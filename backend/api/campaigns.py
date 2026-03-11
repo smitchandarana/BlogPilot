@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -29,16 +30,18 @@ class EnrollRequest(BaseModel):
 async def list_campaigns():
     with get_db() as db:
         campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
-        return [
-            {
+        result = []
+        for c in campaigns:
+            enrolled_count = db.query(CampaignEnrollment).filter_by(campaign_id=c.id).count()
+            result.append({
                 "id": c.id,
                 "name": c.name,
                 "status": c.status,
                 "steps": c.steps,
+                "enrolled_count": enrolled_count,
                 "created_at": str(c.created_at),
-            }
-            for c in campaigns
-        ]
+            })
+        return result
 
 
 @router.post("")
@@ -105,7 +108,11 @@ async def enroll_leads(campaign_id: str, body: EnrollRequest):
             ).first()
             if not existing:
                 enrollment = CampaignEnrollment(
-                    campaign_id=campaign_id, lead_id=lead_id
+                    campaign_id=campaign_id,
+                    lead_id=lead_id,
+                    status="IN_PROGRESS",
+                    current_step=0,
+                    next_action_at=datetime.now(timezone.utc),
                 )
                 db.add(enrollment)
                 enrolled.append(lead_id)

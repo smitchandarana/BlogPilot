@@ -135,6 +135,12 @@ except ImportError:
     pass
 
 try:
+    from backend.api.content import router as content_router
+    app.include_router(content_router, prefix="/content", tags=["content"])
+except ImportError:
+    pass
+
+try:
     from backend.api.websocket import router as ws_router
     app.include_router(ws_router, tags=["websocket"])
 except ImportError:

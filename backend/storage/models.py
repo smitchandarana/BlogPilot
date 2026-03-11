@@ -115,3 +115,18 @@ class Settings(Base):
     key = Column(String(256), primary_key=True)
     value = Column(Text)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ScheduledPost(Base):
+    __tablename__ = "scheduled_posts"
+
+    id = Column(String(64), primary_key=True)
+    text = Column(Text, nullable=False)
+    topic = Column(String(256))
+    style = Column(String(64))
+    tone = Column(String(64))
+    status = Column(String(32), default="SCHEDULED")  # SCHEDULED | PUBLISHED | FAILED | CANCELLED
+    scheduled_at = Column(DateTime, nullable=False)
+    published_at = Column(DateTime)
+    error_msg = Column(Text)
+    created_at = Column(DateTime, default=_utcnow)

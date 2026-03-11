@@ -97,7 +97,26 @@ class LinkedInLogin:
         """Fill login form and submit."""
         try:
             await page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(2000)
+
+            # Check for security challenge on the login page itself
+            challenged = await self.handle_security_challenge(page)
+            if challenged:
+                return False
+
+            # Wait for the login form to actually appear (handles slow page loads
+            # and LinkedIn checkpoints that redirect away from the form)
+            try:
+                await page.wait_for_selector("#username", timeout=15000)
+            except Exception:
+                # Form didn't appear — likely a checkpoint page; wait for user
+                logger.warning("Login form not found — LinkedIn may be showing a challenge page")
+                challenged = await self.handle_security_challenge(page)
+                if challenged:
+                    return False
+                # Still no form — give up
+                logger.error("Login form still not found after challenge wait — aborting")
+                return False
 
             # Fill email
             await page.fill("#username", email)

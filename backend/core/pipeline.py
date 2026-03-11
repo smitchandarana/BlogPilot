@@ -219,6 +219,9 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
         url, db,
         author_name=author,
         author_url=post.get("author_url", ""),
+        text=post.get("text", ""),
+        like_count=int(post.get("like_count", 0)),
+        comment_count=int(post.get("comment_count", 0)),
     )
 
     # Step 4: Score for relevance (Groq AI)
@@ -228,20 +231,37 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     if score < min_score:
         post_state.update_state(
             url, "SKIPPED", db,
-            score=score,
+            relevance_score=score,
             skip_reason=f"score {score:.1f} < threshold {min_score}",
         )
         logger.info(f"Pipeline: SKIP '{author}' score={score:.1f}")
         return
 
-    post_state.update_state(url, "SCORED", db, score=score)
+    post_state.update_state(url, "SCORED", db, relevance_score=score)
     logger.info(f"Pipeline: scored '{author}' score={score:.1f}")
 
-    # Step 5: Viral check (Sprint 7; stub = normal priority for now)
+    # Step 5: Viral check — adjust queue priority (informational at this stage)
+    try:
+        from backend.growth import viral_detector
+        post_ts = post.get("timestamp")  # datetime or None
+        viral = viral_detector.is_viral(
+            like_count=int(post.get("like_count", 0)),
+            comment_count=int(post.get("comment_count", 0)),
+            post_timestamp=post_ts,
+        )
+        if viral:
+            logger.info(f"Pipeline: VIRAL post detected — '{author}'")
+    except Exception as e:
+        logger.debug(f"Pipeline: viral_detector unavailable — {e}")
 
-    # Step 6: Strategy decision
-    mode = cfg_get("feed_engagement.mode", "smart")
-    action = _decide_action(score, mode, db)
+    # Step 6: Strategy decision (Sprint 7 engagement_strategy)
+    mode = str(cfg_get("feed_engagement.mode", "smart"))
+    try:
+        from backend.growth import engagement_strategy
+        budget_flags = engagement_strategy.get_budget_flags(db)
+        action = engagement_strategy.decide(score, budget_flags, mode)
+    except Exception:
+        action = _decide_action(score, mode, db)
 
     if action == "SKIP":
         post_state.update_state(url, "SKIPPED", db, skip_reason="budget/strategy skip")
@@ -265,7 +285,7 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
                 })
             except Exception:
                 pass
-            post_state.update_state(url, "PREVIEW", db, comment_text=comment_text)
+            post_state.update_state(url, "PREVIEW", db, relevance_score=score, comment_text=comment_text)
             logger.info(f"Pipeline: PREVIEW sent for '{author}' — awaiting approval")
             return
 
@@ -292,7 +312,7 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     final_state = "ACTED" if acted else "FAILED"
     post_state.update_state(
         url, final_state, db,
-        score=score,
+        relevance_score=score,
         action_taken=action,
         comment_text=comment_text,
     )

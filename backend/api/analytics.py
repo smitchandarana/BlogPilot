@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter
 from backend.utils.logger import get_logger
 from backend.storage.database import get_db
@@ -7,15 +8,45 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _today_start():
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 @router.get("/daily")
 async def daily_analytics():
+    from backend.storage.models import Post, Lead
     with get_db() as db:
         stats = eng_log.get_stats_today(db)
+        today = _today_start()
+        posts_scanned = db.query(Post).filter(Post.created_at >= today).count()
+        leads_total = db.query(Lead).count()
+        emails_found = db.query(Lead).filter(
+            Lead.email_status.in_(["FOUND", "VERIFIED"])
+        ).count()
     return {
-        "date": __import__("datetime").date.today().isoformat(),
+        "date": datetime.now(timezone.utc).date().isoformat(),
         "actions": stats,
-        "leads_found": 0,  # TODO: wire to leads_store in Sprint 8
+        "posts_scanned": posts_scanned,
+        "leads_total": leads_total,
+        "emails_found": emails_found,
     }
+
+
+@router.get("/recent-activity")
+async def recent_activity(limit: int = 50):
+    with get_db() as db:
+        entries = eng_log.get_recent(limit, db)
+    return [
+        {
+            "id": e.id,
+            "action": e.action_type,
+            "target": e.target_name or "",
+            "result": e.result or "SUCCESS",
+            "comment": e.comment_text,
+            "ts": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in reversed(entries)
+    ]
 
 
 @router.get("/weekly")

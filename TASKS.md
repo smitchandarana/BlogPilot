@@ -161,14 +161,14 @@ Do NOT implement a module already marked [x].
 > **BUILD_PROMPTS.md:** Sessions 7A → 7B
 > **Model:** Sonnet 4.6 (7A) · opusplan (7B) · Run /clear before starting
 
-- [ ] backend/growth/viral_detector.py — calculate engagement velocity, set priority
-- [ ] backend/growth/influencer_monitor.py — poll watchlist profiles for new posts
-- [ ] backend/growth/engagement_strategy.py — decide action type from score + budget
-- [ ] backend/growth/campaign_engine.py — step FSM, next_action_at logic, executor
-- [ ] Wire Campaigns UI → full CRUD via /api/campaigns
-- [ ] Wire campaign enrollment → leads → campaign_enrollments table
-- [ ] Wire post_publisher → ContentStudio scheduler queue
-- [ ] Wire post schedule queue → APScheduler
+- [x] backend/growth/viral_detector.py — calculate engagement velocity, set priority
+- [x] backend/growth/influencer_monitor.py — poll watchlist profiles for new posts
+- [x] backend/growth/engagement_strategy.py — decide action type from score + budget
+- [x] backend/growth/campaign_engine.py — step FSM, next_action_at logic, executor
+- [x] Wire Campaigns UI → full CRUD via /api/campaigns (CRUD already wired; enrollment fixed with next_action_at)
+- [x] Wire campaign enrollment → leads → campaign_enrollments table
+- [x] Wire post_publisher → ContentStudio scheduler queue (backend/api/content.py — schedule, publish-now, queue endpoints + ScheduledPost model)
+- [x] Wire post schedule queue → APScheduler (_job_post_publishing fires every 1 min, submits due posts to worker pool)
 
 ---
 

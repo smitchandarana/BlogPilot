@@ -32,6 +32,7 @@ export const analytics = {
   topTopics: () => http.get('/analytics/top-topics'),
   summary: () => http.get('/analytics/summary'),
   campaignFunnel: () => http.get('/analytics/campaign-funnel'),
+  recentActivity: (limit = 50) => http.get('/analytics/recent-activity', { params: { limit } }),
 }
 
 export const campaigns = {
@@ -49,6 +50,13 @@ export const leads = {
   enrich: (id) => http.post(`/leads/${id}/enrich`),
   enrichAll: () => http.post('/leads/enrich-all'),
   export: () => http.get('/leads/export', { responseType: 'blob' }),
+}
+
+export const content = {
+  getQueue: () => http.get('/content/queue'),
+  schedule: (data) => http.post('/content/schedule', data),
+  cancel: (id) => http.delete(`/content/queue/${id}`),
+  publishNow: (data) => http.post('/content/publish-now', data),
 }
 
 export default http

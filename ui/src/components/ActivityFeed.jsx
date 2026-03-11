@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { ThumbsUp, MessageSquare, UserPlus, Eye, Mail, SkipForward } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { analytics } from '../api/client'
 
 const ACTION_ICONS = {
   like: ThumbsUp,
+  likes: ThumbsUp,
   comment: MessageSquare,
+  comments: MessageSquare,
   connect: UserPlus,
+  connections: UserPlus,
   visit: Eye,
+  profile_visits: Eye,
   enrich: Mail,
+  email_enrichment: Mail,
 }
 
 const RESULT_STYLES = {
@@ -17,31 +23,30 @@ const RESULT_STYLES = {
 }
 
 function timeAgo(ts) {
-  const diff = Date.now() - ts
+  const diff = Date.now() - new Date(ts).getTime()
   if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
   return `${Math.floor(diff / 3600000)}h ago`
 }
 
-const MOCK_FEED = [
-  { id: 1, action: 'like', target: 'Rahul Sharma', result: 'SUCCESS', ts: Date.now() - 12000 },
-  { id: 2, action: 'comment', target: 'Priya Mehta', result: 'SUCCESS', ts: Date.now() - 45000 },
-  { id: 3, action: 'connect', target: 'James Liu', result: 'SKIPPED', ts: Date.now() - 90000 },
-  { id: 4, action: 'visit', target: 'Sarah Chen', result: 'SUCCESS', ts: Date.now() - 180000 },
-  { id: 5, action: 'enrich', target: 'Tom Nguyen', result: 'FAILED', ts: Date.now() - 300000 },
-]
-
 export default function ActivityFeed() {
-  const [activities, setActivities] = useState(MOCK_FEED)
+  const [activities, setActivities] = useState([])
   const bottomRef = useRef(null)
   const { subscribe } = useWebSocket()
+
+  // Load real history on mount
+  useEffect(() => {
+    analytics.recentActivity().then((res) => {
+      setActivities(res.data.map((e) => ({ ...e, _ts: e.ts })))
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const unsub = subscribe('activity', (data) => {
       setActivities((prev) => {
         const next = [
           ...prev,
-          { id: Date.now(), action: data.action, target: data.target, result: data.result, ts: Date.now() },
+          { id: Date.now(), action: data.action, target: data.target, result: data.result, _ts: new Date().toISOString() },
         ]
         return next.slice(-50)
       })
@@ -73,7 +78,7 @@ export default function ActivityFeed() {
               <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${RESULT_STYLES[item.result]}`}>
                 {item.result}
               </span>
-              <span className="w-16 text-right text-xs text-slate-500 tabular-nums">{timeAgo(item.ts)}</span>
+              <span className="w-16 text-right text-xs text-slate-500 tabular-nums">{timeAgo(item._ts)}</span>
             </div>
           )
         })}

@@ -9,11 +9,14 @@ Used by the pipeline (Step 5) to prioritise high-velocity posts.
 from datetime import datetime, timezone
 from typing import Optional
 
-from backend.core.task_queue import Priority
 from backend.utils.config_loader import get as cfg_get
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Priority integers matching task_queue.py (lower = higher urgency)
+PRIORITY_HIGH = 1
+PRIORITY_NORMAL = 5
 
 
 def is_viral(
@@ -55,14 +58,13 @@ def is_viral(
     return viral
 
 
-def get_priority(viral: bool) -> Priority:
+def get_priority(viral: bool) -> int:
     """
-    Map viral flag → task queue priority.
-
-    Reads priority_boost from config; defaults to HIGH for viral posts.
+    Map viral flag → task queue priority integer.
+    Lower value = higher urgency. Reads priority_boost from config.
     """
     if not viral:
-        return Priority.NORMAL
+        return PRIORITY_NORMAL
 
     boost = str(cfg_get("viral_detection.priority_boost", "high")).lower()
-    return Priority.HIGH if boost == "high" else Priority.NORMAL
+    return PRIORITY_HIGH if boost == "high" else PRIORITY_NORMAL

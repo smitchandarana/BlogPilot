@@ -112,9 +112,22 @@ class Scheduler:
             id="budget_reset",
             replace_existing=True,
         )
+        self._scheduler.add_job(
+            _job_campaign_processing,
+            IntervalTrigger(minutes=30),
+            id="campaign_processing",
+            replace_existing=True,
+        )
+        self._scheduler.add_job(
+            _job_post_publishing,
+            IntervalTrigger(minutes=1),
+            id="post_publishing",
+            replace_existing=True,
+        )
         logger.info(
             f"Scheduler: default jobs registered "
-            f"(feed_scan every {interval} min, hourly_reset, budget_reset)"
+            f"(feed_scan every {interval} min, hourly_reset, budget_reset, "
+            f"campaign_processing every 30 min, post_publishing every 1 min)"
         )
 
 
@@ -154,3 +167,62 @@ def _job_budget_reset():
             budget_tracker.reset_all(db)
     except Exception as exc:
         logger.warning(f"Scheduler: budget_reset error: {exc}")
+
+
+def _job_campaign_processing():
+    """Dispatches campaign processing to the engine worker pool."""
+    logger.info("Scheduler: campaign_processing fired")
+    try:
+        from backend.growth.campaign_engine import run_campaign_processing
+        from backend.core.engine import get_engine
+        eng = get_engine()
+        if eng is not None:
+            eng.worker_pool.submit(run_campaign_processing)
+        else:
+            run_campaign_processing()
+    except Exception as exc:
+        logger.warning(f"Scheduler: campaign_processing error: {exc}")
+
+
+def _job_post_publishing():
+    """
+    Check for SCHEDULED posts whose scheduled_at is due and publish them.
+    Runs every minute. Skips if engine is not RUNNING or content_studio module disabled.
+    """
+    try:
+        from backend.utils.config_loader import get as _cfg
+        if not _cfg("modules.content_studio", True):
+            return
+
+        from backend.core.engine import get_engine
+        from backend.core.state_manager import EngineState
+        eng = get_engine()
+        if eng is None or eng.state_manager.get() != EngineState.RUNNING:
+            return
+
+        from datetime import datetime, timezone
+        from backend.storage.database import get_db
+        from backend.storage.models import ScheduledPost
+
+        now = datetime.now(timezone.utc)
+        with get_db() as db:
+            due_posts = (
+                db.query(ScheduledPost)
+                .filter(
+                    ScheduledPost.status == "SCHEDULED",
+                    ScheduledPost.scheduled_at <= now,
+                )
+                .all()
+            )
+
+        if not due_posts:
+            return
+
+        logger.info(f"Scheduler: {len(due_posts)} post(s) due for publishing")
+
+        from backend.api.content import _publish_single
+        for post in due_posts:
+            eng.worker_pool.submit(_publish_single, post.id, post.text)
+
+    except Exception as exc:
+        logger.warning(f"Scheduler: post_publishing error: {exc}")

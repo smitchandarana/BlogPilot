@@ -5,6 +5,7 @@ import { useEngine } from '../hooks/useEngine'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
 import ActivityFeed from '../components/ActivityFeed'
+import { analytics, engine as engineApi } from '../api/client'
 
 const STAT_DEFS = [
   { key: 'posts_scanned', label: 'Posts Scanned', icon: ScanLine, color: 'text-violet-400' },
@@ -15,30 +16,65 @@ const STAT_DEFS = [
   { key: 'leads', label: 'Leads', icon: Users, color: 'text-cyan-400' },
 ]
 
-const BUDGET_DEFAULTS = [
-  { actionType: 'likes', count: 8, limit: 30, label: 'Likes' },
-  { actionType: 'comments', count: 3, limit: 12, label: 'Comments' },
-  { actionType: 'connections', count: 5, limit: 15, label: 'Connections' },
-  { actionType: 'profile_visits', count: 18, limit: 50, label: 'Profile Visits' },
-  { actionType: 'inmails', count: 0, limit: 5, label: 'InMails' },
-  { actionType: 'posts_published', count: 1, limit: 5, label: 'Posts Published' },
-]
+const BUDGET_LABELS = {
+  likes: 'Likes',
+  comments: 'Comments',
+  connections: 'Connections',
+  profile_visits: 'Profile Visits',
+  inmails: 'InMails',
+  posts_published: 'Posts Published',
+}
 
 export default function Dashboard() {
   const { state } = useEngine()
   const { subscribe } = useWebSocket()
 
   const [stats, setStats] = useState({
-    posts_scanned: 42,
-    liked: 8,
-    commented: 3,
-    profiles_visited: 18,
-    emails_found: 4,
-    leads: 7,
+    posts_scanned: 0,
+    liked: 0,
+    commented: 0,
+    profiles_visited: 0,
+    emails_found: 0,
+    leads: 0,
   })
 
-  const [budgets, setBudgets] = useState(BUDGET_DEFAULTS)
+  const [budgets, setBudgets] = useState([])
   const [alert, setAlert] = useState(null)
+
+  // Fetch daily stats + budget on mount, refresh every 30s
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [dailyRes, statusRes] = await Promise.all([
+          analytics.daily(),
+          engineApi.status(),
+        ])
+        const d = dailyRes.data
+        const actions = d.actions || {}
+        setStats({
+          posts_scanned: d.posts_scanned ?? 0,
+          liked: actions.likes ?? 0,
+          commented: actions.comments ?? 0,
+          profiles_visited: actions.profile_visits ?? 0,
+          emails_found: d.emails_found ?? 0,
+          leads: d.leads_total ?? 0,
+        })
+        const budgetMap = statusRes.data?.budget_used ?? {}
+        const rows = Object.entries(BUDGET_LABELS).map(([actionType, label]) => ({
+          actionType,
+          label,
+          count: budgetMap[actionType]?.count ?? 0,
+          limit: budgetMap[actionType]?.limit ?? 0,
+        }))
+        if (rows.length > 0) setBudgets(rows)
+      } catch (e) {
+        // silently ignore — engine may not be running
+      }
+    }
+    load()
+    const interval = setInterval(load, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const unsub = subscribe('stats_update', (data) => {
