@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
-    logger.info("Engine shutdown complete")
+    logger.info("Engine shutdown complete")  # Sprint 6
 
 
 app = FastAPI(

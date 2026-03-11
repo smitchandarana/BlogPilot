@@ -66,6 +66,19 @@ async def resume_engine():
     return {"state": "RUNNING"}
 
 
+@router.post("/scan-now")
+async def trigger_scan():
+    """Manually trigger a feed scan immediately (bypasses scheduler interval)."""
+    eng = _get_engine()
+    if not eng:
+        raise HTTPException(status_code=503, detail="Engine not initialised")
+    from backend.core.state_manager import EngineState
+    if eng.state_manager.get() != EngineState.RUNNING:
+        raise HTTPException(status_code=409, detail="Engine must be RUNNING")
+    eng.queue_feed_scan()
+    return {"status": "feed_scan_queued"}
+
+
 @router.get("/status")
 async def get_status():
     eng = _get_engine()

@@ -21,7 +21,7 @@ schedule:
     - thursday
     - friday
   start_hour: 9                    # 24h format. Engine starts at 9:00 AM
-  end_hour: 18                     # Engine stops at 6:00 PM
+  end_hour: 23                     # Engine stops at 11:00 PM (extended for testing)
   timezone: "Asia/Kolkata"         # Your local timezone
   feed_scan_interval_minutes: 20   # How often to scan the feed
 
@@ -80,7 +80,7 @@ modules:
 # ─────────────────────────────────────────────
 feed_engagement:
   mode: smart                      # like_only / comment_only / like_and_comment / smart
-  preview_comments: true           # true = show in UI before posting, false = auto-post
+  preview_comments: false          # true = show in UI before posting, false = auto-post
   min_relevance_score: 6           # Posts below this are skipped
   score_for_profile_visit: 8       # Posts at this score trigger profile visit
   score_for_connection: 10         # Posts at this score trigger connection request

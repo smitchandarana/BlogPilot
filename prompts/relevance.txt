@@ -15,6 +15,6 @@ Post content:
 {post_text}
 
 Respond with ONLY a JSON object in this exact format:
-{"score": <number 0-10>, "reason": "<one sentence explaining the score>"}
+{{"score": <number 0-10>, "reason": "<one sentence explaining the score>"}}
 
 Do not include anything else. No markdown. No explanation outside the JSON.

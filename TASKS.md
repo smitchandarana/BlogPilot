@@ -14,8 +14,8 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**SPRINT 2 — UI All Screens**
-→ See BUILD_PROMPTS.md Sessions 2A through 2D for exact prompts
+**SPRINT 7 — Campaigns + Growth Intelligence**
+→ See BUILD_PROMPTS.md Sessions 7A → 7B for exact prompts
 
 ---
 
@@ -143,15 +143,15 @@ Do NOT implement a module already marked [x].
 > **BUILD_PROMPTS.md:** Session 6 (single session)
 > **Model:** Sonnet 4.6 · Run /clear before starting
 
-- [ ] backend/enrichment/email_enricher.py — orchestrate all methods, return result
-- [ ] backend/enrichment/dom_email_scraper.py — read email from 1st degree profile DOM
-- [ ] backend/enrichment/pattern_generator.py — generate [f.last@domain, first@domain, ...]
-- [ ] backend/enrichment/smtp_verifier.py — MX lookup + SMTP handshake
-- [ ] backend/enrichment/hunter_client.py — Hunter.io API (optional, key-gated)
-- [ ] Wire Leads page → GET /api/leads endpoint
-- [ ] Wire Enrich button → POST /api/leads/{id}/enrich endpoint
-- [ ] Wire Bulk Enrich → POST /api/leads/enrich-all endpoint
-- [ ] Wire CSV Export → GET /api/leads/export endpoint
+- [x] backend/enrichment/email_enricher.py — orchestrate all methods, return result
+- [x] backend/enrichment/dom_email_scraper.py — read email from 1st degree profile DOM
+- [x] backend/enrichment/pattern_generator.py — generate [f.last@domain, first@domain, ...]
+- [x] backend/enrichment/smtp_verifier.py — MX lookup + SMTP handshake
+- [x] backend/enrichment/hunter_client.py — Hunter.io API (optional, key-gated)
+- [x] Wire Leads page → GET /api/leads endpoint
+- [x] Wire Enrich button → POST /api/leads/{id}/enrich endpoint
+- [x] Wire Bulk Enrich → POST /api/leads/enrich-all endpoint
+- [x] Wire CSV Export → GET /api/leads/export endpoint
 
 **Milestone 6 check:** Profile visited → email found → lead in DB → appears in Leads UI → CSV export includes email.
 
@@ -209,10 +209,10 @@ Do NOT implement a module already marked [x].
 ## Milestone Checklist
 
 - [x] M1 — UI Shell: all 10 pages navigate, settings saves, no broken routes
-- [ ] M2 — Engine Controls: start/stop/pause/resume work, WebSocket live state
-- [ ] M3 — LinkedIn Feed Reads: 10+ posts extracted, appear in UI log
-- [ ] M4 — AI Pipeline End-to-End: post → score → comment text in UI
-- [ ] M5 — First Real Comment Posted on LinkedIn
+- [x] M2 — Engine Controls: start/stop/pause/resume work, WebSocket live state
+- [x] M3 — LinkedIn Feed Reads: 10+ posts extracted, appear in UI log
+- [x] M4 — AI Pipeline End-to-End: post → score → comment text in UI
+- [x] M5 — First Real Comment Posted on LinkedIn
 - [ ] M6 — Email Enrichment: first email found, in Leads table, in CSV export
 - [ ] M7 — Runs 4 Hours Unattended: budget auto-pause, clean logs, real analytics
 - [ ] M8 — Phase 2 Ready: Chrome Extension conversion begins

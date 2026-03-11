@@ -159,31 +159,80 @@ class LinkedInLogin:
     async def handle_security_challenge(self, page: Page) -> bool:
         """
         Detect CAPTCHA or email verification.
-        If found: pause engine + broadcast alert.
+        If found: broadcast alert, then WAIT up to 120s for the user to
+        complete the challenge manually in the visible browser window.
         Returns True if a challenge was detected (action blocked).
+        Returns False if the user resolved it in time.
         """
         try:
             url = page.url
+            challenge_detected = False
 
             # URL-based detection
             if any(x in url for x in ["checkpoint/challenge", "checkpoint/lg", "security-verification"]):
                 logger.error(f"LinkedIn security challenge at: {url}")
-                self._pause_and_alert("security_challenge")
-                return True
+                challenge_detected = True
 
             # DOM-based CAPTCHA detection
-            captcha_selectors = [
-                "iframe[src*='recaptcha']",
-                "div[class*='captcha']",
-                "#captcha-internal",
-                "div[id*='challenge']",
-            ]
-            for sel in captcha_selectors:
-                el = await page.query_selector(sel)
-                if el:
-                    logger.error(f"CAPTCHA detected (selector: {sel})")
-                    self._pause_and_alert("captcha")
-                    return True
+            if not challenge_detected:
+                captcha_selectors = [
+                    "iframe[src*='recaptcha']",
+                    "div[class*='captcha']",
+                    "#captcha-internal",
+                    "div[id*='challenge']",
+                ]
+                for sel in captcha_selectors:
+                    el = await page.query_selector(sel)
+                    if el:
+                        logger.error(f"CAPTCHA detected (selector: {sel})")
+                        challenge_detected = True
+                        break
+
+            if not challenge_detected:
+                return False
+
+            # Alert the user — they need to complete the challenge in the browser
+            try:
+                from backend.api.websocket import schedule_broadcast
+                schedule_broadcast("alert", {
+                    "level": "warning",
+                    "message": "LinkedIn security challenge detected — please complete it in the browser window. Waiting up to 120 seconds…",
+                })
+            except Exception:
+                pass
+
+            # Wait up to 120s for the user to complete the challenge
+            logger.info("Waiting up to 120s for user to complete security challenge…")
+            for i in range(24):  # 24 x 5s = 120s
+                await page.wait_for_timeout(5000)
+
+                # Check if we're past the challenge (redirected to feed or similar)
+                current_url = page.url
+                if not any(x in current_url for x in [
+                    "checkpoint/challenge", "checkpoint/lg", "security-verification",
+                    "checkpoint/challengesV2",
+                ]):
+                    # User completed the challenge
+                    await page.wait_for_timeout(2000)
+                    if await self.is_logged_in(page):
+                        logger.info("Security challenge resolved — login successful!")
+                        try:
+                            from backend.api.websocket import schedule_broadcast
+                            schedule_broadcast("alert", {
+                                "level": "info",
+                                "message": "Security challenge resolved. Engine resuming.",
+                            })
+                        except Exception:
+                            pass
+                        return False  # Challenge resolved, login OK
+
+                if (i + 1) % 6 == 0:
+                    logger.info(f"Still waiting for challenge resolution… ({(i+1)*5}s elapsed)")
+
+            # Timeout — user didn't complete in time
+            logger.error("Security challenge not resolved within 120s — aborting")
+            self._pause_and_alert("security_challenge")
+            return True
 
         except Exception as e:
             logger.warning(f"Security challenge detection error: {e}")

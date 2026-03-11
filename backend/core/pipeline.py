@@ -307,13 +307,29 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
 async def _visit_profile(
     profile_url: str, page, db, score: float, engine
 ) -> None:
-    """Visit and scrape a high-value profile; optionally send connection request."""
+    """Visit and scrape a high-value profile; run email enrichment; optionally connect."""
     from backend.automation.profile_scraper import ProfileScraper
     from backend.automation.interaction_engine import InteractionEngine
 
     logger.info(f"Pipeline: visiting profile {profile_url}")
     scraper = ProfileScraper()
-    await scraper.scrape(page, profile_url, db=db)
+    profile_data = await scraper.scrape(page, profile_url, db=db)
+
+    # Email enrichment — page is already on the profile
+    if cfg_get("email_enrichment.enabled", True):
+        try:
+            from backend.enrichment.email_enricher import EmailEnricher
+
+            enricher = EmailEnricher(page=page)
+            enrich_result = await enricher.enrich(profile_data)
+            email = enrich_result.get("email")
+            method = enrich_result.get("method")
+            if email:
+                logger.info(f"Pipeline: email found via {method}: {email}")
+            else:
+                logger.info(f"Pipeline: no email found for {profile_url}")
+        except Exception as e:
+            logger.warning(f"Pipeline: email enrichment failed — {e}")
 
     # Connection request at maximum score threshold
     connect_threshold = float(cfg_get("feed_engagement.score_for_connection", 10))

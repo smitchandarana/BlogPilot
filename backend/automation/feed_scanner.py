@@ -103,15 +103,27 @@ class FeedScanner:
             return None  # Can't track or deduplicate without URL
 
         # ── Author name ────────────────────────────────────────────────────
-        author_el = await el.query_selector(
-            "span.update-components-actor__name span[aria-hidden='true'], "
-            "span.update-components-actor__name"
-        )
-        author_name = _clean(await author_el.inner_text()) if author_el else "Unknown"
+        author_name = "Unknown"
+        for author_sel in [
+            "span.update-components-actor__name span[aria-hidden='true']",
+            "span.update-components-actor__name",
+            "span.feed-shared-actor__name span[aria-hidden='true']",
+            "span.feed-shared-actor__name",
+            ".update-components-actor__title span[dir='ltr'] span[aria-hidden='true']",
+            ".update-components-actor__title span[dir='ltr']",
+            "a.update-components-actor__meta-link span[aria-hidden='true']",
+        ]:
+            author_el = await el.query_selector(author_sel)
+            if author_el:
+                name = _clean(await author_el.inner_text())
+                if name and name != "Unknown" and len(name) < 100:
+                    author_name = name
+                    break
 
         # ── Author profile URL ─────────────────────────────────────────────
         author_link = await el.query_selector(
             "a.update-components-actor__meta-link, "
+            "a.update-components-actor__container-link, "
             "a[href*='/in/'], a[href*='/company/']"
         )
         author_url = ""
