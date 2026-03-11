@@ -1,0 +1,213 @@
+"""
+LinkedIn authentication — Sprint 4.
+
+Cookie-first login with credential fallback.
+Credentials stored encrypted in config/.secrets/linkedin.json.
+Session persists via Playwright's persistent context (user data dir).
+"""
+import json
+import os
+from typing import Optional
+
+from playwright.async_api import Page
+
+from backend.utils.encryption import encrypt, decrypt
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+_SECRETS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
+)
+_CREDS_FILE = os.path.join(_SECRETS_DIR, "linkedin.json")
+
+LINKEDIN_LOGIN_URL = "https://www.linkedin.com/login"
+LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
+
+
+# ── Credential helpers ─────────────────────────────────────────────────────
+
+def load_credentials() -> tuple[str, str]:
+    """Load and decrypt LinkedIn credentials from config/.secrets/linkedin.json."""
+    if not os.path.exists(_CREDS_FILE):
+        raise FileNotFoundError(
+            f"LinkedIn credentials not found at {_CREDS_FILE}.\n"
+            "Run:  python -m backend.utils.setup_credentials"
+        )
+    with open(_CREDS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    email = decrypt(data["email"])
+    password = decrypt(data["password"])
+    return email, password
+
+
+def save_credentials(email: str, password: str) -> None:
+    """Encrypt and save LinkedIn credentials."""
+    os.makedirs(_SECRETS_DIR, exist_ok=True)
+    data = {
+        "email": encrypt(email),
+        "password": encrypt(password),
+    }
+    with open(_CREDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    logger.info(f"LinkedIn credentials saved (encrypted) → {_CREDS_FILE}")
+
+
+def credentials_exist() -> bool:
+    """Return True if encrypted credentials file exists."""
+    return os.path.exists(_CREDS_FILE)
+
+
+# ── Login handler ──────────────────────────────────────────────────────────
+
+class LinkedInLogin:
+    """
+    Manages LinkedIn authentication.
+    Strategy: check if already logged in → skip.
+    Otherwise try credential login and persist session via browser profile.
+    """
+
+    async def login(
+        self,
+        page: Page,
+        email: Optional[str] = None,
+        password: Optional[str] = None,
+    ) -> bool:
+        """
+        Full login flow. Returns True if logged in.
+        Uses stored credentials if email/password not provided.
+        """
+        # Already logged in?
+        await page.goto(LINKEDIN_FEED_URL, wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(2000)
+
+        if await self.is_logged_in(page):
+            logger.info("Already logged in via persistent session")
+            return True
+
+        logger.info("Not logged in — starting credential login")
+
+        # Load credentials if not provided
+        if email is None or password is None:
+            email, password = load_credentials()
+
+        return await self._credential_login(page, email, password)
+
+    async def _credential_login(self, page: Page, email: str, password: str) -> bool:
+        """Fill login form and submit."""
+        try:
+            await page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(1500)
+
+            # Fill email
+            await page.fill("#username", email)
+            await page.wait_for_timeout(600)
+
+            # Fill password
+            await page.fill("#password", password)
+            await page.wait_for_timeout(500)
+
+            # Submit
+            await page.click('[data-litms-control-urn="login-submit"]')
+            await page.wait_for_timeout(4000)
+
+            # Check for security challenge
+            challenged = await self.handle_security_challenge(page)
+            if challenged:
+                # Challenge detected — engine paused, user must intervene
+                return False
+
+            if await self.is_logged_in(page):
+                logger.info("Credential login successful — session saved to browser profile")
+                return True
+
+            logger.error("Credential login failed — incorrect credentials or LinkedIn blocked login")
+            return False
+
+        except Exception as e:
+            logger.error(f"Credential login error: {e}")
+            return False
+
+    async def is_logged_in(self, page: Page) -> bool:
+        """Check if currently logged into LinkedIn."""
+        try:
+            url = page.url
+            if any(x in url for x in ["linkedin.com/login", "linkedin.com/checkpoint", "linkedin.com/uas/"]):
+                return False
+            # Look for the global nav (present when logged in)
+            nav = await page.query_selector(
+                "#global-nav, "
+                "div.global-nav__content, "
+                "nav[aria-label='Global navigation']"
+            )
+            return nav is not None
+        except Exception:
+            return False
+
+    async def detect_reauth_needed(self, page: Page) -> bool:
+        """Return True if LinkedIn is redirecting to a login/auth page."""
+        try:
+            url = page.url
+            return any(x in url for x in [
+                "linkedin.com/login",
+                "linkedin.com/checkpoint",
+                "linkedin.com/uas/login",
+            ])
+        except Exception:
+            return False
+
+    async def handle_security_challenge(self, page: Page) -> bool:
+        """
+        Detect CAPTCHA or email verification.
+        If found: pause engine + broadcast alert.
+        Returns True if a challenge was detected (action blocked).
+        """
+        try:
+            url = page.url
+
+            # URL-based detection
+            if any(x in url for x in ["checkpoint/challenge", "checkpoint/lg", "security-verification"]):
+                logger.error(f"LinkedIn security challenge at: {url}")
+                self._pause_and_alert("security_challenge")
+                return True
+
+            # DOM-based CAPTCHA detection
+            captcha_selectors = [
+                "iframe[src*='recaptcha']",
+                "div[class*='captcha']",
+                "#captcha-internal",
+                "div[id*='challenge']",
+            ]
+            for sel in captcha_selectors:
+                el = await page.query_selector(sel)
+                if el:
+                    logger.error(f"CAPTCHA detected (selector: {sel})")
+                    self._pause_and_alert("captcha")
+                    return True
+
+        except Exception as e:
+            logger.warning(f"Security challenge detection error: {e}")
+
+        return False
+
+    def _pause_and_alert(self, reason: str) -> None:
+        """Record circuit breaker error (which triggers pause) and broadcast UI alert."""
+        msg = (
+            "CAPTCHA detected — manual intervention required."
+            if reason == "captcha"
+            else f"LinkedIn security challenge ({reason}) — please resolve in browser."
+        )
+
+        try:
+            from backend.api.websocket import schedule_broadcast
+            schedule_broadcast("alert", {"level": "critical", "message": msg})
+        except Exception as e:
+            logger.warning(f"Alert broadcast failed: {e}")
+
+        try:
+            from backend.core.engine import get_engine
+            engine = get_engine()
+            if engine:
+                engine.circuit_breaker.record_error(reason)
+        except Exception as e:
+            logger.warning(f"Circuit breaker record failed: {e}")

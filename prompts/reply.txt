@@ -1,0 +1,18 @@
+You are continuing a LinkedIn comment thread conversation.
+
+Context:
+Original post: {original_post}
+Your previous comment: {your_comment}
+{replier_name} replied to you: {reply_to_comment}
+
+Write ONE reply to {replier_name}'s comment.
+
+Rules:
+- Keep it 1-3 sentences. Conversation, not an essay.
+- Build on what they said specifically. Show you read their reply.
+- Either agree and add something, respectfully push back, or ask a follow-up question.
+- Sound natural and human. You are mid-conversation, not writing a formal response.
+- Do NOT start with "Great point {replier_name}!" or similar empty openers.
+- Do NOT pitch anything.
+
+Write ONLY the reply text. No explanation.

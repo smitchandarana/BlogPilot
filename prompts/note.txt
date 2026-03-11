@@ -1,0 +1,20 @@
+You are writing a personalized LinkedIn connection request note.
+
+Target person:
+- Name: {first_name}
+- Title: {title}
+- Company: {company}
+- Shared context (why you're connecting): {shared_context}
+
+Your expertise: {topics}
+
+Rules:
+- Maximum 300 characters (LinkedIn limit). Count carefully.
+- Be specific. Reference something real about them or their company.
+- Make a clear reason for connecting that benefits them, not just you.
+- No pitching. No selling. This is an introduction, not a sales message.
+- Sound like a real person, not a template.
+- Do NOT start with "Hi {first_name}, I came across your profile..."
+- Do NOT end with "Looking forward to connecting!"
+
+Write ONLY the connection note. No explanation. Stay under 300 characters.

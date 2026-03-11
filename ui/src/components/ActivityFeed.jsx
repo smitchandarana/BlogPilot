@@ -1,0 +1,84 @@
+import { useState, useEffect, useRef } from 'react'
+import { ThumbsUp, MessageSquare, UserPlus, Eye, Mail, SkipForward } from 'lucide-react'
+import { useWebSocket } from '../hooks/useWebSocket'
+
+const ACTION_ICONS = {
+  like: ThumbsUp,
+  comment: MessageSquare,
+  connect: UserPlus,
+  visit: Eye,
+  enrich: Mail,
+}
+
+const RESULT_STYLES = {
+  SUCCESS: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
+  FAILED: 'bg-red-500/15 text-red-400 border border-red-500/20',
+  SKIPPED: 'bg-slate-700/60 text-slate-400 border border-slate-600/30',
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - ts
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  return `${Math.floor(diff / 3600000)}h ago`
+}
+
+const MOCK_FEED = [
+  { id: 1, action: 'like', target: 'Rahul Sharma', result: 'SUCCESS', ts: Date.now() - 12000 },
+  { id: 2, action: 'comment', target: 'Priya Mehta', result: 'SUCCESS', ts: Date.now() - 45000 },
+  { id: 3, action: 'connect', target: 'James Liu', result: 'SKIPPED', ts: Date.now() - 90000 },
+  { id: 4, action: 'visit', target: 'Sarah Chen', result: 'SUCCESS', ts: Date.now() - 180000 },
+  { id: 5, action: 'enrich', target: 'Tom Nguyen', result: 'FAILED', ts: Date.now() - 300000 },
+]
+
+export default function ActivityFeed() {
+  const [activities, setActivities] = useState(MOCK_FEED)
+  const bottomRef = useRef(null)
+  const { subscribe } = useWebSocket()
+
+  useEffect(() => {
+    const unsub = subscribe('activity', (data) => {
+      setActivities((prev) => {
+        const next = [
+          ...prev,
+          { id: Date.now(), action: data.action, target: data.target, result: data.result, ts: Date.now() },
+        ]
+        return next.slice(-50)
+      })
+    })
+    return unsub
+  }, [subscribe])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [activities])
+
+  return (
+    <div className="flex h-72 flex-col overflow-y-auto rounded-xl border border-slate-700/60 bg-slate-900/40 p-1">
+      {activities.length === 0 && (
+        <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+          No activity yet. Start the engine to begin.
+        </div>
+      )}
+      <div className="flex flex-col gap-0.5">
+        {activities.map((item) => {
+          const Icon = ACTION_ICONS[item.action] || SkipForward
+          return (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-slate-800/60"
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <span className="flex-1 truncate text-sm text-slate-300">{item.target}</span>
+              <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${RESULT_STYLES[item.result]}`}>
+                {item.result}
+              </span>
+              <span className="w-16 text-right text-xs text-slate-500 tabular-nums">{timeAgo(item.ts)}</span>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  )
+}

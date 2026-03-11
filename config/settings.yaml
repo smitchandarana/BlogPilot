@@ -1,0 +1,170 @@
+# LinkedIn AI Growth Engine — Configuration
+# Edit this file to change system behaviour.
+# The engine hot-reloads this file — no restart needed.
+# DO NOT put API keys or credentials here. Use config/.secrets (encrypted).
+
+# ─────────────────────────────────────────────
+# ENGINE
+# ─────────────────────────────────────────────
+engine:
+  enabled: true                    # Master on/off switch
+  log_level: INFO                  # DEBUG / INFO / WARNING / ERROR
+
+# ─────────────────────────────────────────────
+# ACTIVITY WINDOW
+# ─────────────────────────────────────────────
+schedule:
+  active_days:                     # Days engine is allowed to run
+    - monday
+    - tuesday
+    - wednesday
+    - thursday
+    - friday
+  start_hour: 9                    # 24h format. Engine starts at 9:00 AM
+  end_hour: 18                     # Engine stops at 6:00 PM
+  timezone: "Asia/Kolkata"         # Your local timezone
+  feed_scan_interval_minutes: 20   # How often to scan the feed
+
+# ─────────────────────────────────────────────
+# DAILY BUDGET (actions per day, resets midnight)
+# ─────────────────────────────────────────────
+daily_budget:
+  feed_scans: 0                    # 0 = unlimited
+  likes: 30
+  comments: 12
+  connections: 15
+  profile_visits: 50
+  inmails: 5
+  posts_published: 5
+  follows: 20
+  endorsements: 10
+
+# ─────────────────────────────────────────────
+# RATE LIMITS (actions per hour)
+# ─────────────────────────────────────────────
+rate_limits:
+  likes_per_hour: 8
+  comments_per_hour: 4
+  connections_per_hour: 5
+  profile_visits_per_hour: 15
+
+# ─────────────────────────────────────────────
+# HUMAN BEHAVIOUR DELAYS (seconds)
+# ─────────────────────────────────────────────
+delays:
+  before_like_min: 3
+  before_like_max: 12
+  before_comment_min: 8
+  before_comment_max: 45
+  before_connect_min: 5
+  before_connect_max: 20
+  between_posts_min: 4
+  between_posts_max: 15
+  typing_speed_wpm_min: 35        # Words per minute (simulated typing)
+  typing_speed_wpm_max: 65
+
+# ─────────────────────────────────────────────
+# MODULES (enable/disable independently)
+# ─────────────────────────────────────────────
+modules:
+  feed_engagement: true            # Scan feed, like, comment
+  campaigns: true                  # Run outreach sequences
+  content_studio: true             # Generate + schedule posts
+  email_enrichment: true           # Find emails from profiles
+  viral_detection: true            # Prioritise viral posts
+  influencer_monitor: true         # Watch specific profiles
+  reply_monitoring: false          # Monitor for replies to comments (Phase 2)
+
+# ─────────────────────────────────────────────
+# FEED ENGAGEMENT
+# ─────────────────────────────────────────────
+feed_engagement:
+  mode: smart                      # like_only / comment_only / like_and_comment / smart
+  preview_comments: true           # true = show in UI before posting, false = auto-post
+  min_relevance_score: 6           # Posts below this are skipped
+  score_for_profile_visit: 8       # Posts at this score trigger profile visit
+  score_for_connection: 10         # Posts at this score trigger connection request
+  max_posts_per_scan: 30           # How many posts to process per feed scan
+  scroll_passes: 3                 # How many times to scroll down per scan
+
+# ─────────────────────────────────────────────
+# VIRAL DETECTION
+# ─────────────────────────────────────────────
+viral_detection:
+  likes_per_hour_threshold: 50     # Posts gaining this many likes/hour = viral
+  comments_per_hour_threshold: 10  # OR this many comments/hour
+  priority_boost: high             # Queue priority for viral posts: normal / high
+
+# ─────────────────────────────────────────────
+# WORKER POOL
+# ─────────────────────────────────────────────
+workers:
+  max_threads: 3                   # NEVER exceed 3. LinkedIn detection risk.
+  queue_max_size: 100              # Max pending tasks in queue
+
+# ─────────────────────────────────────────────
+# CIRCUIT BREAKER (auto-pause on errors)
+# ─────────────────────────────────────────────
+circuit_breaker:
+  enabled: true
+  error_threshold: 3               # Pause after N consecutive failures
+  window_minutes: 10               # Errors counted within this window
+  pause_duration_minutes: 30       # How long to pause before auto-resume
+  captcha_detected_action: pause   # pause / stop
+
+# ─────────────────────────────────────────────
+# AI
+# ─────────────────────────────────────────────
+ai:
+  provider: groq                   # groq (only supported in Phase 1)
+  model: llama-3.3-70b-versatile  # Groq model to use
+  max_tokens: 500                  # Max tokens per AI response
+  temperature: 0.7                 # 0.0 = deterministic, 1.0 = creative
+  retry_attempts: 2                # Retry failed AI calls
+  retry_delay_seconds: 2           # Delay between retries
+
+# ─────────────────────────────────────────────
+# EMAIL ENRICHMENT
+# ─────────────────────────────────────────────
+email_enrichment:
+  enabled: true
+  use_dom_scraper: true            # Read email from 1st degree profile DOM
+  use_pattern_generator: true      # Generate email patterns from name + domain
+  use_smtp_verifier: true          # Verify patterns via SMTP handshake
+  use_hunter_api: false            # Requires Hunter.io API key in .secrets
+  smtp_timeout_seconds: 5          # SMTP check timeout
+  max_pattern_attempts: 5          # How many patterns to try per profile
+
+# ─────────────────────────────────────────────
+# BROWSER
+# ─────────────────────────────────────────────
+browser:
+  type: chromium                   # chromium / firefox / webkit
+  headless: false                  # false = visible browser (safer for LinkedIn)
+  profile_path: ./browser_profile  # Persistent profile directory
+  stealth: true                    # Apply stealth patches to avoid detection
+  viewport_width: 1366
+  viewport_height: 768
+  slow_mo_ms: 80                   # Extra delay between Playwright actions (ms)
+
+# ─────────────────────────────────────────────
+# STORAGE
+# ─────────────────────────────────────────────
+storage:
+  database_path: ./data/engine.db  # SQLite file location
+  log_retention_days: 90           # Delete action logs older than this
+
+# ─────────────────────────────────────────────
+# ANALYTICS
+# ─────────────────────────────────────────────
+analytics:
+  weekly_summary_enabled: true     # Generate AI summary every Monday morning
+  export_format: csv               # csv / json
+
+# ─────────────────────────────────────────────
+# CONTENT STUDIO
+# ─────────────────────────────────────────────
+content_studio:
+  default_tone: professional       # professional / conversational / bold / educational
+  default_word_count: 150          # Target word count for generated posts
+  auto_publish: false              # false = queue for review, true = publish immediately

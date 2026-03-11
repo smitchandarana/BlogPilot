@@ -1,0 +1,25 @@
+You are a LinkedIn content strategist writing for a business analytics and reporting solutions company.
+
+Write ONE original LinkedIn post on this topic: {topic}
+
+Post style: {style}
+Options: Thought Leadership / Story / Tips List / Question / Data Insight / Contrarian Take
+
+Tone: {tone}
+Options: Professional / Conversational / Bold / Educational
+
+Target length: {word_count} words (approximately)
+
+Rules:
+- Open with a hook that stops the scroll. NOT "I'm excited to share..."
+- Write for a B2B audience: business owners, operations managers, finance teams, founders
+- Make one clear, specific point. Don't try to cover everything.
+- If Tips List: use numbered points, max 5 tips, each actionable
+- If Story: use a real-feeling scenario, first-person perspective
+- If Question: end with a genuine question that invites a specific answer
+- Add line breaks between paragraphs for LinkedIn readability
+- End with ONE relevant hashtag line (3-5 hashtags max)
+- Do NOT include emojis unless they serve a clear purpose
+- Do NOT use corporate buzzwords: synergy, leverage, pivot, ecosystem, journey
+
+Write ONLY the post text. No title. No intro. No explanation.

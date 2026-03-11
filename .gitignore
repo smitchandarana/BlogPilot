@@ -1,0 +1,44 @@
+# LinkedIn AI Growth Engine — gitignore
+
+# Secrets — NEVER commit
+config/.secrets
+.env
+*.key
+
+# Database
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Browser profile (contains LinkedIn session cookies)
+browser_profile/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node
+ui/node_modules/
+ui/dist/
+ui/.env
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
