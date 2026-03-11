@@ -42,7 +42,7 @@ class InteractionEngine:
 
     # ── Like ────────────────────────────────────────────────────────────────
 
-    async def like_post(self, page: Page, post_url: str, db=None) -> bool:
+    async def like_post(self, page: Page, post_url: str, db=None, author_name: str = "") -> bool:
         if not self._budget_ok(ACTION_LIKE, db):
             return False
         await random_delay(
@@ -53,7 +53,7 @@ class InteractionEngine:
         if not ok:
             await asyncio.sleep(2)
             ok = await self._attempt_like(page, post_url)
-        self._record(ok, ACTION_LIKE, post_url, db)
+        self._record(ok, ACTION_LIKE, post_url, db, target_name=author_name)
         return ok
 
     async def _attempt_like(self, page: Page, post_url: str) -> bool:
@@ -88,7 +88,7 @@ class InteractionEngine:
     # ── Comment ────────────────────────────────────────────────────────────
 
     async def comment_post(
-        self, page: Page, post_url: str, comment_text: str, db=None
+        self, page: Page, post_url: str, comment_text: str, db=None, author_name: str = ""
     ) -> bool:
         if not self._budget_ok(ACTION_COMMENT, db):
             return False
@@ -100,7 +100,7 @@ class InteractionEngine:
         if not ok:
             await asyncio.sleep(3)
             ok = await self._attempt_comment(page, post_url, comment_text)
-        self._record(ok, ACTION_COMMENT, post_url, db, comment_text=comment_text)
+        self._record(ok, ACTION_COMMENT, post_url, db, comment_text=comment_text, target_name=author_name)
         return ok
 
     async def _attempt_comment(
@@ -388,6 +388,7 @@ class InteractionEngine:
         target_url: str,
         db,
         comment_text: Optional[str] = None,
+        target_name: str = "",
     ) -> None:
         """Log result, increment budget, update circuit breaker, broadcast WS event."""
         result = "SUCCESS" if success else "FAILED"
@@ -399,15 +400,20 @@ class InteractionEngine:
             else:
                 self._cb.record_error(f"{action_type}_failed")
 
+        # Derive a readable name from URL if none supplied
+        if not target_name:
+            url_stripped = target_url.rstrip("/")
+            if "/in/" in url_stripped:
+                target_name = url_stripped.split("/in/")[-1].split("/")[0]
+            else:
+                # For post URLs: use the last non-empty segment
+                parts = [p for p in url_stripped.split("/") if p]
+                target_name = parts[-1] if parts else target_url
+
         if db:
             # Engagement log
             try:
                 from backend.storage import engagement_log
-                target_name = (
-                    target_url.split("/in/")[-1].strip("/")
-                    if "/in/" in target_url
-                    else target_url.split("/")[-1]
-                )
                 engagement_log.write_action(
                     action_type=action_type,
                     target_url=target_url,
@@ -432,7 +438,7 @@ class InteractionEngine:
             from backend.api.websocket import schedule_broadcast
             schedule_broadcast("activity", {
                 "action": action_type,
-                "target": target_url,
+                "target": target_name,
                 "result": result,
                 "comment": comment_text,
             })

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X } from 'lucide-react'
 import { config as configApi, content as contentApi } from '../api/client'
 
-const TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
+const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
 const STYLES = ['Thought Leadership', 'Story', 'Tips List', 'Question', 'Data Insight', 'Contrarian Take']
 const TONES = ['Professional', 'Conversational', 'Bold', 'Educational']
 
@@ -32,7 +32,8 @@ function formatDate(iso) {
 }
 
 export default function ContentStudio() {
-  const [topic, setTopic] = useState(TOPICS[0])
+  const [topics, setTopics] = useState(DEFAULT_TOPICS)
+  const [topic, setTopic] = useState(DEFAULT_TOPICS[0])
   const [style, setStyle] = useState(STYLES[0])
   const [tone, setTone] = useState(TONES[0])
   const [wordCount, setWordCount] = useState(150)
@@ -47,6 +48,16 @@ export default function ContentStudio() {
 
   const [queue, setQueue] = useState([])
   const [queueLoading, setQueueLoading] = useState(true)
+
+  useEffect(() => {
+    configApi.getTopics().then((res) => {
+      const t = res.data
+      if (Array.isArray(t) && t.length > 0) {
+        setTopics(t)
+        setTopic(t[0])
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetchQueue()
@@ -70,8 +81,8 @@ export default function ContentStudio() {
     try {
       const res = await configApi.testPrompt('post', { topic, style, tone, word_count: wordCount })
       setGenerated(res.data.output || '')
-    } catch {
-      setGenerated(`[Mock] ${style} post about "${topic}" in a ${tone.toLowerCase()} tone.\n\nThe data doesn't lie — companies that invest in analytics report 2x faster decision-making.\n\nHere's what we've seen across 50+ implementations:\n\n1. Start with one KPI that matters\n2. Build the habit before the dashboard\n3. Let data ask the hard questions\n\nWhat metric are you watching most closely right now?\n\n#businessintelligence #dataanalytics #reporting`)
+    } catch (e) {
+      setGenerated(`[Error generating post: ${e.response?.data?.output || e.message}]`)
     } finally {
       setGenerating(false)
     }
@@ -148,7 +159,7 @@ export default function ContentStudio() {
               onChange={(e) => setTopic(e.target.value)}
               className="w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
             >
-              {TOPICS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {topics.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 

@@ -14,8 +14,9 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**SPRINT 7 — Campaigns + Growth Intelligence**
-→ See BUILD_PROMPTS.md Sessions 7A → 7B for exact prompts
+**SPRINT 8 — Analytics + Polish** (mostly complete)
+→ All mock data removed, all pages wired to real API
+→ Remaining: E2E test + README
 
 ---
 
@@ -94,7 +95,7 @@ Do NOT implement a module already marked [x].
 - [x] backend/core/pipeline.py — full post processing pipeline (stub)
 - [x] Wire start/stop/pause/resume API → engine via state_manager
 - [x] Wire engine state → WebSocket → Dashboard UI
-- [ ] Wire budget tracker → BudgetBar component via WebSocket
+- [x] Wire budget tracker → BudgetBar component via WebSocket (Dashboard reads budget_used from engine.status + listens to budget_update events)
 
 **Milestone 2 check:** Start/stop/pause/resume work. WebSocket shows live state. Scheduler fires tasks. Queue and workers visible in logs.
 
@@ -176,12 +177,18 @@ Do NOT implement a module already marked [x].
 > **BUILD_PROMPTS.md:** Sessions 8A → 8B → 8C
 > **Model:** Sonnet 4.6 (8A, 8C) · Opus 4.6 (8B review) · Run /clear before starting
 
-- [ ] backend/api/analytics.py — full stats queries (daily, weekly, by topic)
-- [ ] Wire Analytics page charts → real DB data
-- [ ] Wire Dashboard counters → real budget_tracker data
-- [ ] Wire ActivityFeed → WebSocket activity events (real actions)
-- [ ] Wire alert system → WebSocket alert events → Dashboard banner
-- [ ] Add weekly summary generator (AI summarise week's engagement)
+- [x] backend/api/analytics.py — full stats queries (daily, weekly, by topic, feed-posts, feed-skipped, comment-history)
+- [x] Wire Analytics page charts → real DB data (weekly chart, top topics, campaign funnel, summary)
+- [x] Wire Dashboard counters → real budget_tracker data (via engine.status() budget_used)
+- [x] Wire ActivityFeed → WebSocket activity events + real DB history on mount
+- [x] Wire alert system → WebSocket alert events → Dashboard banner
+- [x] Add weekly summary generator (real stats-based summary from DB)
+- [x] Wire Leads page → real API (removed MOCK_LEADS, fetch on mount with filters)
+- [x] Wire Campaigns page → real API (removed MOCK_CAMPAIGNS, real CRUD + stats)
+- [x] Wire FeedEngagement page → real API (3 new endpoints: feed-posts, feed-skipped, comment-history)
+- [x] Wire ContentStudio topics → config API (fetch from /topics, fallback to defaults)
+- [x] Fix config persistence (POST /topics + PUT /settings now write to settings.yaml)
+- [x] Fix naive vs UTC datetime mismatch in analytics queries
 - [ ] End-to-end test: engine runs 30 minutes, no crashes, no duplicates
 - [ ] README.md — setup guide, how to run, config instructions
 

@@ -299,12 +299,12 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     acted = False
 
     if action in ("LIKE", "LIKE_AND_COMMENT"):
-        ok = await ie.like_post(page, url, db=db)
+        ok = await ie.like_post(page, url, db=db, author_name=author)
         if ok:
             acted = True
 
     if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text:
-        ok = await ie.comment_post(page, url, comment_text, db=db)
+        ok = await ie.comment_post(page, url, comment_text, db=db, author_name=author)
         if ok:
             acted = True
 

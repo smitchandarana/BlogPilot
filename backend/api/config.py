@@ -25,7 +25,19 @@ async def get_topics():
 
 @router.post("/topics")
 async def update_topics(topics: list[str]):
-    # In-memory update only for now; full persistence via settings file in Sprint 3
+    import yaml
+    from backend.utils.config_loader import load_config
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml")
+    config_path = os.path.abspath(config_path)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        data["topics"] = topics
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+        load_config()
+    except Exception as e:
+        logger.error(f"Failed to persist topics: {e}")
     return topics
 
 
@@ -42,7 +54,24 @@ async def get_settings():
 
 @router.put("/settings")
 async def update_settings(settings: dict):
-    # TODO: persist to settings.yaml in Sprint 3
+    import yaml
+    from backend.utils.config_loader import load_config
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml")
+    config_path = os.path.abspath(config_path)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        # Deep merge settings into existing config
+        for key, val in settings.items():
+            if isinstance(val, dict) and isinstance(data.get(key), dict):
+                data[key].update(val)
+            else:
+                data[key] = val
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+        load_config()
+    except Exception as e:
+        logger.error(f"Failed to persist settings: {e}")
     return settings
 
 

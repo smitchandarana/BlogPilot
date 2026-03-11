@@ -1,20 +1,13 @@
-import { useState } from 'react'
-import { Plus, X, ChevronDown, ChevronUp, Play, Pause, Trash2, Users } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, X, ChevronDown, ChevronUp, Play, Pause, Trash2, Users, Loader2 } from 'lucide-react'
 import CampaignBuilder from '../components/CampaignBuilder'
 import { campaigns as campaignsApi } from '../api/client'
-
-const MOCK_CAMPAIGNS = [
-  { id: '1', name: 'BI Decision Makers Q1', status: 'ACTIVE', enrolled: 24, reply_rate: 0.18, created_at: '2026-02-15', steps: 4 },
-  { id: '2', name: 'Analytics Leaders Outreach', status: 'PAUSED', enrolled: 11, reply_rate: 0.09, created_at: '2026-03-01', steps: 3 },
-  { id: '3', name: 'CFO Connect Campaign', status: 'ACTIVE', enrolled: 37, reply_rate: 0.27, created_at: '2026-01-20', steps: 5 },
-]
-
-const MOCK_STATS = { enrolled: 24, in_progress: 15, completed: 7, reply_rate: 0.18 }
 
 const STATUS_STYLES = {
   ACTIVE: 'bg-emerald-500/15 text-emerald-400',
   PAUSED: 'bg-amber-500/15 text-amber-400',
   COMPLETED: 'bg-slate-700/60 text-slate-400',
+  ARCHIVED: 'bg-slate-700/60 text-slate-400',
 }
 
 function Modal({ title, onClose, children }) {
@@ -34,37 +27,77 @@ function Modal({ title, onClose, children }) {
 }
 
 export default function Campaigns() {
-  const [campaigns, setCampaigns] = useState(MOCK_CAMPAIGNS)
+  const [campaigns, setCampaigns] = useState([])
+  const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [expandedStats, setExpandedStats] = useState({})
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newSteps, setNewSteps] = useState([])
   const [showEnroll, setShowEnroll] = useState(null)
   const [enrollUrls, setEnrollUrls] = useState('')
 
-  const toggleExpand = (id) => setExpanded(expanded === id ? null : id)
+  const fetchCampaigns = async () => {
+    try {
+      const res = await campaignsApi.list()
+      setCampaigns(res.data || [])
+    } catch {
+      // keep existing data
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchCampaigns()
+  }, [])
+
+  const toggleExpand = async (id) => {
+    if (expanded === id) {
+      setExpanded(null)
+      return
+    }
+    setExpanded(id)
+    // Fetch real stats for this campaign
+    try {
+      const res = await campaignsApi.stats(id)
+      setExpandedStats((prev) => ({ ...prev, [id]: res.data }))
+    } catch {}
+  }
 
   const handleCreate = async () => {
     if (!newName.trim()) return
     try {
       await campaignsApi.create({ name: newName, steps: newSteps })
+      fetchCampaigns()
     } catch {}
-    setCampaigns((prev) => [
-      ...prev,
-      { id: String(Date.now()), name: newName, status: 'ACTIVE', enrolled: 0, reply_rate: 0, created_at: new Date().toISOString().slice(0, 10), steps: newSteps.length },
-    ])
     setShowNew(false)
     setNewName('')
     setNewSteps([])
   }
 
-  const handleDelete = (id) => setCampaigns((prev) => prev.filter((c) => c.id !== id))
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this campaign?')) return
+    try {
+      await campaignsApi.delete(id)
+      setCampaigns((prev) => prev.filter((c) => c.id !== id))
+    } catch {}
+  }
+
+  const handleToggleStatus = async (c) => {
+    const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE'
+    try {
+      await campaignsApi.update(c.id, { status: newStatus })
+      fetchCampaigns()
+    } catch {}
+  }
 
   const handleEnroll = async () => {
     const ids = enrollUrls.split('\n').map((s) => s.trim()).filter(Boolean)
     if (!ids.length) return
     try {
       await campaignsApi.enroll(showEnroll, ids)
+      fetchCampaigns()
     } catch {}
     setShowEnroll(null)
     setEnrollUrls('')
@@ -86,70 +119,84 @@ export default function Campaigns() {
         </button>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {campaigns.map((c) => (
-          <div key={c.id} className="rounded-xl border border-slate-700/60 bg-slate-800/40 overflow-hidden">
-            {/* Row */}
-            <div className="flex items-center gap-4 px-5 py-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-200 truncate">{c.name}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{c.steps} steps · created {c.created_at}</p>
-              </div>
-              <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[c.status] || ''}`}>{c.status}</span>
-              <div className="flex items-center gap-1.5 text-sm text-slate-400">
-                <Users className="h-3.5 w-3.5" />
-                {c.enrolled}
-              </div>
-              <span className="text-sm text-slate-400 tabular-nums">{Math.round(c.reply_rate * 100)}% reply</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowEnroll(c.id)}
-                  className="rounded-lg border border-slate-700/40 px-2.5 py-1 text-xs text-slate-400 transition-colors hover:text-violet-300 hover:border-violet-600/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
-                >
-                  Enroll
-                </button>
-                {c.status === 'ACTIVE' ? (
-                  <button className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500">
-                    <Pause className="h-3.5 w-3.5" />
-                  </button>
-                ) : (
-                  <button className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-emerald-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500">
-                    <Play className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => toggleExpand(c.id)} className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500">
-                  {expanded === c.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Expanded stats */}
-            {expanded === c.id && (
-              <div className="border-t border-slate-700/40 bg-slate-900/30 px-5 py-4">
-                <div className="grid grid-cols-4 gap-4">
-                  {[
-                    { label: 'Enrolled', value: MOCK_STATS.enrolled, color: 'text-slate-200' },
-                    { label: 'In Progress', value: MOCK_STATS.in_progress, color: 'text-violet-300' },
-                    { label: 'Completed', value: MOCK_STATS.completed, color: 'text-emerald-400' },
-                    { label: 'Reply Rate', value: `${Math.round(MOCK_STATS.reply_rate * 100)}%`, color: 'text-amber-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="text-center">
-                      <p className={`text-xl font-semibold tabular-nums ${color}`}>{value}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-                    </div>
-                  ))}
+      {loading ? (
+        <div className="flex items-center justify-center py-12 gap-2 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading campaigns…
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="py-12 text-center text-sm text-slate-500">No campaigns yet. Create one to get started.</div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {campaigns.map((c) => {
+            const stepCount = Array.isArray(c.steps) ? c.steps.length : 0
+            const stats = expandedStats[c.id]
+            return (
+              <div key={c.id} className="rounded-xl border border-slate-700/60 bg-slate-800/40 overflow-hidden">
+                {/* Row */}
+                <div className="flex items-center gap-4 px-5 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-200 truncate">{c.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{stepCount} steps · created {c.created_at ? c.created_at.slice(0, 10) : '—'}</p>
+                  </div>
+                  <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[c.status] || ''}`}>{c.status}</span>
+                  <div className="flex items-center gap-1.5 text-sm text-slate-400">
+                    <Users className="h-3.5 w-3.5" />
+                    {c.enrolled_count ?? 0}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setShowEnroll(c.id)}
+                      className="rounded-lg border border-slate-700/40 px-2.5 py-1 text-xs text-slate-400 transition-colors hover:text-violet-300 hover:border-violet-600/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
+                    >
+                      Enroll
+                    </button>
+                    <button
+                      onClick={() => handleToggleStatus(c)}
+                      className={`rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors focus-visible:outline-none focus-visible:ring-1 ${
+                        c.status === 'ACTIVE' ? 'hover:text-amber-400 focus-visible:ring-amber-500' : 'hover:text-emerald-400 focus-visible:ring-emerald-500'
+                      }`}
+                    >
+                      {c.status === 'ACTIVE' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => toggleExpand(c.id)} className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500">
+                      {expanded === c.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Expanded stats */}
+                {expanded === c.id && (
+                  <div className="border-t border-slate-700/40 bg-slate-900/30 px-5 py-4">
+                    {stats ? (
+                      <div className="grid grid-cols-4 gap-4">
+                        {[
+                          { label: 'Enrolled', value: stats.enrolled, color: 'text-slate-200' },
+                          { label: 'In Progress', value: stats.in_progress, color: 'text-violet-300' },
+                          { label: 'Completed', value: stats.completed, color: 'text-emerald-400' },
+                          { label: 'Reply Rate', value: `${Math.round((stats.reply_rate || 0) * 100)}%`, color: 'text-amber-400' },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="text-center">
+                            <p className={`text-xl font-semibold tabular-nums ${color}`}>{value}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-sm text-slate-500">Loading stats…</div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* New campaign modal */}
       {showNew && (
@@ -193,7 +240,7 @@ export default function Campaigns() {
               value={enrollUrls}
               onChange={(e) => setEnrollUrls(e.target.value)}
               rows={6}
-              placeholder="https://linkedin.com/in/profile-1&#10;https://linkedin.com/in/profile-2"
+              placeholder={"https://linkedin.com/in/profile-1\nhttps://linkedin.com/in/profile-2"}
               className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
             />
             <div className="flex justify-end gap-3">

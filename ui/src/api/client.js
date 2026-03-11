@@ -33,6 +33,9 @@ export const analytics = {
   summary: () => http.get('/analytics/summary'),
   campaignFunnel: () => http.get('/analytics/campaign-funnel'),
   recentActivity: (limit = 50) => http.get('/analytics/recent-activity', { params: { limit } }),
+  feedPosts: (limit = 30) => http.get('/analytics/feed-posts', { params: { limit } }),
+  feedSkipped: (limit = 30) => http.get('/analytics/feed-skipped', { params: { limit } }),
+  commentHistory: (limit = 30) => http.get('/analytics/comment-history', { params: { limit } }),
 }
 
 export const campaigns = {
