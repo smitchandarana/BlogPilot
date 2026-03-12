@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Eye, EyeOff, Save, Loader2, CheckCircle2, AlertTriangle, X } from 'lucide-react'
-import { config as configApi } from '../api/client'
+import { useState, useEffect, useCallback } from 'react'
+import { Eye, EyeOff, Save, Loader2, CheckCircle2, AlertTriangle, X, RotateCcw, Power } from 'lucide-react'
+import { config as configApi, server as serverApi } from '../api/client'
 
 function SectionCard({ title, description, children }) {
   return (
@@ -50,6 +50,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showConfirmClear, setShowConfirmClear] = useState(false)
+  const [showConfirmRestart, setShowConfirmRestart] = useState(false)
+  const [showConfirmShutdown, setShowConfirmShutdown] = useState(false)
+  const [serverAction, setServerAction] = useState(null) // 'restarting' | 'shutdown' | null
 
   useEffect(() => {
     configApi.getSettings().then((res) => {
@@ -66,6 +69,37 @@ export default function Settings() {
 
   const set = (section, key, val) =>
     setForm((f) => ({ ...f, [section]: { ...f[section], [key]: val } }))
+
+  const pollUntilReady = useCallback(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('http://localhost:8000/health')
+        if (res.ok) {
+          clearInterval(interval)
+          setServerAction(null)
+          window.location.reload()
+        }
+      } catch { /* server still down */ }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleRestart = async () => {
+    setShowConfirmRestart(false)
+    setServerAction('restarting')
+    try {
+      await serverApi.restart()
+    } catch { /* expected — server is restarting */ }
+    setTimeout(pollUntilReady, 1500)
+  }
+
+  const handleShutdown = async () => {
+    setShowConfirmShutdown(false)
+    setServerAction('shutdown')
+    try {
+      await serverApi.shutdown()
+    } catch { /* expected — server is shutting down */ }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -230,6 +264,28 @@ export default function Settings() {
       <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-5">
         <h2 className="mb-1 text-sm font-semibold text-red-400">Danger Zone</h2>
         <p className="mb-4 text-xs text-slate-500">These actions are irreversible. Proceed with caution.</p>
+
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+          <h3 className="text-sm font-medium text-amber-300">Server Control</h3>
+          <p className="text-xs text-slate-500">Restart or shut down the entire backend process. The engine will be stopped gracefully before the action.</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowConfirmRestart(true)}
+              className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Restart Server
+            </button>
+            <button
+              onClick={() => setShowConfirmShutdown(true)}
+              className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            >
+              <Power className="h-4 w-4" />
+              Shutdown Server
+            </button>
+          </div>
+        </div>
+
         <button
           onClick={() => setShowConfirmClear(true)}
           className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
@@ -238,6 +294,84 @@ export default function Settings() {
         </button>
       </div>
 
+      {/* Server action overlay */}
+      {serverAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-700/60 bg-[#161b27] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+            {serverAction === 'restarting' ? (
+              <>
+                <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                <p className="text-base font-medium text-slate-200">Restarting server...</p>
+                <p className="text-sm text-slate-500">Reconnecting automatically when ready.</p>
+              </>
+            ) : (
+              <>
+                <Power className="h-8 w-8 text-red-400" />
+                <p className="text-base font-medium text-slate-200">Server has been shut down</p>
+                <p className="text-sm text-slate-500">Start the backend manually to continue.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirm restart modal */}
+      {showConfirmRestart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-[#161b27] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-100">Restart Server?</h3>
+              <button onClick={() => setShowConfirmRestart(false)} className="rounded-lg p-1 text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-400">
+              The engine will be stopped gracefully and the entire backend process will restart. The UI will automatically reconnect when the server is back.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowConfirmRestart(false)} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                Cancel
+              </button>
+              <button
+                onClick={handleRestart}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                Yes, Restart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm shutdown modal */}
+      {showConfirmShutdown && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-[#161b27] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-100">Shutdown Server?</h3>
+              <button onClick={() => setShowConfirmShutdown(false)} className="rounded-lg p-1 text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-400">
+              The engine will be stopped and the backend process will be terminated. You will need to manually restart the server to use the application again.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowConfirmShutdown(false)} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                Cancel
+              </button>
+              <button
+                onClick={handleShutdown}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              >
+                Yes, Shutdown
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm clear data modal */}
       {showConfirmClear && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-[#161b27] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">

@@ -1,0 +1,21 @@
+Score this LinkedIn post draft for quality before publishing.
+PhoenixSolution is a business intelligence and reporting solutions company.
+Only high-quality posts that position us as experts should be published.
+
+Scoring criteria (each 0-2, total 0-10):
+
+  original_insight:  Contains a non-obvious claim, observation, or data point
+  specific_claim:    Makes at least one concrete, specific statement (not vague)
+  hook_strength:     First sentence would stop a scroller
+  conversation_hook: Ends with something that invites comments or discussion
+  readability:       Well-structured, flows naturally, not jargon-heavy
+
+Post draft:
+{post_text}
+
+Topic: {topic}
+Style: {style}
+Target audience: {target_audience}
+
+Return ONLY valid JSON:
+{{"original_insight": 0, "specific_claim": 0, "hook_strength": 0, "conversation_hook": 0, "readability": 0, "total": 0, "publish_recommendation": true, "rejection_reason": null, "improvement_suggestion": "one sentence on what would make this better"}}

@@ -205,6 +205,20 @@ async def comment_history(limit: int = 30):
         ]
 
 
+@router.get("/comment-quality")
+async def comment_quality():
+    from backend.storage.quality_log import get_comment_quality_stats
+    with get_db() as db:
+        return get_comment_quality_stats(db)
+
+
+@router.get("/post-quality")
+async def post_quality():
+    from backend.storage.quality_log import get_post_quality_stats
+    with get_db() as db:
+        return get_post_quality_stats(db)
+
+
 @router.get("/campaign-funnel")
 async def campaign_funnel():
     from backend.storage.models import CampaignEnrollment

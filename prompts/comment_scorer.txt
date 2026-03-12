@@ -1,0 +1,17 @@
+Score each of these LinkedIn comment candidates on quality.
+Scoring criteria (each 0-2, total 0-10):
+
+  specificity:    References specific content from the post (not generic)
+  insight_value:  Adds real knowledge or perspective the author hasn't said
+  conversation:   Likely to get a reply from the author or other readers
+  professionalism: Sounds like a credible senior professional wrote it
+  originality:    Different from typical AI-generated LinkedIn comments
+
+Post the comment is responding to:
+{post_text}
+
+Candidates:
+{candidates_json}
+
+Return ONLY valid JSON, no preamble, no markdown:
+{{"scores": [{{"index": 0, "specificity": 0, "insight_value": 0, "conversation": 0, "professionalism": 0, "originality": 0, "total": 0, "reject_reason": null}}], "winner_index": 0}}

@@ -25,10 +25,11 @@ task queue                → backend/core/task_queue.py
 worker pool (max 3)       → backend/core/worker_pool.py
 APScheduler jobs          → backend/core/scheduler.py
 per-action rate caps      → backend/core/rate_limiter.py
-auto-pause on errors      → backend/core/circuit_breaker.py
+auto-pause on errors      → backend/core/circuit_breaker.py (auto-resumes after pause_duration_minutes)
 full pipeline logic       → backend/core/pipeline.py
-FastAPI routes            → backend/api/ (engine, config, analytics, campaigns, leads, websocket)
+FastAPI routes            → backend/api/ (engine, config, analytics, campaigns, leads, websocket, server)
 WebSocket broadcaster     → backend/api/websocket.py
+server process control    → backend/api/server.py
 Playwright browser        → backend/automation/browser.py
 LinkedIn login/cookies    → backend/automation/linkedin_login.py
 feed DOM extraction       → backend/automation/feed_scanner.py
@@ -109,6 +110,18 @@ Profile visit + email enrichment triggered if score ≥ 8.
 `engine_state | activity | budget_update | alert | post_preview | lead_added | stats_update`
 
 All pushed via `api/websocket.py`
+
+---
+
+## Server Control Endpoints
+
+```
+POST /server/restart   → graceful engine stop + os.execv() re-exec
+POST /server/shutdown  → graceful engine stop + process exit
+GET  /server/info      → PID, uptime, python version
+```
+
+UI: Settings → Danger Zone (restart/shutdown buttons with confirmation modals)
 
 ---
 

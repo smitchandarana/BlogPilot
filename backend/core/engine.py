@@ -65,16 +65,17 @@ class Engine:
         logger.info("Engine RUNNING")
 
     def stop(self):
-        """Stop the engine: drain workers, stop scheduler, transition to STOPPED."""
+        """Stop the engine: stop scheduler first, transition, then drain workers."""
         current = self.state_manager.get()
         if current not in (EngineState.RUNNING, EngineState.PAUSED, EngineState.ERROR):
             raise ValueError(
                 f"Cannot stop from state {current.value}"
             )
         logger.info("Engine stopping…")
+        self.circuit_breaker.cancel_pending_resume()  # cancel any auto-resume timer
+        self.scheduler.stop()               # stop new jobs from firing first
         self.state_manager.stop()           # → STOPPED
-        self.scheduler.stop()
-        self.worker_pool.drain()
+        self.worker_pool.drain()            # wait for in-flight tasks
         self._start_time = None
         logger.info("Engine STOPPED")
 

@@ -20,36 +20,43 @@ class Scheduler:
 
     def __init__(self):
         os.makedirs(_DB_DIR, exist_ok=True)
-        db_url = f"sqlite:///{os.path.abspath(_SCHEDULER_DB)}"
-        jobstores = {"default": SQLAlchemyJobStore(url=db_url)}
-        self._scheduler = BackgroundScheduler(
+        self._db_url = f"sqlite:///{os.path.abspath(_SCHEDULER_DB)}"
+        self._scheduler = None
+        self._started: bool = False
+
+    def _create_scheduler(self):
+        """Create a fresh BackgroundScheduler instance (APScheduler cannot restart after shutdown)."""
+        jobstores = {"default": SQLAlchemyJobStore(url=self._db_url)}
+        return BackgroundScheduler(
             jobstores=jobstores,
             job_defaults={"coalesce": True, "max_instances": 1},
         )
-        self._started: bool = False
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
     def start(self):
         if not self._started:
+            self._scheduler = self._create_scheduler()
             self._scheduler.start()
             self._started = True
+            self._scheduler.remove_all_jobs()  # purge stale jobs from previous runs
             self._register_default_jobs()
             logger.info("Scheduler started")
 
     def stop(self):
-        if self._started and self._scheduler.running:
+        if self._started and self._scheduler is not None and self._scheduler.running:
             self._scheduler.shutdown(wait=False)
+            self._scheduler = None
             self._started = False
             logger.info("Scheduler stopped")
 
     def pause(self):
-        if self._started and self._scheduler.running:
+        if self._started and self._scheduler is not None and self._scheduler.running:
             self._scheduler.pause()
             logger.info("Scheduler paused — jobs will not fire")
 
     def resume(self):
-        if self._started and self._scheduler.running:
+        if self._started and self._scheduler is not None and self._scheduler.running:
             self._scheduler.resume()
             logger.info("Scheduler resumed")
 
@@ -63,6 +70,9 @@ class Scheduler:
         replace_existing: bool = True,
         **kwargs,
     ):
+        if self._scheduler is None:
+            logger.warning(f"Scheduler: cannot add job '{job_id}' — scheduler not running")
+            return
         self._scheduler.add_job(
             fn,
             trigger,
@@ -124,10 +134,19 @@ class Scheduler:
             id="post_publishing",
             replace_existing=True,
         )
+        cycle_hours = int(cfg_get("topic_rotation.cycle_interval_hours", 24))
+        if cfg_get("topic_rotation.enabled", True):
+            self._scheduler.add_job(
+                _job_topic_rotation,
+                IntervalTrigger(hours=cycle_hours),
+                id="topic_rotation_cycle",
+                replace_existing=True,
+            )
         logger.info(
             f"Scheduler: default jobs registered "
             f"(feed_scan every {interval} min, hourly_reset, budget_reset, "
-            f"campaign_processing every 30 min, post_publishing every 1 min)"
+            f"campaign_processing every 30 min, post_publishing every 1 min, "
+            f"topic_rotation every {cycle_hours} h)"
         )
 
 
@@ -226,3 +245,25 @@ def _job_post_publishing():
 
     except Exception as exc:
         logger.warning(f"Scheduler: post_publishing error: {exc}")
+
+
+def _job_topic_rotation():
+    """Runs the topic auto-rotation cycle. Fires every cycle_interval_hours (default 24h)."""
+    logger.info("Scheduler: topic_rotation fired")
+    try:
+        from backend.growth.topic_rotator import topic_rotator
+        from backend.storage.database import get_db
+        from backend.api.websocket import schedule_broadcast
+
+        with get_db() as db:
+            report = topic_rotator.run_iteration_cycle(db)
+
+        schedule_broadcast("topic_rotation", report)
+        logger.info(
+            f"Scheduler: topic rotation complete — "
+            f"activated: {report['topics_activated']}, "
+            f"paused: {report['topics_paused']}, "
+            f"active: {report['active_count']}"
+        )
+    except Exception as exc:
+        logger.warning(f"Scheduler: topic_rotation error: {exc}")

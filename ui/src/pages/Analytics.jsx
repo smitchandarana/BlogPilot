@@ -47,18 +47,22 @@ export default function Analytics() {
   const [funnelData, setFunnelData] = useState([])
   const [summary, setSummary] = useState('')
   const [dailyStats, setDailyStats] = useState(null)
+  const [commentQuality, setCommentQuality] = useState(null)
+  const [postQuality, setPostQuality] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
-        const [weeklyRes, topicsRes, funnelRes, summaryRes, dailyRes] = await Promise.all([
+        const [weeklyRes, topicsRes, funnelRes, summaryRes, dailyRes, cqRes, pqRes] = await Promise.all([
           analytics.weekly(),
           analytics.topTopics(),
           analytics.campaignFunnel(),
           analytics.summary(),
           analytics.daily(),
+          analytics.commentQuality().catch(() => ({ data: null })),
+          analytics.postQuality().catch(() => ({ data: null })),
         ])
 
         // Transform weekly data for chart
@@ -83,6 +87,8 @@ export default function Analytics() {
 
         setSummary(summaryRes.data?.summary || 'No summary available yet.')
         setDailyStats(dailyRes.data || {})
+        setCommentQuality(cqRes.data || null)
+        setPostQuality(pqRes.data || null)
       } catch {
         // keep defaults
       } finally {
@@ -217,6 +223,85 @@ export default function Analytics() {
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Weekly Summary</h2>
         <p className="text-sm leading-relaxed text-slate-400">{summary}</p>
       </div>
+
+      {/* Content Quality Metrics (Sprint 10) */}
+      {(commentQuality || postQuality) && (
+        <div>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Content Quality Metrics</h2>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Comment Quality */}
+            <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+              <h3 className="mb-4 text-sm font-medium text-slate-300">Comment Quality</h3>
+              {commentQuality && commentQuality.total_comments > 0 ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">Avg Quality Score</span>
+                    <span className={`text-2xl font-semibold tabular-nums ${commentQuality.avg_quality_score >= 8 ? 'text-green-500' : commentQuality.avg_quality_score >= 6 ? 'text-yellow-500' : 'text-red-500'}`}>
+                      {commentQuality.avg_quality_score}/10
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">Reply Rate</span>
+                    <span className="text-lg font-semibold text-violet-300 tabular-nums">{Math.round(commentQuality.reply_rate * 100)}%</span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">High Quality</span>
+                    <span className="text-sm text-slate-400">{commentQuality.high_quality_count} / {commentQuality.total_comments}</span>
+                  </div>
+                  {commentQuality.top_angles && (
+                    <div className="mt-2">
+                      <span className="text-xs text-slate-500 block mb-2">Angle Breakdown</span>
+                      <div className="flex gap-2">
+                        {Object.entries(commentQuality.top_angles).map(([angle, count]) => (
+                          <div key={angle} className="flex-1 rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500 capitalize">{angle}</p>
+                            <p className="text-sm font-semibold text-slate-300 tabular-nums">{count}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-slate-500">No comment quality data yet.</p>
+              )}
+            </div>
+
+            {/* Post Quality */}
+            <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+              <h3 className="mb-4 text-sm font-medium text-slate-300">Post Quality</h3>
+              {postQuality && postQuality.total_generated > 0 ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">Approval Rate</span>
+                    <span className={`text-2xl font-semibold tabular-nums ${postQuality.approval_rate >= 0.8 ? 'text-green-500' : postQuality.approval_rate >= 0.6 ? 'text-yellow-500' : 'text-red-500'}`}>
+                      {Math.round(postQuality.approval_rate * 100)}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">Avg Score</span>
+                    <span className={`text-lg font-semibold tabular-nums ${postQuality.avg_quality_score >= 8 ? 'text-green-500' : postQuality.avg_quality_score >= 6 ? 'text-yellow-500' : 'text-red-500'}`}>
+                      {postQuality.avg_quality_score}/10
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-500">Approved / Rejected</span>
+                    <span className="text-sm text-slate-400">{postQuality.approved_count} / {postQuality.rejected_count}</span>
+                  </div>
+                  {postQuality.top_rejection_reasons && postQuality.top_rejection_reasons.length > 0 && (
+                    <div className="mt-2">
+                      <span className="text-xs text-slate-500 block mb-1">Top Rejection Reason</span>
+                      <p className="text-xs text-red-400/80 italic">{postQuality.top_rejection_reasons[0]}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-slate-500">No post quality data yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

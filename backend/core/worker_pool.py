@@ -39,18 +39,20 @@ class WorkerPool:
     def submit(self, fn: Callable, *args, **kwargs) -> Optional[Future]:
         """
         Submit a callable. Returns None (silently) if engine is not RUNNING.
+        State check and executor submit are atomic (held under lock).
         """
-        if self._state_manager is not None:
-            from backend.core.state_manager import EngineState
-            state = self._state_manager.get()
-            if state != EngineState.RUNNING:
-                logger.debug(
-                    f"WorkerPool: submit rejected — engine is {state.value}"
-                )
-                return None
+        with self._lock:
+            if self._state_manager is not None:
+                from backend.core.state_manager import EngineState
+                state = self._state_manager.get()
+                if state != EngineState.RUNNING:
+                    logger.debug(
+                        f"WorkerPool: submit rejected — engine is {state.value}"
+                    )
+                    return None
 
-        future = self._executor.submit(self._wrap(fn, fn.__name__), *args, **kwargs)
-        return future
+            future = self._executor.submit(self._wrap(fn, fn.__name__), *args, **kwargs)
+            return future
 
     def submit_task(self, task) -> Optional[Future]:
         """Dispatch a Task object to its registered handler by task.type."""
@@ -75,6 +77,8 @@ class WorkerPool:
         """
         logger.info("WorkerPool: draining in-flight tasks…")
         self._executor.shutdown(wait=True, cancel_futures=False)
+        with self._lock:
+            self._active = 0  # safe: shutdown(wait=True) guarantees all tasks done
         self._executor = self._new_executor()
         logger.info("WorkerPool: drained and reset")
 

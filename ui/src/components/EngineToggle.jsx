@@ -1,9 +1,23 @@
-import { Loader2, Play, Square, Pause, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Play, Square, Pause, RotateCcw, Radar } from 'lucide-react'
 import { useEngine } from '../hooks/useEngine'
+import { engine as engineApi } from '../api/client'
 
 export default function EngineToggle() {
   const { state, loading, start, stop, pause, resume } = useEngine()
   const status = state.status
+  const [scanning, setScanning] = useState(false)
+
+  const handleScanNow = async () => {
+    setScanning(true)
+    try {
+      await engineApi.scanNow()
+    } catch (e) {
+      console.error('Scan now failed:', e)
+    } finally {
+      setTimeout(() => setScanning(false), 2000)
+    }
+  }
 
   if (loading) {
     return (
@@ -31,6 +45,16 @@ export default function EngineToggle() {
   if (status === 'RUNNING') {
     return (
       <div className="flex w-full gap-3">
+        <button
+          onClick={handleScanNow}
+          disabled={scanning}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-600/40 bg-cyan-500/10 px-6 py-4 text-cyan-300 transition-[background] duration-200 hover:bg-cyan-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none"
+        >
+          {scanning
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <Radar className="h-4 w-4" />}
+          <span className="font-semibold">{scanning ? 'Scanning…' : 'Scan Now'}</span>
+        </button>
         <button
           onClick={pause}
           className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-600/40 bg-amber-500/10 px-6 py-4 text-amber-300 transition-[background] duration-200 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 active:scale-[0.99]"

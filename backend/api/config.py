@@ -1,6 +1,6 @@
 import os
 from typing import Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from backend.utils.logger import get_logger
 
@@ -8,10 +8,83 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply"]
+_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply", "comment_candidate", "comment_scorer", "post_scorer"]
 
 
-# ── Topics ────────────────────────────────────────────────────────
+# ── Topic Rotation (Sprint 9) ─────────────────────────────────────
+
+class TopicAction(BaseModel):
+    topic: str
+
+
+@router.get("/topics/all")
+async def get_all_topics():
+    from backend.growth.topic_rotator import topic_rotator
+    from backend.storage.database import get_db
+    with get_db() as db:
+        return topic_rotator.get_all_topics(db)
+
+
+@router.post("/topics/activate")
+async def activate_topic(body: TopicAction):
+    from backend.growth.topic_rotator import topic_rotator
+    from backend.storage.database import get_db
+    with get_db() as db:
+        success = topic_rotator.activate_topic(body.topic, db)
+    msg = f"Topic '{body.topic}' activated" if success else f"Failed to activate '{body.topic}'"
+    return {"success": success, "message": msg}
+
+
+@router.post("/topics/deactivate")
+async def deactivate_topic(body: TopicAction):
+    from backend.growth.topic_rotator import topic_rotator
+    from backend.storage.database import get_db
+    with get_db() as db:
+        success = topic_rotator.deactivate_topic(body.topic, db)
+    msg = f"Topic '{body.topic}' paused" if success else f"Failed to pause '{body.topic}'"
+    return {"success": success, "message": msg}
+
+
+@router.post("/topics/run-iteration")
+async def run_topic_iteration():
+    from backend.growth.topic_rotator import topic_rotator
+    from backend.storage.database import get_db
+    from backend.api.websocket import schedule_broadcast
+    with get_db() as db:
+        report = topic_rotator.run_iteration_cycle(db)
+    schedule_broadcast("topic_rotation", report)
+    return report
+
+
+@router.get("/topics/hashtag-suggestions")
+async def get_hashtag_suggestions(topic: str = Query(...)):
+    from backend.growth.topic_rotator import topic_rotator
+    return {"hashtags": topic_rotator.get_hashtag_suggestions(topic)}
+
+
+@router.get("/topics/performance")
+async def get_topic_performance():
+    from backend.storage.database import get_db
+    from backend.storage.models import TopicPerformance
+    with get_db() as db:
+        rows = db.query(TopicPerformance).order_by(TopicPerformance.engagement_rate.desc()).all()
+        return [
+            {
+                "topic": r.topic,
+                "posts_seen": r.posts_seen,
+                "posts_engaged": r.posts_engaged,
+                "engagement_rate": r.engagement_rate,
+                "avg_score": r.avg_score,
+                "is_active": r.is_active,
+                "is_paused": r.is_paused,
+                "pause_reason": r.pause_reason,
+                "last_used": r.last_used.isoformat() if r.last_used else None,
+            }
+            for r in rows
+        ]
+
+
+# ── Topics (existing) ─────────────────────────────────────────────
 
 @router.get("/topics")
 async def get_topics():

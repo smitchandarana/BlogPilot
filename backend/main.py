@@ -146,6 +146,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from backend.api.server import router as server_router
+    app.include_router(server_router, prefix="/server", tags=["server"])
+except ImportError:
+    pass
+
 
 @app.get("/health")
 async def health():

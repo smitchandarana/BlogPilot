@@ -130,3 +130,54 @@ class ScheduledPost(Base):
     published_at = Column(DateTime)
     error_msg = Column(Text)
     created_at = Column(DateTime, default=_utcnow)
+
+
+class TopicPerformance(Base):
+    __tablename__ = "topic_performance"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    topic = Column(String(256), nullable=False, index=True, unique=True)
+    hashtag = Column(String(256), nullable=True)
+    comments_generated = Column(Integer, default=0)
+    likes_given = Column(Integer, default=0)
+    avg_score = Column(Float, default=0.0)
+    posts_seen = Column(Integer, default=0)
+    posts_engaged = Column(Integer, default=0)
+    engagement_rate = Column(Float, default=0.0)
+    last_used = Column(DateTime, default=_utcnow)
+    last_rotated = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_paused = Column(Boolean, default=False)
+    pause_reason = Column(String(256), nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class CommentQualityLog(Base):
+    __tablename__ = "comment_quality_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(String, nullable=False)
+    post_text_snippet = Column(String)
+    comment_used = Column(Text)
+    candidate_count = Column(Integer)
+    quality_score = Column(Float)
+    angle = Column(String(32))
+    got_reply = Column(Boolean, default=False)
+    reply_count = Column(Integer, default=0)
+    topic = Column(String, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class PostQualityLog(Base):
+    __tablename__ = "post_quality_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    topic = Column(String)
+    style = Column(String)
+    post_text = Column(Text)
+    quality_score = Column(Float)
+    was_published = Column(Boolean, default=False)
+    rejection_reason = Column(String, nullable=True)
+    likes_received = Column(Integer, default=0)
+    comments_received = Column(Integer, default=0)
+    created_at = Column(DateTime, default=_utcnow)

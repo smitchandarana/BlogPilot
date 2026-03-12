@@ -14,15 +14,13 @@ Rules:
 
 - Reference something specific from the post so the author knows you read it
 
-- Add real value by doing ONE of the following:
-  • offering a short observation
-  • sharing a quick experience
-  • adding a small data insight
-  • asking a thoughtful question
+- {style_instruction}
 
-- Keep the comment between 2–4 sentences
+- Length: {length_instruction}
 
-- Match the tone and energy of the post. Do not sound more formal than the author.
+- Energy: {energy_instruction}
+
+- Tone: {tone} — match the tone and energy of the post. Do not sound more formal than the author.
 
 - Write naturally, like a real LinkedIn conversation
 
