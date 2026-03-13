@@ -37,34 +37,32 @@ _SYSTEM_SCORER = (
 # ── Randomization pools (used by fallback single-comment path) ────────────
 
 _LENGTH_OPTIONS = [
-    (15, "Write exactly 1 punchy sentence. No fluff."),
-    (30, "Keep it to 2 sentences max."),
-    (25, "Write 2–3 sentences."),
-    (20, "Write 3–4 sentences with some depth."),
-    (10, "Write 4–5 sentences — go deeper, share a real thought."),
+    (25, "Write exactly 1 punchy sentence. No fluff."),
+    (40, "Keep it to 2 sentences max."),
+    (25, "Write 2–3 short sentences."),
+    (10, "Write 3 sentences with some depth."),
 ]
 
 _STYLE_OPTIONS = [
-    "Share a quick personal observation related to the post",
-    "Ask a specific, thoughtful question about something in the post",
-    "Add a relevant data point, stat, or number you've seen",
-    "Relate the topic to a trend you've noticed recently",
-    "Offer a slightly different perspective or gentle pushback",
-    "Share a brief real-world experience or anecdote",
-    "Build on the author's point with a specific example",
-    "Agree with one part and expand on why it matters",
-    "Connect this to something happening in your industry",
-    "Point out an implication the author didn't mention",
+    "Drop a specific number or stat from your own work that supports or challenges the post",
+    "Name a concrete tool, framework, or method you'd use differently",
+    "Disagree with one specific claim — say what you've seen instead",
+    "Share a 1-sentence war story from a real project that's relevant",
+    "Point out a consequence or second-order effect the author missed",
+    "Connect this to a specific trend you've noticed in the last 6 months",
+    "Mention a specific company, team, or project where you saw this play out",
+    "Challenge an assumption buried in the post — name it explicitly",
+    "Add a caveat the author skipped — when does their advice NOT work?",
+    "State your actual opinion on the topic — agree or disagree, but be specific",
 ]
 
 _ENERGY_OPTIONS = [
     "Casual and brief — like a quick reply between meetings",
-    "Thoughtful and measured — take your time with the words",
-    "Enthusiastic but genuine — you actually care about this topic",
     "Direct and to-the-point — no padding, say what you mean",
-    "Curious and questioning — you want to learn more",
-    "Warm and conversational — like talking to a colleague",
     "Confident and opinionated — you have a clear stance",
+    "Slightly provocative — push back on something specific",
+    "Matter-of-fact — state what you know, no hedging",
+    "Warm but brief — like talking to a colleague in passing",
 ]
 
 
@@ -313,6 +311,26 @@ async def generate(
     except Exception as e:
         logger.warning(f"CommentGenerator: scoring failed ({e}), picking first candidate")
         winner_index = 0
+
+    # ── Step 3b: Check if all candidates were rejected ──
+    min_quality = float(cfg_get("quality.min_comment_score", 4))
+    if scores:
+        best_score = max(s.get("total", 0) for s in scores)
+        if best_score < min_quality:
+            reasons = [s.get("reject_reason", "low score") for s in scores if s.get("reject_reason")]
+            logger.warning(
+                f"CommentGenerator: ALL candidates scored below {min_quality} "
+                f"(best={best_score}). Reasons: {reasons}. Returning empty."
+            )
+            return {
+                "comment": "",
+                "quality_score": 0.0,
+                "angle": "rejected",
+                "candidate_count": len(candidates),
+                "all_candidates": candidates,
+                "rejected": True,
+                "reject_reasons": reasons,
+            }
 
     # ── Step 4: Diversity check ──
     winning_comment = candidates[winner_index].get("text", "")

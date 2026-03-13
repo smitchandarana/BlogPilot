@@ -270,7 +270,30 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     # Step 7: Generate comment (Groq AI — Sprint 5; stub now)
     comment_text: Optional[str] = None
     if action in ("COMMENT", "LIKE_AND_COMMENT"):
-        comment_text = await _generate_comment(post, groq_client, prompt_loader)
+        comment_result = await _generate_comment(post, groq_client, prompt_loader)
+        if isinstance(comment_result, dict):
+            comment_text = comment_result.get("comment", "")
+            # Reject low-quality or explicitly rejected comments
+            if comment_result.get("rejected") or not comment_text:
+                reasons = comment_result.get("reject_reasons", ["empty"])
+                logger.info(f"Pipeline: comment REJECTED for '{author}' — {reasons}. Downgrading to LIKE.")
+                try:
+                    from backend.api.websocket import schedule_broadcast
+                    schedule_broadcast("activity", {
+                        "action": "COMMENT_REJECTED",
+                        "target": author,
+                        "result": "SKIPPED",
+                        "comment": f"Quality too low: {', '.join(reasons[:2])}",
+                    })
+                except Exception:
+                    pass
+                comment_text = None
+                if action == "COMMENT":
+                    action = "LIKE"
+                elif action == "LIKE_AND_COMMENT":
+                    action = "LIKE"
+        else:
+            comment_text = str(comment_result) if comment_result else None
 
         # Preview mode: push to UI and wait for human approval before posting
         if bool(cfg_get("feed_engagement.preview_comments", True)):

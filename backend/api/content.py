@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -54,7 +54,7 @@ async def get_post_queue():
 
 
 @router.post("/schedule")
-async def schedule_post(body: ScheduleRequest):
+async def schedule_post(body: ScheduleRequest, force: bool = Query(False)):
     """Add a post to the publishing queue at the given scheduled_at time."""
     try:
         scheduled_at = datetime.fromisoformat(body.scheduled_at)
@@ -62,6 +62,26 @@ async def schedule_post(body: ScheduleRequest):
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid scheduled_at format — use ISO 8601")
+
+    # Duplicate detection
+    if not force:
+        try:
+            from backend.research.duplicate_detector import check_duplicate
+            with get_db() as db:
+                dup = check_duplicate(body.text, db)
+                if dup["is_duplicate"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "message": "Near-duplicate post detected",
+                            "similarity": dup["similarity"],
+                            "matching_preview": dup["matching_preview"],
+                        },
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Don't block on duplicate check failure
 
     with get_db() as db:
         post = ScheduledPost(
@@ -99,7 +119,7 @@ async def cancel_post(post_id: str):
 
 
 @router.post("/publish-now")
-async def publish_now(body: PublishNowRequest):
+async def publish_now(body: PublishNowRequest, force: bool = Query(False)):
     """
     Immediately publish a post via the LinkedIn browser session.
     This runs synchronously (via asyncio) — may take 10-30 seconds.
@@ -113,6 +133,26 @@ async def publish_now(body: PublishNowRequest):
             status_code=409,
             detail="Engine must be RUNNING to publish a post"
         )
+
+    # Duplicate detection
+    if not force:
+        try:
+            from backend.research.duplicate_detector import check_duplicate
+            with get_db() as db:
+                dup = check_duplicate(body.text, db)
+                if dup["is_duplicate"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "message": "Near-duplicate post detected",
+                            "similarity": dup["similarity"],
+                            "matching_preview": dup["matching_preview"],
+                        },
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     # Record the post in DB as a scheduled post with now as scheduled_at
     with get_db() as db:
@@ -194,6 +234,15 @@ async def _async_publish(post_id: str, text: str) -> None:
                     post.error_msg = "Publisher returned False"
                     logger.error(f"Content: post {post_id} failed to publish")
                 db.commit()
+
+        # Register content hash for duplicate detection
+        if success:
+            try:
+                from backend.research.duplicate_detector import register_post
+                with _get_db() as db_dup:
+                    register_post(text, post_id, db_dup)
+            except Exception:
+                pass
 
         # Budget tracking
         if success:

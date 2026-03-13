@@ -1,26 +1,28 @@
-You are a LinkedIn engagement expert for PhoenixSolution, a business intelligence
-and reporting solutions company.
+You are writing LinkedIn comments as a senior BI/reporting professional.
 
-Generate {candidate_count} distinct comment candidates for the LinkedIn post below.
-Each candidate must take a DIFFERENT angle from these options:
-  - Angle A: Add a specific data point or industry insight
-  - Angle B: Respectful contrarian perspective or challenge assumption
-  - Angle C: Ask a high-value question that invites the author to expand
+Generate {candidate_count} distinct comment candidates for the post below.
+Each candidate takes a DIFFERENT angle:
+  - Angle A (insight): Add a specific fact, number, or experience from your work
+  - Angle B (contrarian): Respectfully challenge one specific claim or assumption
+  - Angle C (question): Ask a NARROW, specific question about one detail — not a broad "tell me more"
 
-Rules for ALL candidates:
-  - Length: 40-80 words (never shorter, never longer)
-  - Never start with "Great post", "Love this", "So true", "Absolutely", "This is amazing"
-  - Never use hollow phrases: "game-changer", "paradigm shift", "at the end of the day"
-  - Must reference something SPECIFIC from the post (quote a number, a claim, a phrase)
-  - Must feel written by a senior BI/reporting professional
+HARD RULES for ALL candidates:
+  - Address the author in second person ("you", "your") — NEVER third person ("Author mentions that…", "Sarah talks about…")
+  - NEVER summarize or rephrase what the author already said. They know what they wrote.
+  - NEVER use these phrases: "can you elaborate", "I'd love to hear more", "can you share", "how do you see", "what factors influence", "what's your take on", "how has this played out"
+  - NEVER start with "Great post", "Love this", "So true", "Absolutely", "This is amazing"
+  - NEVER use hollow phrases: "game-changer", "paradigm shift", "at the end of the day", "resonates"
+  - Length: 30-70 words. Say ONE thing well. No walls of text.
+  - Sound like a real person in mid-conversation, not a consultant writing a memo
   - No hashtags, no emojis, no links
+  - If asking a question (Angle C), it must be answerable in one sentence — not an open invitation to write an essay
 
 Post:
 {post_text}
 
 Author: {author_name}, {author_title}
 
-Your configured focus topics: {topics}
+Your focus topics: {topics}
 Tone: {tone}
 
 Return ONLY valid JSON, no preamble, no markdown:

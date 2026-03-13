@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X } from 'lucide-react'
-import { config as configApi, content as contentApi } from '../api/client'
+import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink } from 'lucide-react'
+import { config as configApi, content as contentApi, research as researchApi } from '../api/client'
 
 const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
 const STYLES = ['Thought Leadership', 'Story', 'Tips List', 'Question', 'Data Insight', 'Contrarian Take']
@@ -20,6 +20,13 @@ const STATUS_LABELS = {
   CANCELLED: 'Cancelled',
 }
 
+const SOURCE_STYLES = {
+  REDDIT: 'bg-orange-500/15 text-orange-400',
+  RSS: 'bg-blue-500/15 text-blue-400',
+  HN: 'bg-amber-500/15 text-amber-400',
+  LINKEDIN: 'bg-sky-500/15 text-sky-400',
+}
+
 function formatDate(iso) {
   if (!iso) return '—'
   try {
@@ -31,6 +38,122 @@ function formatDate(iso) {
   }
 }
 
+function ScoreBar({ score, label, color }) {
+  const pct = Math.min(100, Math.max(0, score * 10))
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-slate-500 w-16 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-slate-700/50 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[10px] tabular-nums text-slate-400 w-6 text-right">{score.toFixed(1)}</span>
+    </div>
+  )
+}
+
+function ResearchTopicCard({ topic, onGenerate, onDismiss }) {
+  const [expanded, setExpanded] = useState(false)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [snippets, setSnippets] = useState(null)
+
+  const scoreColor = topic.composite_score >= 7 ? 'bg-emerald-500' :
+    topic.composite_score >= 5 ? 'bg-amber-500' : 'bg-red-500'
+
+  const handleExpand = async () => {
+    if (!expanded && !snippets) {
+      setLoadingDetail(true)
+      try {
+        const res = await researchApi.topicDetail(topic.id)
+        setSnippets(res.data.snippets || [])
+      } catch { setSnippets([]) }
+      finally { setLoadingDetail(false) }
+    }
+    setExpanded(!expanded)
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium text-slate-200 truncate">{topic.topic}</h3>
+          <div className="mt-1 flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full ${scoreColor}`} />
+            <span className="text-xs tabular-nums text-slate-400">{topic.composite_score.toFixed(1)}/10</span>
+            <span className="text-[10px] text-slate-600">•</span>
+            <span className="text-[10px] text-slate-500">{topic.snippet_count} sources</span>
+          </div>
+        </div>
+        <button
+          onClick={() => onDismiss(topic.id)}
+          className="text-slate-600 hover:text-slate-400 transition-colors p-0.5"
+          title="Dismiss"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <ScoreBar score={topic.trending_score} label="Trending" color="bg-violet-500" />
+        <ScoreBar score={topic.engagement_score} label="Engage" color="bg-emerald-500" />
+        <ScoreBar score={topic.content_gap_score} label="Gap" color="bg-amber-500" />
+        <ScoreBar score={topic.relevance_score} label="Relevant" color="bg-sky-500" />
+      </div>
+
+      {topic.suggested_angle && (
+        <p className="text-xs text-slate-400 italic leading-relaxed line-clamp-2">
+          <Lightbulb className="inline h-3 w-3 mr-1 text-amber-500/70" />
+          {topic.suggested_angle}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={() => onGenerate(topic)}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-violet-700/20 border border-violet-600/30 px-3 py-1.5 text-xs text-violet-300 hover:bg-violet-700/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+        >
+          <Sparkles className="h-3 w-3" />
+          Generate Post
+        </button>
+        <button
+          onClick={handleExpand}
+          className="flex items-center gap-1 rounded-lg border border-slate-700/40 px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+        >
+          {loadingDetail ? <Loader2 className="h-3 w-3 animate-spin" /> :
+            expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          Sources
+        </button>
+      </div>
+
+      {expanded && snippets && (
+        <div className="mt-1 flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+          {snippets.length === 0 ? (
+            <p className="text-xs text-slate-600 text-center py-2">No source snippets</p>
+          ) : snippets.map((s, i) => (
+            <div key={i} className="rounded-lg bg-slate-900/50 border border-slate-700/30 p-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_STYLES[s.source] || 'text-slate-400'}`}>
+                  {s.source}
+                </span>
+                <span className="text-[10px] text-slate-500 tabular-nums">{s.engagement_signal} eng</span>
+              </div>
+              <p className="text-xs text-slate-400 line-clamp-2">{s.title}</p>
+              {s.source_url && (
+                <a href={s.source_url} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-[10px] text-slate-600 hover:text-slate-400 mt-1">
+                  <ExternalLink className="h-2.5 w-2.5" /> Link
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ContentStudio() {
   const [topics, setTopics] = useState(DEFAULT_TOPICS)
   const [topic, setTopic] = useState(DEFAULT_TOPICS[0])
@@ -39,6 +162,7 @@ export default function ContentStudio() {
   const [wordCount, setWordCount] = useState(150)
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState('')
+  const [qualityInfo, setQualityInfo] = useState(null)
   const [copied, setCopied] = useState(false)
 
   const [showScheduler, setShowScheduler] = useState(false)
@@ -48,6 +172,18 @@ export default function ContentStudio() {
 
   const [queue, setQueue] = useState([])
   const [queueLoading, setQueueLoading] = useState(true)
+
+  // Research state
+  const [researchTopics, setResearchTopics] = useState([])
+  const [researchLoading, setResearchLoading] = useState(false)
+  const [researching, setResearching] = useState(false)
+  const [researchStatus, setResearchStatus] = useState(null)
+  const [researchOpen, setResearchOpen] = useState(true)
+  const [enrichedContext, setEnrichedContext] = useState(null)
+  const [generatingFromResearch, setGeneratingFromResearch] = useState(false)
+
+  // Duplicate warning
+  const [duplicateWarning, setDuplicateWarning] = useState(null)
 
   useEffect(() => {
     configApi.getTopics().then((res) => {
@@ -65,22 +201,94 @@ export default function ContentStudio() {
     return () => clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    loadResearchTopics()
+    loadResearchStatus()
+  }, [])
+
+  const loadResearchTopics = async () => {
+    setResearchLoading(true)
+    try {
+      const res = await researchApi.topics()
+      setResearchTopics(res.data || [])
+    } catch { /* keep existing */ }
+    finally { setResearchLoading(false) }
+  }
+
+  const loadResearchStatus = async () => {
+    try {
+      const res = await researchApi.status()
+      setResearchStatus(res.data)
+    } catch { /* ignore */ }
+  }
+
+  const triggerResearch = async () => {
+    setResearching(true)
+    try {
+      await researchApi.trigger()
+      await loadResearchTopics()
+      await loadResearchStatus()
+    } catch (e) {
+      alert('Research failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setResearching(false)
+    }
+  }
+
+  const dismissResearchTopic = async (id) => {
+    try {
+      await researchApi.dismiss(id)
+      setResearchTopics(prev => prev.filter(t => t.id !== id))
+    } catch { /* ignore */ }
+  }
+
+  const generateFromResearchTopic = async (researchTopic) => {
+    setGeneratingFromResearch(true)
+    setEnrichedContext({ topicId: researchTopic.id, topicName: researchTopic.topic, angle: researchTopic.suggested_angle })
+    setDuplicateWarning(null)
+    try {
+      const res = await researchApi.generateFromTopic(researchTopic.id, {
+        style, tone, word_count: wordCount,
+      })
+      const data = res.data
+      setGenerated(data.post || '')
+      setTopic(researchTopic.topic)
+
+      if (data.is_duplicate) {
+        setDuplicateWarning({
+          similarity: data.duplicate_similarity,
+          preview: data.duplicate_preview,
+        })
+      }
+    } catch (e) {
+      setGenerated(`[Error: ${e.response?.data?.detail || e.message}]`)
+    } finally {
+      setGeneratingFromResearch(false)
+    }
+  }
+
   const fetchQueue = async () => {
     try {
       const res = await contentApi.getQueue()
       setQueue(res.data || [])
-    } catch {
-      // keep existing data
-    } finally {
-      setQueueLoading(false)
-    }
+    } catch { }
+    finally { setQueueLoading(false) }
   }
 
   const generate = async () => {
     setGenerating(true)
+    setEnrichedContext(null)
+    setDuplicateWarning(null)
+    setQualityInfo(null)
     try {
       const res = await configApi.testPrompt('post', { topic, style, tone, word_count: wordCount })
       setGenerated(res.data.output || '')
+      const qi = {}
+      if (res.data.quality_score != null) qi.score = res.data.quality_score
+      if (res.data.rejected) qi.rejected = true
+      if (res.data.rejection_reason) qi.reason = res.data.rejection_reason
+      if (res.data.improvement_suggestion) qi.suggestion = res.data.improvement_suggestion
+      if (Object.keys(qi).length) setQualityInfo(qi)
     } catch (e) {
       setGenerated(`[Error generating post: ${e.response?.data?.output || e.message}]`)
     } finally {
@@ -99,17 +307,20 @@ export default function ContentStudio() {
     setScheduling(true)
     try {
       await contentApi.schedule({
-        text: generated,
-        topic,
-        style,
-        tone,
+        text: generated, topic, style, tone,
         scheduled_at: new Date(scheduledAt).toISOString(),
       })
       setShowScheduler(false)
       setScheduledAt('')
+      setDuplicateWarning(null)
       fetchQueue()
     } catch (e) {
-      alert('Failed to schedule: ' + (e.response?.data?.detail || e.message))
+      const detail = e.response?.data?.detail
+      if (typeof detail === 'object' && detail?.message?.includes('duplicate')) {
+        setDuplicateWarning({ similarity: detail.similarity, preview: detail.matching_preview })
+      } else {
+        alert('Failed to schedule: ' + (typeof detail === 'string' ? detail : e.message))
+      }
     } finally {
       setScheduling(false)
     }
@@ -122,9 +333,15 @@ export default function ContentStudio() {
     try {
       await contentApi.publishNow({ text: generated, topic, style })
       alert('Post queued for publishing — check the queue for status.')
+      setDuplicateWarning(null)
       fetchQueue()
     } catch (e) {
-      alert('Failed: ' + (e.response?.data?.detail || e.message))
+      const detail = e.response?.data?.detail
+      if (typeof detail === 'object' && detail?.message?.includes('duplicate')) {
+        setDuplicateWarning({ similarity: detail.similarity, preview: detail.matching_preview })
+      } else {
+        alert('Failed: ' + (typeof detail === 'string' ? detail : e.message))
+      }
     } finally {
       setPublishing(false)
     }
@@ -144,13 +361,107 @@ export default function ContentStudio() {
     <div className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-100">Content Studio</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Generate and schedule LinkedIn posts with AI.</p>
+        <p className="mt-0.5 text-sm text-slate-500">Research trending topics, generate context-enriched LinkedIn posts.</p>
       </div>
 
+      {/* ── Research Panel ───────────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 overflow-hidden">
+        <button
+          onClick={() => setResearchOpen(!researchOpen)}
+          className="w-full flex items-center justify-between p-4 hover:bg-slate-800/60 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-violet-400" />
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">Topic Research</h2>
+            {researchTopics.length > 0 && (
+              <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] tabular-nums text-violet-300">
+                {researchTopics.length}
+              </span>
+            )}
+          </div>
+          {researchOpen ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+        </button>
+
+        {researchOpen && (
+          <div className="px-4 pb-4 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={triggerResearch}
+                disabled={researching}
+                className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-xs font-medium text-white shadow-[0_0_12px_rgba(124,58,237,0.15)] hover:bg-violet-600 hover:shadow-[0_0_20px_rgba(124,58,237,0.25)] disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 active:scale-[0.98]"
+              >
+                {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                {researching ? 'Researching…' : 'Run Research'}
+              </button>
+              <div className="text-xs text-slate-600">
+                {researchStatus?.last_run
+                  ? `Last: ${formatDate(researchStatus.last_run)}`
+                  : 'Never run'}
+                {researchStatus?.scan_interval_hours && (
+                  <span className="ml-2">• every {researchStatus.scan_interval_hours}h</span>
+                )}
+              </div>
+            </div>
+
+            {researchLoading ? (
+              <div className="py-8 text-center text-sm text-slate-500 flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading research…
+              </div>
+            ) : researchTopics.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-600">
+                No research data yet. Click "Run Research" to discover trending topics from Reddit, RSS feeds, and your LinkedIn feed.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {researchTopics.map(rt => (
+                  <ResearchTopicCard
+                    key={rt.id}
+                    topic={rt}
+                    onGenerate={generateFromResearchTopic}
+                    onDismiss={dismissResearchTopic}
+                  />
+                ))}
+              </div>
+            )}
+
+            {generatingFromResearch && (
+              <div className="flex items-center justify-center gap-2 py-3 text-sm text-violet-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Generating context-enriched post…
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Generator + Output ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left — Generator controls */}
         <div className="flex flex-col gap-5 rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Generate Post</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Generate Post</h2>
+            {enrichedContext && (
+              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[10px] text-violet-300">
+                <Sparkles className="h-3 w-3" /> Context-enriched
+              </span>
+            )}
+          </div>
+
+          {enrichedContext && (
+            <div className="rounded-lg border border-violet-600/20 bg-violet-900/10 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] uppercase tracking-wider text-violet-400/70">Research Context</span>
+                <button onClick={() => setEnrichedContext(null)} className="text-slate-600 hover:text-slate-400">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Topic: <span className="text-slate-300">{enrichedContext.topicName}</span>
+              </p>
+              {enrichedContext.angle && (
+                <p className="text-xs text-slate-500 mt-0.5 italic">{enrichedContext.angle}</p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs text-slate-400">Topic</label>
@@ -242,6 +553,21 @@ export default function ContentStudio() {
             )}
           </div>
 
+          {duplicateWarning && (
+            <div className="rounded-lg border border-amber-600/30 bg-amber-900/15 p-3 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-amber-300">
+                  Duplicate detected ({(duplicateWarning.similarity * 100).toFixed(0)}% match)
+                </p>
+                {duplicateWarning.preview && (
+                  <p className="text-[11px] text-amber-400/60 mt-1 line-clamp-2">{duplicateWarning.preview}</p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1">You can still publish — click "Post Now" to proceed anyway.</p>
+              </div>
+            </div>
+          )}
+
           <textarea
             value={generated}
             onChange={(e) => setGenerated(e.target.value)}
@@ -249,6 +575,18 @@ export default function ContentStudio() {
             maxLength={3000}
             className="flex-1 min-h-[220px] resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 text-sm leading-relaxed text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
           />
+
+          {qualityInfo && (
+            <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs ${
+              qualityInfo.rejected ? 'bg-red-500/10 border border-red-500/30 text-red-400' :
+              qualityInfo.score >= 7 ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' :
+              'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+            }`}>
+              <span className="font-semibold">Quality: {qualityInfo.score?.toFixed(1) || '—'}/10</span>
+              {qualityInfo.rejected && <span>— Rejected: {qualityInfo.reason}</span>}
+              {qualityInfo.suggestion && !qualityInfo.rejected && <span>— {qualityInfo.suggestion}</span>}
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <span className={`text-xs tabular-nums ${generated.length > 2700 ? 'text-amber-400' : 'text-slate-500'}`}>
@@ -282,7 +620,6 @@ export default function ContentStudio() {
             </div>
           </div>
 
-          {/* Inline schedule picker */}
           {showScheduler && (
             <div className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
@@ -310,7 +647,7 @@ export default function ContentStudio() {
         </div>
       </div>
 
-      {/* Post queue — live from API */}
+      {/* ── Post Queue ───────────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Post Queue</h2>

@@ -182,3 +182,44 @@ class PostQualityLog(Base):
     likes_received = Column(Integer, default=0)
     comments_received = Column(Integer, default=0)
     created_at = Column(DateTime, default=_utcnow)
+
+
+class ResearchedTopic(Base):
+    __tablename__ = "researched_topics"
+
+    id = Column(String(64), primary_key=True)  # UUID
+    topic = Column(String(256), nullable=False, index=True)
+    trending_score = Column(Float, default=0.0)       # 0-10
+    engagement_score = Column(Float, default=0.0)      # 0-10
+    content_gap_score = Column(Float, default=0.0)     # 0-10
+    relevance_score = Column(Float, default=0.0)       # 0-10
+    composite_score = Column(Float, default=0.0)       # weighted average
+    suggested_angle = Column(Text)
+    snippet_count = Column(Integer, default=0)
+    status = Column(String(32), default="RESEARCHED")  # RESEARCHED | USED | EXPIRED
+    researched_at = Column(DateTime, default=_utcnow)
+    expires_at = Column(DateTime)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class ResearchSnippet(Base):
+    __tablename__ = "research_snippets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    topic_id = Column(String(64), ForeignKey("researched_topics.id"), nullable=False)
+    source = Column(String(32), nullable=False)    # REDDIT | RSS | LINKEDIN | HN
+    source_url = Column(String(2048))
+    title = Column(String(512))
+    snippet = Column(Text)
+    engagement_signal = Column(Integer, default=0)  # upvotes/likes/comments
+    discovered_at = Column(DateTime, default=_utcnow)
+
+
+class PostContentHash(Base):
+    __tablename__ = "post_content_hashes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    content_hash = Column(String(64), unique=True, nullable=False)  # SHA256 of normalized text
+    post_id = Column(String(64))           # FK to scheduled_posts.id
+    text_preview = Column(String(500))     # first 500 chars for debugging
+    created_at = Column(DateTime, default=_utcnow)

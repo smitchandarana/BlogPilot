@@ -69,6 +69,13 @@ circuit_breaker:
   window_minutes: 10
   pause_duration_minutes: 30
   captcha_detected_action: pause
+quality:
+  min_comment_score: 8
+  min_post_score: 7
+  comment_candidates: 3
+  max_recent_comments_for_diversity: 20
+  diversity_threshold: 0.7
+  winning_example_min_score: 10
 ai:
   provider: groq
   model: llama-3.3-70b-versatile
@@ -102,6 +109,36 @@ content_studio:
   default_tone: professional
   default_word_count: 150
   auto_publish: false
+research:
+  enabled: true
+  scan_interval_hours: 6
+  max_age_hours: 48
+  reddit:
+    enabled: true
+    subreddits:
+    - BusinessIntelligence
+    - datascience
+    - analytics
+    - PowerBI
+    - dataengineering
+    - tableau
+    posts_per_subreddit: 25
+  rss:
+    enabled: true
+    feeds:
+    - https://towardsdatascience.com/feed
+    - https://feeds.feedburner.com/AnalyticsVidhya
+    max_age_hours: 72
+  hackernews:
+    enabled: false
+    top_stories_limit: 30
+  scoring_weights:
+    trending: 0.3
+    engagement: 0.25
+    content_gap: 0.25
+    relevance: 0.2
+  duplicate_detection:
+    enabled: true
 topics:
 - Business Intelligence
 - Data Analytics

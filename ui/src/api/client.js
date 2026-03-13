@@ -70,6 +70,15 @@ export const content = {
   publishNow: (data) => http.post('/content/publish-now', data),
 }
 
+export const research = {
+  trigger: () => http.post('/research/trigger', null, { timeout: 120000 }),
+  topics: (limit = 20) => http.get('/research/topics', { params: { limit } }),
+  topicDetail: (id) => http.get(`/research/topics/${id}`),
+  generateFromTopic: (id, opts) => http.post(`/research/topics/${id}/generate`, opts, { timeout: 60000 }),
+  dismiss: (id) => http.delete(`/research/topics/${id}`),
+  status: () => http.get('/research/status'),
+}
+
 export const server = {
   restart: () => http.post('/server/restart'),
   shutdown: () => http.post('/server/shutdown'),

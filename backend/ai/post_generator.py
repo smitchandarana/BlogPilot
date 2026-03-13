@@ -34,31 +34,47 @@ async def generate(
     word_count: int,
     groq_client: GroqClient,
     prompt_loader: PromptLoader,
+    context: str = "",
+    suggested_angle: str = "",
 ) -> dict:
     """
     Generate a LinkedIn post with quality scoring.
 
     Args:
-        topic:         Subject of the post.
-        style:         Post style (e.g. "Thought Leadership", "Tips List").
-        tone:          Tone (e.g. "Professional", "Conversational").
-        word_count:    Approximate target length in words.
-        groq_client:   Configured GroqClient instance.
-        prompt_loader: Loaded PromptLoader instance.
+        topic:           Subject of the post.
+        style:           Post style (e.g. "Thought Leadership", "Tips List").
+        tone:            Tone (e.g. "Professional", "Conversational").
+        word_count:      Approximate target length in words.
+        groq_client:     Configured GroqClient instance.
+        prompt_loader:   Loaded PromptLoader instance.
+        context:         Research context from topic research (optional).
+        suggested_angle: AI-suggested angle from topic scoring (optional).
 
     Returns:
         Dict with keys: post, quality_score, approved, rejection_reason,
         improvement_suggestion
     """
-    # Step 1: Generate post (existing logic)
+    # Step 1: Generate post — use context-enriched prompt when context is provided
     try:
-        prompt = prompt_loader.format(
-            "post",
-            topic=topic,
-            style=style,
-            tone=tone,
-            word_count=word_count,
-        )
+        if context:
+            prompt = prompt_loader.format(
+                "post_with_context",
+                topic=topic,
+                suggested_angle=suggested_angle or f"Write about {topic}",
+                context=context,
+                style=style,
+                tone=tone,
+                word_count=word_count,
+            )
+            logger.info(f"PostGenerator: using context-enriched prompt (context={len(context)} chars)")
+        else:
+            prompt = prompt_loader.format(
+                "post",
+                topic=topic,
+                style=style,
+                tone=tone,
+                word_count=word_count,
+            )
         raw = await groq_client.complete(_SYSTEM, prompt)
         post_text = raw.strip()
         logger.info(f"PostGenerator: topic='{topic}' style='{style}' chars={len(post_text)}")

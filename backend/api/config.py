@@ -247,9 +247,56 @@ async def test_prompt(body: PromptTestRequest):
         )
         loader = PromptLoader()
         loader.load_all()
-        formatted = loader.format(body.prompt_name, **body.variables)
-        output = await client.complete("You are a helpful assistant.", formatted)
-        return {"output": output}
+
+        # Route post/comment through their full quality-gated pipelines
+        if body.prompt_name == "post":
+            from backend.ai.post_generator import generate as gen_post
+            result = await gen_post(
+                topic=body.variables.get("topic", ""),
+                style=body.variables.get("style", "Thought Leadership"),
+                tone=body.variables.get("tone", "Professional"),
+                word_count=int(body.variables.get("word_count", 150)),
+                groq_client=client,
+                prompt_loader=loader,
+                context=body.variables.get("context", ""),
+                suggested_angle=body.variables.get("suggested_angle", ""),
+            )
+            output = result.get("post", "")
+            meta = {}
+            if result.get("quality_score"):
+                meta["quality_score"] = result["quality_score"]
+            if not result.get("approved"):
+                meta["rejected"] = True
+                meta["rejection_reason"] = result.get("rejection_reason", "Below quality threshold")
+                if result.get("improvement_suggestion"):
+                    meta["improvement_suggestion"] = result["improvement_suggestion"]
+            return {"output": output, **meta}
+
+        elif body.prompt_name == "comment":
+            from backend.ai.comment_generator import generate as gen_comment
+            result = await gen_comment(
+                post_text=body.variables.get("post_text", ""),
+                author_name=body.variables.get("author_name", "Unknown"),
+                topics=body.variables.get("topics", ""),
+                tone=body.variables.get("tone", "professional"),
+                groq_client=client,
+                prompt_loader=loader,
+            )
+            output = result.get("comment", "")
+            meta = {}
+            if result.get("quality_score"):
+                meta["quality_score"] = result["quality_score"]
+            if result.get("rejected"):
+                meta["rejected"] = True
+                meta["reject_reasons"] = result.get("reject_reasons", [])
+                output = "[All candidates rejected: " + ", ".join(result.get("reject_reasons", ["low quality"])) + "]"
+            return {"output": output, **meta}
+
+        else:
+            # Other prompts (relevance, note, reply): raw call is fine
+            formatted = loader.format(body.prompt_name, **body.variables)
+            output = await client.complete("You are a helpful assistant.", formatted)
+            return {"output": output}
     except Exception as e:
         logger.error(f"Prompt test failed: {e}")
         return {"output": f"[Error: {e}]"}

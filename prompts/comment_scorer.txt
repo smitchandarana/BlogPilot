@@ -1,11 +1,18 @@
-Score each of these LinkedIn comment candidates on quality.
+Score each LinkedIn comment candidate. Be harsh — most AI comments are garbage.
+
 Scoring criteria (each 0-2, total 0-10):
 
-  specificity:    References specific content from the post (not generic)
-  insight_value:  Adds real knowledge or perspective the author hasn't said
-  conversation:   Likely to get a reply from the author or other readers
-  professionalism: Sounds like a credible senior professional wrote it
-  originality:    Different from typical AI-generated LinkedIn comments
+  specificity:      References a specific detail from the post, not just the general topic
+  adds_something:   Says something NEW the author didn't already say (not a rephraseor summary)
+  human_voice:      Sounds like a real person typed this quickly, not an AI crafting a response
+  reply_worthy:     Author would actually want to respond (not just "thanks!")
+  no_ai_smell:      Zero AI tells — no third-person references to author, no "elaborate", no summary-then-question
+
+AUTOMATIC REJECT (set total=0, fill reject_reason):
+  - Refers to the author in third person ("Author mentions…", "Name talks about…")
+  - Contains "can you elaborate", "I'd love to hear", "can you share more"
+  - Just summarizes the post and adds a generic question
+  - Starts with any form of "Great post" / "Love this" / "Totally agree"
 
 Post the comment is responding to:
 {post_text}
@@ -14,4 +21,4 @@ Candidates:
 {candidates_json}
 
 Return ONLY valid JSON, no preamble, no markdown:
-{{"scores": [{{"index": 0, "specificity": 0, "insight_value": 0, "conversation": 0, "professionalism": 0, "originality": 0, "total": 0, "reject_reason": null}}], "winner_index": 0}}
+{{"scores": [{{"index": 0, "specificity": 0, "adds_something": 0, "human_voice": 0, "reply_worthy": 0, "no_ai_smell": 0, "total": 0, "reject_reason": null}}], "winner_index": 0}}

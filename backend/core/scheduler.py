@@ -142,11 +142,20 @@ class Scheduler:
                 id="topic_rotation_cycle",
                 replace_existing=True,
             )
+        research_hours = int(cfg_get("research.scan_interval_hours", 6))
+        if cfg_get("research.enabled", True):
+            self._scheduler.add_job(
+                _job_topic_research,
+                IntervalTrigger(hours=research_hours),
+                id="topic_research",
+                replace_existing=True,
+            )
         logger.info(
             f"Scheduler: default jobs registered "
             f"(feed_scan every {interval} min, hourly_reset, budget_reset, "
             f"campaign_processing every 30 min, post_publishing every 1 min, "
-            f"topic_rotation every {cycle_hours} h)"
+            f"topic_rotation every {cycle_hours} h, "
+            f"topic_research every {research_hours} h)"
         )
 
 
@@ -245,6 +254,71 @@ def _job_post_publishing():
 
     except Exception as exc:
         logger.warning(f"Scheduler: post_publishing error: {exc}")
+
+
+def _job_topic_research():
+    """Runs topic research pipeline — fetches from Reddit, RSS, HN, LinkedIn feed data."""
+    logger.info("Scheduler: topic_research fired")
+    try:
+        import asyncio
+        from backend.utils.config_loader import get as _cfg
+        from backend.storage.database import get_db
+        from backend.research.topic_researcher import TopicResearcher
+
+        topics = _cfg("topics", []) or []
+        if not topics:
+            logger.info("Scheduler: topic_research skipped — no topics configured")
+            return
+
+        # Try to init AI clients for scoring
+        groq_client = None
+        prompt_loader = None
+        try:
+            from backend.ai.groq_client import GroqClient
+            from backend.ai.prompt_loader import PromptLoader
+            from backend.utils.encryption import decrypt
+            import os
+
+            secrets_path = os.path.normpath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
+            )
+            api_key = None
+            if os.path.exists(secrets_path):
+                with open(secrets_path, "r") as f:
+                    for line in f:
+                        if line.startswith("groq_api_key="):
+                            encrypted = line.strip().split("=", 1)[1]
+                            api_key = decrypt(encrypted)
+                            break
+            if api_key:
+                groq_client = GroqClient(
+                    api_key=api_key,
+                    model=_cfg("ai.model", "llama-3.3-70b-versatile"),
+                    max_tokens=int(_cfg("ai.max_tokens", 500)),
+                    temperature=float(_cfg("ai.temperature", 0.7)),
+                )
+                prompt_loader = PromptLoader()
+                prompt_loader.load_all()
+        except Exception:
+            pass
+
+        researcher = TopicResearcher(groq_client=groq_client, prompt_loader=prompt_loader)
+
+        with get_db() as db:
+            results = asyncio.run(researcher.research_topics(topics, db))
+
+        try:
+            from backend.api.websocket import schedule_broadcast
+            schedule_broadcast("research_complete", {
+                "topics_researched": len(results),
+                "top_topic": results[0]["topic"] if results else None,
+            })
+        except Exception:
+            pass
+
+        logger.info(f"Scheduler: topic_research complete — {len(results)} topics scored")
+    except Exception as exc:
+        logger.warning(f"Scheduler: topic_research error: {exc}")
 
 
 def _job_topic_rotation():
