@@ -79,6 +79,22 @@ async def trigger_scan():
     return {"status": "feed_scan_queued"}
 
 
+@router.post("/reset-circuit-breaker")
+async def reset_circuit_breaker():
+    """Manually reset the circuit breaker after investigating errors."""
+    eng = _get_engine()
+    if not eng:
+        raise HTTPException(status_code=503, detail="Engine not initialised")
+    if hasattr(eng, "circuit_breaker") and eng.circuit_breaker:
+        eng.circuit_breaker.reset()
+        # If engine is in ERROR state, recover to STOPPED
+        from backend.core.state_manager import EngineState
+        if eng.state_manager.get() == EngineState.ERROR:
+            eng.state_manager.recover()
+        return {"status": "circuit_breaker_reset", "state": eng.status()["state"]}
+    return {"status": "no_circuit_breaker"}
+
+
 @router.get("/status")
 async def get_status():
     eng = _get_engine()

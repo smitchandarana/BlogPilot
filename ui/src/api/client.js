@@ -11,6 +11,7 @@ export const engine = {
   pause: () => http.post('/engine/pause'),
   resume: () => http.post('/engine/resume'),
   status: () => http.get('/engine/status'),
+  resetCircuitBreaker: () => http.post('/engine/reset-circuit-breaker'),
 }
 
 export const config = {
@@ -33,6 +34,9 @@ export const analytics = {
   summary: () => http.get('/analytics/summary'),
   campaignFunnel: () => http.get('/analytics/campaign-funnel'),
   recentActivity: (limit = 50) => http.get('/analytics/recent-activity', { params: { limit } }),
+  skippedPosts: (limit = 50) => http.get('/analytics/skipped-posts', { params: { limit } }),
+  actedPosts: (limit = 50) => http.get('/analytics/acted-posts', { params: { limit } }),
+  commentHistory: (limit = 50) => http.get('/analytics/comment-history', { params: { limit } }),
 }
 
 export const campaigns = {

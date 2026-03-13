@@ -318,6 +318,20 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     )
     logger.info(f"Pipeline: {final_state} '{author}' action={action} score={score:.1f}")
 
+    # Broadcast budget update to Dashboard
+    if acted:
+        try:
+            from backend.api.websocket import schedule_broadcast
+            from backend.storage import budget_tracker
+            for row in budget_tracker.get_all(db):
+                schedule_broadcast("budget_update", {
+                    "action_type": row.action_type,
+                    "count": row.count_today,
+                    "limit": row.limit_per_day,
+                })
+        except Exception as e:
+            logger.debug(f"Pipeline: budget broadcast error — {e}")
+
     # High-score profile visit (leads to email enrichment in Sprint 6)
     visit_threshold = float(cfg_get("feed_engagement.score_for_profile_visit", 8))
     if score >= visit_threshold and post.get("author_url"):

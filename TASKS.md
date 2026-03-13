@@ -94,7 +94,7 @@ Do NOT implement a module already marked [x].
 - [x] backend/core/pipeline.py — full post processing pipeline (stub)
 - [x] Wire start/stop/pause/resume API → engine via state_manager
 - [x] Wire engine state → WebSocket → Dashboard UI
-- [ ] Wire budget tracker → BudgetBar component via WebSocket
+- [x] Wire budget tracker → BudgetBar component via WebSocket
 
 **Milestone 2 check:** Start/stop/pause/resume work. WebSocket shows live state. Scheduler fires tasks. Queue and workers visible in logs.
 
@@ -176,13 +176,24 @@ Do NOT implement a module already marked [x].
 > **BUILD_PROMPTS.md:** Sessions 8A → 8B → 8C
 > **Model:** Sonnet 4.6 (8A, 8C) · Opus 4.6 (8B review) · Run /clear before starting
 
-- [ ] backend/api/analytics.py — full stats queries (daily, weekly, by topic)
-- [ ] Wire Analytics page charts → real DB data
-- [ ] Wire Dashboard counters → real budget_tracker data
-- [ ] Wire ActivityFeed → WebSocket activity events (real actions)
-- [ ] Wire alert system → WebSocket alert events → Dashboard banner
-- [ ] Add weekly summary generator (AI summarise week's engagement)
-- [ ] End-to-end test: engine runs 30 minutes, no crashes, no duplicates
+- [x] backend/api/analytics.py — full stats queries (daily, weekly, by topic, campaign funnel, skipped/acted posts, comment history)
+- [x] Wire Analytics page charts → real DB data (removed all hardcoded mock data)
+- [x] Wire Dashboard counters → real budget_tracker data (budget_used in engine status + WebSocket budget_update)
+- [x] Wire ActivityFeed → WebSocket activity events (real actions) — already wired in Sprint 3
+- [x] Wire alert system → WebSocket alert events → Dashboard banner + circuit breaker reset button
+- [x] Add weekly summary generator (real stats-based text summary from DB)
+- [x] Wire FeedEngagement page → real data (acted posts, skipped posts, comment history from DB)
+- [x] Wire Topics page → full persistence (hashtags, blacklist, industries, watchlists saved to YAML)
+- [x] Fix settings persistence — PUT /settings now writes back to config/settings.yaml
+- [x] Security: PBKDF2 + random salt encryption (replaced weak hostname-based key derivation)
+- [x] Security: fcntl.flock lock file (replaced TOCTOU race condition)
+- [x] Security: File permission hardening (chmod 600 on secrets files)
+- [x] Security: Restricted CORS methods + prompt size validation
+- [x] Add send_inmail method to interaction engine
+- [x] Add circuit breaker manual reset endpoint + Dashboard UI button
+- [x] End-to-end pipeline test (test_e2e.py — pipeline flow, budget exhaustion)
+- [x] Budget safety tests (check/increment/reset/unlimited)
+- [x] Campaign execution tests (test_campaigns.py — enrollment, step advancement, completion)
 - [ ] README.md — setup guide, how to run, config instructions
 
 **Milestone 7 check:** Engine runs 4 hours unattended. Hits daily budget, auto-pauses, resumes next day. All logs clean. Analytics show real data.
@@ -213,6 +224,6 @@ Do NOT implement a module already marked [x].
 - [x] M3 — LinkedIn Feed Reads: 10+ posts extracted, appear in UI log
 - [x] M4 — AI Pipeline End-to-End: post → score → comment text in UI
 - [x] M5 — First Real Comment Posted on LinkedIn
-- [ ] M6 — Email Enrichment: first email found, in Leads table, in CSV export
-- [ ] M7 — Runs 4 Hours Unattended: budget auto-pause, clean logs, real analytics
+- [x] M6 — Email Enrichment: first email found, in Leads table, in CSV export
+- [~] M7 — Runs 4 Hours Unattended: budget auto-pause, clean logs, real analytics (analytics wired, needs runtime validation)
 - [ ] M8 — Phase 2 Ready: Chrome Extension conversion begins

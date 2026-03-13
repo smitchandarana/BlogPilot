@@ -25,7 +25,8 @@ async def get_topics():
 
 @router.post("/topics")
 async def update_topics(topics: list[str]):
-    # In-memory update only for now; full persistence via settings file in Sprint 3
+    from backend.utils.config_loader import save_config
+    save_config({"topics": topics})
     return topics
 
 
@@ -42,8 +43,9 @@ async def get_settings():
 
 @router.put("/settings")
 async def update_settings(settings: dict):
-    # TODO: persist to settings.yaml in Sprint 3
-    return settings
+    from backend.utils.config_loader import save_config
+    updated = save_config(settings)
+    return updated
 
 
 # ── Prompts ───────────────────────────────────────────────────────
@@ -73,6 +75,9 @@ async def get_prompt(name: str):
         raise HTTPException(status_code=404, detail=f"Prompt file not found: {name}.txt")
 
 
+_MAX_PROMPT_SIZE = 50_000  # 50KB max prompt size
+
+
 class PromptUpdate(BaseModel):
     text: str
 
@@ -81,6 +86,8 @@ class PromptUpdate(BaseModel):
 async def update_prompt(name: str, body: PromptUpdate):
     if name not in _PROMPT_NAMES:
         raise HTTPException(status_code=404, detail=f"Prompt '{name}' not found")
+    if len(body.text) > _MAX_PROMPT_SIZE:
+        raise HTTPException(status_code=413, detail=f"Prompt too large (max {_MAX_PROMPT_SIZE} chars)")
     path = os.path.join(_PROMPTS_DIR, f"{name}.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write(body.text)

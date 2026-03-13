@@ -24,6 +24,7 @@ class Post(Base):
     state = Column(String(32), default="SEEN")  # SEEN | SCORED | ACTED | SKIPPED | FAILED
     action_taken = Column(String(32))            # LIKE | COMMENT | CONNECT | SKIP
     comment_text = Column(Text)
+    skip_reason = Column(String(256))
     topic_tag = Column(String(128))
     post_timestamp = Column(DateTime)
     created_at = Column(DateTime, default=_utcnow)

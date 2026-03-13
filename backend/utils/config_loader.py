@@ -73,6 +73,23 @@ class _ConfigLoader:
         self._observer.start()
         logger.info("Config file watcher started")
 
+    def save_config(self, updates: dict) -> dict:
+        """Deep-merge updates into current config, write back to YAML, reload."""
+        self._deep_merge(self._data, updates)
+        path = os.path.abspath(_CONFIG_PATH)
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(self._data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        logger.info(f"Config saved to {path}")
+        return self._data
+
+    @staticmethod
+    def _deep_merge(base: dict, updates: dict):
+        for key, val in updates.items():
+            if isinstance(val, dict) and isinstance(base.get(key), dict):
+                _ConfigLoader._deep_merge(base[key], val)
+            else:
+                base[key] = val
+
     def stop_watch(self):
         if self._observer and self._observer.is_alive():
             self._observer.stop()
@@ -96,6 +113,10 @@ def all_config() -> dict:
 
 def watch():
     _loader.watch()
+
+
+def save_config(updates: dict) -> dict:
+    return _loader.save_config(updates)
 
 
 def stop_watch():

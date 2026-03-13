@@ -134,6 +134,19 @@ export default function Dashboard() {
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1 text-sm">{alert.message}</span>
+          {alert.level === 'critical' && (
+            <button
+              onClick={async () => {
+                try {
+                  await engineApi.resetCircuitBreaker()
+                  setAlert(null)
+                } catch {}
+              }}
+              className="rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/20"
+            >
+              Reset Circuit Breaker
+            </button>
+          )}
           <button
             onClick={() => setAlert(null)}
             className="rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
