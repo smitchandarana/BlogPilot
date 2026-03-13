@@ -146,6 +146,11 @@ export default function Topics() {
     configApi.getSettings().then((res) => {
       const d = res.data
       if (d?.feed_engagement?.min_relevance_score != null) setMinScore(d.feed_engagement.min_relevance_score)
+      if (Array.isArray(d?.hashtags) && d.hashtags.length) setHashtags(d.hashtags)
+      if (Array.isArray(d?.keyword_blacklist) && d.keyword_blacklist.length) setBlacklist(d.keyword_blacklist)
+      if (Array.isArray(d?.target_industries) && d.target_industries.length) setIndustries(d.target_industries)
+      if (Array.isArray(d?.influencer_watchlist)) setInfluencers(d.influencer_watchlist)
+      if (Array.isArray(d?.competitor_watchlist)) setCompetitors(d.competitor_watchlist)
     }).catch(() => {})
     fetchTopicData()
     fetchPerformance()
@@ -164,7 +169,14 @@ export default function Topics() {
     setSaving(true)
     try {
       await configApi.updateTopics(topics)
-      await configApi.updateSettings({ feed_engagement: { min_relevance_score: minScore } })
+      await configApi.updateSettings({
+        feed_engagement: { min_relevance_score: minScore },
+        hashtags,
+        keyword_blacklist: blacklist,
+        target_industries: industries,
+        influencer_watchlist: influencers,
+        competitor_watchlist: competitors,
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {

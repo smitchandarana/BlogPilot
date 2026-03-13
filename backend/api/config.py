@@ -1,6 +1,6 @@
 import os
 from typing import Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from backend.utils.logger import get_logger
 
@@ -8,83 +8,10 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply", "comment_candidate", "comment_scorer", "post_scorer"]
+_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply"]
 
 
-# ── Topic Rotation (Sprint 9) ─────────────────────────────────────
-
-class TopicAction(BaseModel):
-    topic: str
-
-
-@router.get("/topics/all")
-async def get_all_topics():
-    from backend.growth.topic_rotator import topic_rotator
-    from backend.storage.database import get_db
-    with get_db() as db:
-        return topic_rotator.get_all_topics(db)
-
-
-@router.post("/topics/activate")
-async def activate_topic(body: TopicAction):
-    from backend.growth.topic_rotator import topic_rotator
-    from backend.storage.database import get_db
-    with get_db() as db:
-        success = topic_rotator.activate_topic(body.topic, db)
-    msg = f"Topic '{body.topic}' activated" if success else f"Failed to activate '{body.topic}'"
-    return {"success": success, "message": msg}
-
-
-@router.post("/topics/deactivate")
-async def deactivate_topic(body: TopicAction):
-    from backend.growth.topic_rotator import topic_rotator
-    from backend.storage.database import get_db
-    with get_db() as db:
-        success = topic_rotator.deactivate_topic(body.topic, db)
-    msg = f"Topic '{body.topic}' paused" if success else f"Failed to pause '{body.topic}'"
-    return {"success": success, "message": msg}
-
-
-@router.post("/topics/run-iteration")
-async def run_topic_iteration():
-    from backend.growth.topic_rotator import topic_rotator
-    from backend.storage.database import get_db
-    from backend.api.websocket import schedule_broadcast
-    with get_db() as db:
-        report = topic_rotator.run_iteration_cycle(db)
-    schedule_broadcast("topic_rotation", report)
-    return report
-
-
-@router.get("/topics/hashtag-suggestions")
-async def get_hashtag_suggestions(topic: str = Query(...)):
-    from backend.growth.topic_rotator import topic_rotator
-    return {"hashtags": topic_rotator.get_hashtag_suggestions(topic)}
-
-
-@router.get("/topics/performance")
-async def get_topic_performance():
-    from backend.storage.database import get_db
-    from backend.storage.models import TopicPerformance
-    with get_db() as db:
-        rows = db.query(TopicPerformance).order_by(TopicPerformance.engagement_rate.desc()).all()
-        return [
-            {
-                "topic": r.topic,
-                "posts_seen": r.posts_seen,
-                "posts_engaged": r.posts_engaged,
-                "engagement_rate": r.engagement_rate,
-                "avg_score": r.avg_score,
-                "is_active": r.is_active,
-                "is_paused": r.is_paused,
-                "pause_reason": r.pause_reason,
-                "last_used": r.last_used.isoformat() if r.last_used else None,
-            }
-            for r in rows
-        ]
-
-
-# ── Topics (existing) ─────────────────────────────────────────────
+# ── Topics ────────────────────────────────────────────────────────
 
 @router.get("/topics")
 async def get_topics():
@@ -98,19 +25,8 @@ async def get_topics():
 
 @router.post("/topics")
 async def update_topics(topics: list[str]):
-    import yaml
-    from backend.utils.config_loader import load_config
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml")
-    config_path = os.path.abspath(config_path)
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        data["topics"] = topics
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
-        load_config()
-    except Exception as e:
-        logger.error(f"Failed to persist topics: {e}")
+    from backend.utils.config_loader import save_config
+    save_config({"topics": topics})
     return topics
 
 
@@ -127,25 +43,9 @@ async def get_settings():
 
 @router.put("/settings")
 async def update_settings(settings: dict):
-    import yaml
-    from backend.utils.config_loader import load_config
-    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml")
-    config_path = os.path.abspath(config_path)
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        # Deep merge settings into existing config
-        for key, val in settings.items():
-            if isinstance(val, dict) and isinstance(data.get(key), dict):
-                data[key].update(val)
-            else:
-                data[key] = val
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
-        load_config()
-    except Exception as e:
-        logger.error(f"Failed to persist settings: {e}")
-    return settings
+    from backend.utils.config_loader import save_config
+    updated = save_config(settings)
+    return updated
 
 
 # ── Prompts ───────────────────────────────────────────────────────
@@ -175,6 +75,9 @@ async def get_prompt(name: str):
         raise HTTPException(status_code=404, detail=f"Prompt file not found: {name}.txt")
 
 
+_MAX_PROMPT_SIZE = 50_000  # 50KB max prompt size
+
+
 class PromptUpdate(BaseModel):
     text: str
 
@@ -183,6 +86,8 @@ class PromptUpdate(BaseModel):
 async def update_prompt(name: str, body: PromptUpdate):
     if name not in _PROMPT_NAMES:
         raise HTTPException(status_code=404, detail=f"Prompt '{name}' not found")
+    if len(body.text) > _MAX_PROMPT_SIZE:
+        raise HTTPException(status_code=413, detail=f"Prompt too large (max {_MAX_PROMPT_SIZE} chars)")
     path = os.path.join(_PROMPTS_DIR, f"{name}.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write(body.text)

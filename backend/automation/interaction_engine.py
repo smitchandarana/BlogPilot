@@ -365,6 +365,77 @@ class InteractionEngine:
             logger.warning(f"Message attempt error: {e}")
             return False
 
+    # ── InMail ──────────────────────────────────────────────────────────────
+
+    async def send_inmail(
+        self, page: Page, profile_url: str, subject: str, message: str, db=None
+    ) -> bool:
+        if not self._budget_ok(ACTION_INMAIL, db):
+            return False
+        await random_delay(5.0, 15.0)
+        ok = await self._attempt_inmail(page, profile_url, subject, message)
+        self._record(ok, ACTION_INMAIL, profile_url, db, comment_text=message)
+        return ok
+
+    async def _attempt_inmail(
+        self, page: Page, profile_url: str, subject: str, message: str
+    ) -> bool:
+        try:
+            await page.goto(profile_url, wait_until="domcontentloaded", timeout=20000)
+            await asyncio.sleep(2.0)
+
+            # Look for InMail / Message button (premium feature)
+            msg_btn = await page.query_selector(
+                "button[aria-label*='InMail' i], "
+                "button[aria-label*='Message' i], "
+                "button:text-is('Message')"
+            )
+            if not msg_btn:
+                logger.debug(f"InMail button not found on {profile_url}")
+                return False
+
+            await msg_btn.click()
+            await asyncio.sleep(1.5)
+
+            # Fill subject line if present
+            subject_input = await page.query_selector(
+                "input[name='subject'], "
+                "input[placeholder*='Subject' i]"
+            )
+            if subject_input and subject:
+                await subject_input.fill(subject)
+                await asyncio.sleep(0.5)
+
+            # Fill message body
+            msg_input = await page.query_selector(
+                "div.msg-form__contenteditable[contenteditable='true'], "
+                "div[role='textbox'][aria-label*='Write' i], "
+                "textarea[name='message']"
+            )
+            if not msg_input:
+                return False
+
+            await msg_input.click()
+            for char in message:
+                await page.keyboard.type(char)
+                await asyncio.sleep(0.05)
+            await asyncio.sleep(0.8)
+
+            send_btn = await page.query_selector(
+                "button.msg-form__send-button, "
+                "button[aria-label='Send' i], "
+                "button:text-is('Send')"
+            )
+            if send_btn:
+                await send_btn.click()
+                await asyncio.sleep(1.0)
+                logger.info(f"InMail sent to {profile_url}")
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"InMail attempt error: {e}")
+            return False
+
     # ── Internal helpers ────────────────────────────────────────────────────
 
     def _budget_ok(self, action_type: str, db) -> bool:

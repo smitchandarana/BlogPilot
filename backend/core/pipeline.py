@@ -267,19 +267,10 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
         post_state.update_state(url, "SKIPPED", db, skip_reason="budget/strategy skip")
         return
 
-    # Step 7: Generate comment (Groq AI — Sprint 10: 3-candidate pipeline)
+    # Step 7: Generate comment (Groq AI — Sprint 5; stub now)
     comment_text: Optional[str] = None
-    comment_quality_score: float = 0.0
-    comment_angle: str = "unknown"
-    comment_result: Optional[dict] = None
     if action in ("COMMENT", "LIKE_AND_COMMENT"):
-        comment_result = await _generate_comment(post, groq_client, prompt_loader, db)
-        if isinstance(comment_result, dict):
-            comment_text = comment_result.get("comment", "")
-            comment_quality_score = comment_result.get("quality_score", 0.0)
-            comment_angle = comment_result.get("angle", "unknown")
-        elif isinstance(comment_result, str):
-            comment_text = comment_result
+        comment_text = await _generate_comment(post, groq_client, prompt_loader)
 
         # Preview mode: push to UI and wait for human approval before posting
         if bool(cfg_get("feed_engagement.preview_comments", True)):
@@ -308,12 +299,12 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     acted = False
 
     if action in ("LIKE", "LIKE_AND_COMMENT"):
-        ok = await ie.like_post(page, url, db=db, author_name=author)
+        ok = await ie.like_post(page, url, db=db)
         if ok:
             acted = True
 
     if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text:
-        ok = await ie.comment_post(page, url, comment_text, db=db, author_name=author)
+        ok = await ie.comment_post(page, url, comment_text, db=db)
         if ok:
             acted = True
 
@@ -327,43 +318,19 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     )
     logger.info(f"Pipeline: {final_state} '{author}' action={action} score={score:.1f}")
 
-    # Step 10b: Record topic engagement for auto-rotation (Sprint 9)
-    matched_topic = None
-    try:
-        from backend.growth.topic_rotator import topic_rotator
-        active_topics = cfg_get("topics", []) or []
-        post_text_lower = (post.get("text") or "").lower()
-        matched_topic = next(
-            (t for t in active_topics if t.lower() in post_text_lower),
-            None,
-        )
-        if matched_topic:
-            topic_rotator.record_engagement(
-                topic=matched_topic,
-                score=score,
-                action_taken=action,
-                db=db,
-            )
-    except Exception as e:
-        logger.debug(f"Pipeline: record_engagement skipped — {e}")
-
-    # Step 10c: Log comment quality (Sprint 10)
-    if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text and acted:
+    # Broadcast budget update to Dashboard
+    if acted:
         try:
-            from backend.storage.quality_log import log_comment as _log_comment
-            _log_comment(
-                db=db,
-                post_id=post.get("url", ""),
-                post_text=post.get("text", ""),
-                comment_used=comment_text,
-                quality_score=comment_quality_score,
-                candidate_count=comment_result.get("candidate_count", 1) if comment_result else 1,
-                topic=matched_topic,
-                all_candidates=comment_result.get("all_candidates", []) if comment_result else [],
-                angle=comment_angle,
-            )
+            from backend.api.websocket import schedule_broadcast
+            from backend.storage import budget_tracker
+            for row in budget_tracker.get_all(db):
+                schedule_broadcast("budget_update", {
+                    "action_type": row.action_type,
+                    "count": row.count_today,
+                    "limit": row.limit_per_day,
+                })
         except Exception as e:
-            logger.warning(f"Pipeline: log_comment skipped: {e}")
+            logger.debug(f"Pipeline: budget broadcast error — {e}")
 
     # High-score profile visit (leads to email enrichment in Sprint 6)
     visit_threshold = float(cfg_get("feed_engagement.score_for_profile_visit", 8))
@@ -458,10 +425,9 @@ async def _score_post(post: dict, groq_client=None, prompt_loader=None) -> float
 
 # ── AI comment generation (Groq) ──────────────────────────────────────────
 
-async def _generate_comment(post: dict, groq_client=None, prompt_loader=None, db=None) -> dict:
+async def _generate_comment(post: dict, groq_client=None, prompt_loader=None) -> str:
     """
     Generate a LinkedIn comment via Groq AI.
-    Returns dict with keys: comment, quality_score, angle, candidate_count, all_candidates.
     Falls back to a generic stub if no API key is configured.
     """
     if groq_client and prompt_loader:
@@ -476,24 +442,15 @@ async def _generate_comment(post: dict, groq_client=None, prompt_loader=None, db
                 tone=tone,
                 groq_client=groq_client,
                 prompt_loader=prompt_loader,
-                author_title=post.get("author_title", ""),
-                db=db,
             )
-            if result and (isinstance(result, dict) and result.get("comment")) or (isinstance(result, str) and result):
+            if result:
                 return result
         except Exception as e:
             logger.warning(f"Pipeline: Groq comment generation failed, using fallback: {e}")
 
     # Fallback stub
     author = post.get("author_name", "the author")
-    fallback = f"Thanks for sharing this perspective, {author}. Really valuable insight."
-    return {
-        "comment": fallback,
-        "quality_score": 0.0,
-        "angle": "unknown",
-        "candidate_count": 0,
-        "all_candidates": [],
-    }
+    return f"Thanks for sharing this perspective, {author}. Really valuable insight."
 
 
 # ── Action decision (replaced by engagement_strategy in Sprint 7) ──────────

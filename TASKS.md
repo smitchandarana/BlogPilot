@@ -14,9 +14,8 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**SPRINT 10 — Comment & Post Quality Engine** ✅
-→ 3-candidate comment pipeline, post quality gate, diversity guard
-→ Quality analytics wired to UI
+**SPRINT 7 — Campaigns + Growth Intelligence**
+→ See BUILD_PROMPTS.md Sessions 7A → 7B for exact prompts
 
 ---
 
@@ -95,7 +94,7 @@ Do NOT implement a module already marked [x].
 - [x] backend/core/pipeline.py — full post processing pipeline (stub)
 - [x] Wire start/stop/pause/resume API → engine via state_manager
 - [x] Wire engine state → WebSocket → Dashboard UI
-- [x] Wire budget tracker → BudgetBar component via WebSocket (Dashboard reads budget_used from engine.status + listens to budget_update events)
+- [x] Wire budget tracker → BudgetBar component via WebSocket
 
 **Milestone 2 check:** Start/stop/pause/resume work. WebSocket shows live state. Scheduler fires tasks. Queue and workers visible in logs.
 
@@ -111,7 +110,6 @@ Do NOT implement a module already marked [x].
 - [x] backend/automation/profile_scraper.py — visit profile, extract all fields
 - [x] backend/automation/interaction_engine.py — like, comment, connect, follow
 - [x] backend/automation/human_behavior.py — random_delay(), type_slowly(), scroll()
-- [x] backend/automation/human_behavior.py — full randomization engine (SessionProfile, rethink_comment, move_mouse, enhanced scroll, session_start_delay)
 - [x] backend/automation/post_publisher.py — navigate to post composer, type, submit
 - [x] backend/core/pipeline.py — full 10-step pipeline (AI/strategy stubs for Sprint 5/7)
 - [x] CAPTCHA detection → circuit_breaker → auto-pause → alert WebSocket event
@@ -178,66 +176,27 @@ Do NOT implement a module already marked [x].
 > **BUILD_PROMPTS.md:** Sessions 8A → 8B → 8C
 > **Model:** Sonnet 4.6 (8A, 8C) · Opus 4.6 (8B review) · Run /clear before starting
 
-- [x] backend/api/analytics.py — full stats queries (daily, weekly, by topic, feed-posts, feed-skipped, comment-history)
-- [x] Wire Analytics page charts → real DB data (weekly chart, top topics, campaign funnel, summary)
-- [x] Wire Dashboard counters → real budget_tracker data (via engine.status() budget_used)
-- [x] Wire ActivityFeed → WebSocket activity events + real DB history on mount
-- [x] Wire alert system → WebSocket alert events → Dashboard banner
-- [x] Add weekly summary generator (real stats-based summary from DB)
-- [x] Wire Leads page → real API (removed MOCK_LEADS, fetch on mount with filters)
-- [x] Wire Campaigns page → real API (removed MOCK_CAMPAIGNS, real CRUD + stats)
-- [x] Wire FeedEngagement page → real API (3 new endpoints: feed-posts, feed-skipped, comment-history)
-- [x] Wire ContentStudio topics → config API (fetch from /topics, fallback to defaults)
-- [x] Fix config persistence (POST /topics + PUT /settings now write to settings.yaml)
-- [x] Fix naive vs UTC datetime mismatch in analytics queries
-- [x] Fix APScheduler restart bug — scheduler can't restart after shutdown, now creates fresh instance
-- [x] Fix engine stop() ordering — scheduler stops before state transition to prevent race
-- [x] Fix worker pool atomic submit — state check + executor.submit under lock (TOCTOU fix)
-- [x] Fix worker pool drain() — reset _active=0 after shutdown(wait=True)
-- [x] Fix scheduler stale jobs — remove_all_jobs() on start before registering defaults
-- [x] Add circuit breaker auto-resume timer — uses pause_duration_minutes config (was missing)
-- [x] Add server process control — POST /server/restart, /server/shutdown, GET /server/info
-- [x] Add Server Control UI — Settings > Danger Zone (restart/shutdown with confirmation modals)
-- [ ] End-to-end test: engine runs 30 minutes, no crashes, no duplicates
+- [x] backend/api/analytics.py — full stats queries (daily, weekly, by topic, campaign funnel, skipped/acted posts, comment history)
+- [x] Wire Analytics page charts → real DB data (removed all hardcoded mock data)
+- [x] Wire Dashboard counters → real budget_tracker data (budget_used in engine status + WebSocket budget_update)
+- [x] Wire ActivityFeed → WebSocket activity events (real actions) — already wired in Sprint 3
+- [x] Wire alert system → WebSocket alert events → Dashboard banner + circuit breaker reset button
+- [x] Add weekly summary generator (real stats-based text summary from DB)
+- [x] Wire FeedEngagement page → real data (acted posts, skipped posts, comment history from DB)
+- [x] Wire Topics page → full persistence (hashtags, blacklist, industries, watchlists saved to YAML)
+- [x] Fix settings persistence — PUT /settings now writes back to config/settings.yaml
+- [x] Security: PBKDF2 + random salt encryption (replaced weak hostname-based key derivation)
+- [x] Security: fcntl.flock lock file (replaced TOCTOU race condition)
+- [x] Security: File permission hardening (chmod 600 on secrets files)
+- [x] Security: Restricted CORS methods + prompt size validation
+- [x] Add send_inmail method to interaction engine
+- [x] Add circuit breaker manual reset endpoint + Dashboard UI button
+- [x] End-to-end pipeline test (test_e2e.py — pipeline flow, budget exhaustion)
+- [x] Budget safety tests (check/increment/reset/unlimited)
+- [x] Campaign execution tests (test_campaigns.py — enrollment, step advancement, completion)
 - [ ] README.md — setup guide, how to run, config instructions
 
 **Milestone 7 check:** Engine runs 4 hours unattended. Hits daily budget, auto-pauses, resumes next day. All logs clean. Analytics show real data.
-
----
-
-## Sprint 9 — Topics Iteration Engine
-> **Model:** Opus 4.6 · Run /clear before starting
-
-- [x] backend/storage/models.py — TopicPerformance table added
-- [x] config/settings.yaml — topic_rotation config block added
-- [x] backend/growth/topic_rotator.py — TopicRotator class: get_all_topics, activate_topic,
-      deactivate_topic, record_engagement, run_iteration_cycle, get_hashtag_suggestions
-- [x] backend/api/config.py — 6 new topic endpoints (all, activate, deactivate,
-      run-iteration, hashtag-suggestions, performance)
-- [x] backend/core/scheduler.py — topic_rotation_cycle job (24h interval)
-- [x] backend/core/pipeline.py — record_engagement() wired after step 10
-- [x] ui/src/api/client.js — 6 new API methods added
-- [x] ui/src/pages/Topics.jsx — 3-column selector, performance table, iteration panel
-
----
-
-## Sprint 10 — Comment & Post Quality Engine
-> **Model:** Opus 4.6 · Run /clear before starting
-
-- [x] backend/storage/models.py — CommentQualityLog and PostQualityLog tables
-- [x] prompts/comment_candidate.txt — 3-candidate generation prompt
-- [x] prompts/comment_scorer.txt — multi-dimension comment scoring prompt
-- [x] prompts/post_scorer.txt — post quality gate prompt
-- [x] backend/ai/comment_generator.py — 3-candidate pipeline with diversity guard
-- [x] backend/ai/post_generator.py — quality gate, returns approved flag
-- [x] backend/storage/quality_log.py — log_comment, log_post, stats queries
-- [x] backend/core/pipeline.py — quality score captured, comment logged after action
-- [x] backend/api/analytics.py — comment-quality and post-quality endpoints
-- [x] ui/src/api/client.js — commentQuality and postQuality API methods
-- [x] ui/src/pages/Analytics.jsx — Content Quality Metrics section added
-- [x] config/settings.yaml — quality config block added
-- [x] backend/ai/prompt_loader.py — 3 new prompt names registered
-- [x] backend/api/config.py — 3 new prompt names in allowlist
 
 ---
 
@@ -265,6 +224,6 @@ Do NOT implement a module already marked [x].
 - [x] M3 — LinkedIn Feed Reads: 10+ posts extracted, appear in UI log
 - [x] M4 — AI Pipeline End-to-End: post → score → comment text in UI
 - [x] M5 — First Real Comment Posted on LinkedIn
-- [ ] M6 — Email Enrichment: first email found, in Leads table, in CSV export
-- [ ] M7 — Runs 4 Hours Unattended: budget auto-pause, clean logs, real analytics
+- [x] M6 — Email Enrichment: first email found, in Leads table, in CSV export
+- [~] M7 — Runs 4 Hours Unattended: budget auto-pause, clean logs, real analytics (analytics wired, needs runtime validation)
 - [ ] M8 — Phase 2 Ready: Chrome Extension conversion begins

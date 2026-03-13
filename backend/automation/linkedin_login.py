@@ -48,8 +48,11 @@ def save_credentials(email: str, password: str) -> None:
         "email": encrypt(email),
         "password": encrypt(password),
     }
-    with open(_CREDS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+    fd = os.open(_CREDS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps(data).encode("utf-8"))
+    finally:
+        os.close(fd)
     logger.info(f"LinkedIn credentials saved (encrypted) → {_CREDS_FILE}")
 
 

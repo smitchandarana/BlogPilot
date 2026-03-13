@@ -11,7 +11,7 @@ export const engine = {
   pause: () => http.post('/engine/pause'),
   resume: () => http.post('/engine/resume'),
   status: () => http.get('/engine/status'),
-  scanNow: () => http.post('/engine/scan-now'),
+  resetCircuitBreaker: () => http.post('/engine/reset-circuit-breaker'),
 }
 
 export const config = {
@@ -25,13 +25,6 @@ export const config = {
   resetPrompt: (name) => http.get(`/prompts/${name}/default`),
   testPrompt: (prompt_name, variables) =>
     http.post('/prompts/test', { prompt_name, variables }),
-  getAllTopics: () => http.get('/topics/all'),
-  activateTopic: (topic) => http.post('/topics/activate', { topic }),
-  deactivateTopic: (topic) => http.post('/topics/deactivate', { topic }),
-  runIteration: () => http.post('/topics/run-iteration'),
-  hashtagSuggestions: (topic) =>
-    http.get('/topics/hashtag-suggestions', { params: { topic } }),
-  topicPerformance: () => http.get('/topics/performance'),
 }
 
 export const analytics = {
@@ -41,11 +34,9 @@ export const analytics = {
   summary: () => http.get('/analytics/summary'),
   campaignFunnel: () => http.get('/analytics/campaign-funnel'),
   recentActivity: (limit = 50) => http.get('/analytics/recent-activity', { params: { limit } }),
-  feedPosts: (limit = 30) => http.get('/analytics/feed-posts', { params: { limit } }),
-  feedSkipped: (limit = 30) => http.get('/analytics/feed-skipped', { params: { limit } }),
-  commentHistory: (limit = 30) => http.get('/analytics/comment-history', { params: { limit } }),
-  commentQuality: () => http.get('/analytics/comment-quality'),
-  postQuality: () => http.get('/analytics/post-quality'),
+  skippedPosts: (limit = 50) => http.get('/analytics/skipped-posts', { params: { limit } }),
+  actedPosts: (limit = 50) => http.get('/analytics/acted-posts', { params: { limit } }),
+  commentHistory: (limit = 50) => http.get('/analytics/comment-history', { params: { limit } }),
 }
 
 export const campaigns = {
@@ -70,12 +61,6 @@ export const content = {
   schedule: (data) => http.post('/content/schedule', data),
   cancel: (id) => http.delete(`/content/queue/${id}`),
   publishNow: (data) => http.post('/content/publish-now', data),
-}
-
-export const server = {
-  restart: () => http.post('/server/restart'),
-  shutdown: () => http.post('/server/shutdown'),
-  info: () => http.get('/server/info'),
 }
 
 export default http
