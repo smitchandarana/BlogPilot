@@ -63,4 +63,10 @@ export const content = {
   publishNow: (data) => http.post('/content/publish-now', data),
 }
 
+export const server = {
+  restart: () => http.post('/server/restart'),
+  shutdown: () => http.post('/server/shutdown'),
+  info: () => http.get('/server/info'),
+}
+
 export default http
