@@ -1,0 +1,43 @@
+You are a research extraction assistant analyzing discussions related to: {domain}
+
+Below are {snippet_count} recent discussions from Reddit, RSS feeds, Hacker News, and LinkedIn:
+
+{snippets_summary}
+
+Your job is NOT to extract broad domains like "{domain}". Instead, identify the specific learning topics, concepts, techniques, or tools discussed in the content.
+
+Think at the level of:
+- techniques and methods
+- frameworks and models
+- specific tools and platforms
+- metrics and KPIs
+- concepts and principles
+
+Examples of BAD (too broad):
+- Data Analytics
+- Business Intelligence
+- AI
+- Marketing
+
+Examples of GOOD (specific):
+- Exploratory Data Analysis (EDA)
+- KPI design for business dashboards
+- Cohort retention analysis
+- SQL window functions for analytics
+- Dimensional modeling
+- Customer churn prediction models
+- A/B testing statistical significance
+- Data cleaning pipeline best practices
+
+Instructions:
+1. Read all the discussions carefully
+2. Identify 3-10 specific, actionable subtopics that someone could study, write about, or research further
+3. Each subtopic should be specific enough to write a focused LinkedIn post about
+4. If a subtopic appears across multiple sources, prioritize it (likely trending)
+5. NEVER return the broad domain name "{domain}" as a subtopic
+6. Avoid generic categories — prefer concepts that are educational or actionable
+
+Respond with ONLY a JSON object in this exact format:
+{{"domain": "{domain}", "specific_topics": ["topic 1", "topic 2", "topic 3"]}}
+
+Do not include anything else. No markdown. No explanation outside the JSON.

@@ -67,14 +67,14 @@ class TestRSSScanner:
 
 
 class TestTopicResearcher:
-    def test_match_snippets_to_topic_exact(self):
+    def test_match_snippets_to_domain_exact(self):
         researcher = TopicResearcher()
         snippets = [
             {"title": "Data Analytics trends 2025", "text": "The field of data analytics is evolving"},
             {"title": "Cooking recipes for beginners", "text": "Start with simple pasta"},
             {"title": "Power BI dashboard design", "text": "Best practices for data visualization"},
         ]
-        matched = researcher._match_snippets_to_topic("Data Analytics", snippets)
+        matched = researcher._match_snippets_to_domain("Data Analytics", snippets)
         assert len(matched) >= 1
         assert any("Data Analytics" in s["title"] for s in matched)
 
@@ -84,7 +84,7 @@ class TestTopicResearcher:
             {"title": "How analytics drives business growth", "text": "Using data to make better decisions"},
             {"title": "Weather forecast today", "text": "Sunny with clouds"},
         ]
-        matched = researcher._match_snippets_to_topic("Business Analytics", snippets)
+        matched = researcher._match_snippets_to_domain("Business Analytics", snippets)
         assert len(matched) >= 1
 
     def test_match_no_snippets(self):
@@ -92,13 +92,13 @@ class TestTopicResearcher:
         snippets = [
             {"title": "Cooking pasta", "text": "Boil water first"},
         ]
-        matched = researcher._match_snippets_to_topic("Data Analytics", snippets)
+        matched = researcher._match_snippets_to_domain("Data Analytics", snippets)
         assert len(matched) == 0
 
     def test_match_caps_at_30(self):
         researcher = TopicResearcher()
         snippets = [{"title": f"Analytics article {i}", "text": "analytics content"} for i in range(50)]
-        matched = researcher._match_snippets_to_topic("Analytics", snippets)
+        matched = researcher._match_snippets_to_domain("Analytics", snippets)
         assert len(matched) <= 30
 
     def test_heuristic_score(self):

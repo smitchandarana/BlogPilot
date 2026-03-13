@@ -137,6 +137,9 @@ research:
     engagement: 0.25
     content_gap: 0.25
     relevance: 0.2
+  max_subtopics_per_domain: 5
+  max_total_subtopics: 20
+  min_subtopic_score: 4.0
   duplicate_detection:
     enabled: true
 topics:

@@ -43,6 +43,18 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     logger.info(f"Database initialised at {_DB_PATH}")
 
+    # Migrate: add domain column to researched_topics if missing
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        cols = [c["name"] for c in inspector.get_columns("researched_topics")]
+        if "domain" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE researched_topics ADD COLUMN domain VARCHAR(256)"))
+            logger.info("Migration: added 'domain' column to researched_topics")
+    except Exception:
+        pass  # table may not exist yet on first run
+
     # Seed budget rows from config
     try:
         from backend.utils.config_loader import get as cfg_get

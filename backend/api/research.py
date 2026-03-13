@@ -9,6 +9,7 @@ Endpoints:
   DELETE /research/topics/{id}          → dismiss a researched topic
   GET  /research/status                 → research status info
 """
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -58,24 +59,20 @@ async def trigger_research():
     try:
         from backend.ai.groq_client import GroqClient
         from backend.ai.prompt_loader import PromptLoader
-        from backend.utils.encryption import decrypt
 
-        api_key = None
-        try:
-            import os
-            secrets_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "config", ".secrets"
-            )
-            secrets_path = os.path.normpath(secrets_path)
-            if os.path.exists(secrets_path):
-                with open(secrets_path, "r") as f:
-                    for line in f:
-                        if line.startswith("groq_api_key="):
-                            encrypted = line.strip().split("=", 1)[1]
-                            api_key = decrypt(encrypted)
-                            break
-        except Exception:
-            pass
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        if not api_key:
+            try:
+                import json as _json
+                groq_path = os.path.normpath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
+                )
+                if os.path.exists(groq_path):
+                    with open(groq_path, "r") as f:
+                        data = _json.load(f)
+                    api_key = data.get("api_key", "")
+            except Exception:
+                pass
 
         if api_key:
             groq_client = GroqClient(
@@ -145,24 +142,21 @@ async def generate_from_topic(topic_id: str, body: GenerateRequest):
     # Get AI clients
     from backend.ai.groq_client import GroqClient
     from backend.ai.prompt_loader import PromptLoader
-    from backend.utils.encryption import decrypt
     from backend.ai import post_generator
-    import os
 
-    api_key = None
-    try:
-        secrets_path = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-        )
-        if os.path.exists(secrets_path):
-            with open(secrets_path, "r") as f:
-                for line in f:
-                    if line.startswith("groq_api_key="):
-                        encrypted = line.strip().split("=", 1)[1]
-                        api_key = decrypt(encrypted)
-                        break
-    except Exception:
-        pass
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        try:
+            import json as _json
+            groq_path = os.path.normpath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
+            )
+            if os.path.exists(groq_path):
+                with open(groq_path, "r") as f:
+                    data = _json.load(f)
+                api_key = data.get("api_key", "")
+        except Exception:
+            pass
 
     if not api_key:
         raise HTTPException(status_code=400, detail="Groq API key not configured")
@@ -205,6 +199,15 @@ async def generate_from_topic(topic_id: str, body: GenerateRequest):
         mark_used(topic_id, db)
 
     return result
+
+
+@router.delete("/topics")
+async def clear_all_topics():
+    """Delete all researched topics and their snippets."""
+    from backend.research.topic_researcher import clear_all_topics
+    with get_db() as db:
+        count = clear_all_topics(db)
+    return {"cleared": count}
 
 
 @router.delete("/topics/{topic_id}")

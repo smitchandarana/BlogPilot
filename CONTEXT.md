@@ -27,7 +27,7 @@ APScheduler jobs          → backend/core/scheduler.py
 per-action rate caps      → backend/core/rate_limiter.py
 auto-pause on errors      → backend/core/circuit_breaker.py (auto-resumes after pause_duration_minutes)
 full pipeline logic       → backend/core/pipeline.py
-FastAPI routes            → backend/api/ (engine, config, analytics, campaigns, leads, websocket, server)
+FastAPI routes            → backend/api/ (engine, config, analytics, campaigns, leads, research, websocket, server)
 WebSocket broadcaster     → backend/api/websocket.py
 server process control    → backend/api/server.py
 Playwright browser        → backend/automation/browser.py
@@ -59,6 +59,12 @@ post seen/acted/skipped   → backend/storage/post_state.py
 log every action          → backend/storage/engagement_log.py
 daily budget counters     → backend/storage/budget_tracker.py
 lead CRUD                 → backend/storage/leads_store.py
+topic research orchestr.  → backend/research/topic_researcher.py
+Reddit scanner            → backend/research/reddit_scanner.py
+RSS/Atom scanner          → backend/research/rss_scanner.py
+Hacker News scanner       → backend/research/hn_scanner.py
+LinkedIn feed insights    → backend/research/linkedin_insights.py
+duplicate detector        → backend/research/duplicate_detector.py
 logger factory            → backend/utils/logger.py
 Fernet encryption         → backend/utils/encryption.py
 YAML config + hot-reload  → backend/utils/config_loader.py
@@ -69,7 +75,7 @@ single instance lock      → backend/utils/lock_file.py
 
 ## DB Tables (names only)
 
-`posts` `leads` `actions_log` `campaigns` `campaign_enrollments` `budget` `settings`
+`posts` `leads` `actions_log` `campaigns` `campaign_enrollments` `budget` `settings` `researched_topics` `research_snippets`
 
 Full schema → ARCHITECTURE.md § Database Schema
 
@@ -164,12 +170,32 @@ utils → nothing internal
 
 ---
 
+## Research Pipeline
+
+```
+1. Fetch from Reddit, RSS, HN, LinkedIn (parallel)
+2. Domain-filter snippets per broad topic (from settings.yaml)
+3. AI extract specific subtopics (Groq via topic_extractor prompt)
+4. Deduplicate subtopics across domains
+5. Score each subtopic (Groq via topic_scorer prompt)
+6. Quality gate (drop if composite_score < min_subtopic_score)
+7. Store as ResearchedTopic + ResearchSnippet records
+```
+
+Broad topics from settings.yaml are domain filters only.
+AI extracts specific subtopics like "EDA", "KPI design", "Cohort analysis".
+Each ResearchedTopic has a `domain` field linking to its parent broad category.
+
+---
+
 ## Prompt Variables
 
 ```
-relevance: {post_text} {author_name} {topics}
-comment:   {post_text} {author_name} {topics} {tone}
-post:      {topic} {style} {tone} {word_count}
-note:      {first_name} {title} {company} {shared_context} {topics}
-reply:     {original_post} {your_comment} {reply_to_comment} {replier_name}
+relevance:        {post_text} {author_name} {topics}
+comment:          {post_text} {author_name} {topics} {tone}
+post:             {topic} {style} {tone} {word_count}
+note:             {first_name} {title} {company} {shared_context} {topics}
+reply:            {original_post} {your_comment} {reply_to_comment} {replier_name}
+topic_extractor:  {domain} {snippet_count} {snippets_summary}
+topic_scorer:     {topic} {snippet_count} {snippets_summary} {engagement_history}
 ```

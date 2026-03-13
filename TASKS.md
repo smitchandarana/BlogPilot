@@ -18,6 +18,18 @@ Do NOT implement a module already marked [x].
 → Remaining: README.md documentation + M7 runtime validation (4-hour unattended run)
 → Phase 2 (Chrome Extension) begins after M7 is validated.
 
+### Post-Sprint Enhancement: Specific Subtopic Extraction
+- [x] AI-powered subtopic extraction from research snippets (replaces broad topic matching)
+- [x] `prompts/topic_extractor.txt` — new prompt for extracting specific subtopics
+- [x] `backend/ai/prompt_loader.py` — registered topic_extractor prompt
+- [x] `backend/storage/models.py` — added `domain` column to ResearchedTopic
+- [x] `backend/storage/database.py` — migration for existing DBs
+- [x] `backend/research/topic_researcher.py` — refactored pipeline: domain-filter → AI extract → dedup → score → quality gate → store
+- [x] `backend/api/research.py` — DELETE /research/topics (clear all) endpoint
+- [x] `ui/src/api/client.js` — clearAll method added to research API
+- [x] `ui/src/pages/ContentStudio.jsx` — domain badge on topic cards + "Clear All" button
+- [x] `config/settings.yaml` — max_subtopics_per_domain, max_total_subtopics, min_subtopic_score
+
 ---
 
 ## Sprint 1 — Project Foundation ✅

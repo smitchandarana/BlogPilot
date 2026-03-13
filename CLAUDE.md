@@ -49,6 +49,7 @@ backend/
   ai/        → Groq API layer
   growth/    → Viral detection, campaigns, strategy
   enrichment/→ Email finding and verification
+  research/  → Multi-source topic research (Reddit, RSS, HN, LinkedIn)
   storage/   → SQLite + SQLAlchemy
   utils/     → Logger, encryption, config loader
 prompts/     → Plain text AI prompt templates (editable)

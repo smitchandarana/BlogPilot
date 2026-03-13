@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink } from 'lucide-react'
+import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink, Trash2 } from 'lucide-react'
 import { config as configApi, content as contentApi, research as researchApi } from '../api/client'
 
 const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
@@ -78,6 +78,11 @@ function ResearchTopicCard({ topic, onGenerate, onDismiss }) {
     <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
+          {topic.domain && (
+            <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-slate-700/40 text-slate-500 mb-1">
+              {topic.domain}
+            </span>
+          )}
           <h3 className="text-sm font-medium text-slate-200 truncate">{topic.topic}</h3>
           <div className="mt-1 flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full ${scoreColor}`} />
@@ -242,6 +247,16 @@ export default function ContentStudio() {
     } catch { /* ignore */ }
   }
 
+  const clearAllResearchTopics = async () => {
+    if (!confirm('Clear all researched topics? This cannot be undone.')) return
+    try {
+      await researchApi.clearAll()
+      setResearchTopics([])
+    } catch (e) {
+      alert('Failed to clear: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+
   const generateFromResearchTopic = async (researchTopic) => {
     setGeneratingFromResearch(true)
     setEnrichedContext({ topicId: researchTopic.id, topicName: researchTopic.topic, angle: researchTopic.suggested_angle })
@@ -385,14 +400,25 @@ export default function ContentStudio() {
         {researchOpen && (
           <div className="px-4 pb-4 flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={triggerResearch}
-                disabled={researching}
-                className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-xs font-medium text-white shadow-[0_0_12px_rgba(124,58,237,0.15)] hover:bg-violet-600 hover:shadow-[0_0_20px_rgba(124,58,237,0.25)] disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 active:scale-[0.98]"
-              >
-                {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-                {researching ? 'Researching…' : 'Run Research'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={triggerResearch}
+                  disabled={researching}
+                  className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-xs font-medium text-white shadow-[0_0_12px_rgba(124,58,237,0.15)] hover:bg-violet-600 hover:shadow-[0_0_20px_rgba(124,58,237,0.25)] disabled:opacity-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 active:scale-[0.98]"
+                >
+                  {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  {researching ? 'Researching…' : 'Run Research'}
+                </button>
+                {researchTopics.length > 0 && (
+                  <button
+                    onClick={clearAllResearchTopics}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-700/30 px-3 py-2 text-xs text-red-400/70 hover:text-red-400 hover:border-red-600/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Clear All
+                  </button>
+                )}
+              </div>
               <div className="text-xs text-slate-600">
                 {researchStatus?.last_run
                   ? `Last: ${formatDate(researchStatus.last_run)}`

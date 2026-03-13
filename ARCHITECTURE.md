@@ -18,7 +18,8 @@ Local Python application. React UI on localhost:3000. FastAPI backend on localho
 ┌────────────────────▼────────────────────────────────────────┐
 │  API LAYER — FastAPI (localhost:8000)                        │
 │  api/engine.py · api/config.py · api/analytics.py           │
-│  api/campaigns.py · api/leads.py · api/websocket.py         │
+│  api/campaigns.py · api/leads.py · api/research.py           │
+│  api/websocket.py · api/server.py                            │
 └────────────────────┬────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────┐
@@ -61,6 +62,16 @@ Local Python application. React UI on localhost:3000. FastAPI backend on localho
 │  growth/influencer_monitor.py  — watch specific accounts    │
 │  growth/engagement_strategy.py — decide action per post     │
 │  growth/campaign_engine.py     — multi-step sequence FSM    │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│  RESEARCH LAYER — Multi-Source Topic Discovery                │
+│  research/topic_researcher.py   — orchestrator pipeline     │
+│  research/reddit_scanner.py     — Reddit subreddit scraper  │
+│  research/rss_scanner.py        — RSS/Atom feed reader      │
+│  research/hn_scanner.py         — Hacker News top stories   │
+│  research/linkedin_insights.py  — LinkedIn feed analysis    │
+│  research/duplicate_detector.py — SHA256 + text dedup       │
 └────────────────────┬────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────┐
@@ -169,6 +180,49 @@ Local Python application. React UI on localhost:3000. FastAPI backend on localho
 | value | TEXT | JSON-encoded value |
 | updated_at | DATETIME | |
 
+### researched_topics
+| Column | Type | Description |
+|---|---|---|
+| id | INT PK | Auto-increment |
+| topic | TEXT | Specific subtopic name (e.g. "Cohort Retention Analysis") |
+| domain | TEXT | Parent broad category from settings.yaml (e.g. "Data Analytics") |
+| source_count | INT | Number of snippets mentioning this topic |
+| suggested_angle | TEXT | AI-suggested angle for a LinkedIn post |
+| composite_score | FLOAT | Weighted score (trending + engagement + content_gap + relevance) |
+| status | TEXT | NEW / USED / DISMISSED |
+| created_at | DATETIME | |
+
+### research_snippets
+| Column | Type | Description |
+|---|---|---|
+| id | INT PK | Auto-increment |
+| topic_id | INT FK | References researched_topics.id |
+| source | TEXT | REDDIT / RSS / HACKERNEWS / LINKEDIN |
+| title | TEXT | Snippet headline or post title |
+| url | TEXT | Source URL |
+| summary | TEXT | Extracted text summary |
+| engagement_score | FLOAT | Likes/upvotes/points from source |
+| published_at | DATETIME | Original publish date |
+| fetched_at | DATETIME | When scraped |
+
+---
+
+## Research Pipeline
+
+```
+1. Fetch snippets from Reddit, RSS, HN, LinkedIn (parallel)
+2. Domain-filter snippets per broad topic (from settings.yaml)
+3. AI extract specific subtopics (Groq via topic_extractor prompt)
+4. Deduplicate subtopics across domains
+5. Score each subtopic (Groq via topic_scorer prompt)
+6. Quality gate (drop if composite_score < min_subtopic_score)
+7. Store as ResearchedTopic + ResearchSnippet records
+```
+
+Broad topics from `settings.yaml` are domain filters only.
+AI extracts specific subtopics like "EDA", "KPI design", "Cohort analysis".
+Each ResearchedTopic has a `domain` field linking to its parent broad category.
+
 ---
 
 ## Engine State Machine
@@ -246,8 +300,9 @@ All state transitions go through `core/state_manager.py`. API routes call state_
 
 ## Module Dependency Rules
 
-- `api/` imports from `core/`, `storage/`, `growth/`
+- `api/` imports from `core/`, `storage/`, `growth/`, `research/`
 - `core/pipeline.py` imports from `automation/`, `ai/`, `growth/`, `enrichment/`, `storage/`
+- `research/` imports from `ai/`, `storage/`, `utils/` only
 - `automation/` imports from `utils/` only
 - `ai/` imports from `utils/` and `storage/` (for prompt loading) only
 - `growth/` imports from `ai/`, `storage/`, `core/state_manager` only

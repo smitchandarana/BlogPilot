@@ -189,6 +189,7 @@ class ResearchedTopic(Base):
 
     id = Column(String(64), primary_key=True)  # UUID
     topic = Column(String(256), nullable=False, index=True)
+    domain = Column(String(256), nullable=True, index=True)  # parent broad category
     trending_score = Column(Float, default=0.0)       # 0-10
     engagement_score = Column(Float, default=0.0)      # 0-10
     content_gap_score = Column(Float, default=0.0)     # 0-10
