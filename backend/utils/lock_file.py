@@ -1,5 +1,5 @@
 import os
-import fcntl
+import sys
 import tempfile
 import signal
 import atexit
@@ -11,9 +11,16 @@ logger = get_logger(__name__)
 _LOCK_PATH = os.path.join(tempfile.gettempdir(), "linkedin_engine.lock")
 _lock_fd = None
 
+# fcntl is Unix-only; use msvcrt on Windows
+_IS_WINDOWS = sys.platform == "win32"
+if _IS_WINDOWS:
+    import msvcrt
+else:
+    import fcntl
+
 
 def acquire() -> bool:
-    """Acquire single-instance lock using fcntl.flock (no TOCTOU race)."""
+    """Acquire single-instance lock."""
     global _lock_fd
 
     # Verify path is not a symlink
@@ -23,7 +30,10 @@ def acquire() -> bool:
 
     try:
         _lock_fd = open(_LOCK_PATH, "w")
-        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if _IS_WINDOWS:
+            msvcrt.locking(_lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         _lock_fd.write(str(os.getpid()))
         _lock_fd.flush()
 
@@ -43,11 +53,17 @@ def acquire() -> bool:
 
 
 def release():
-    """Release the flock and remove the lock file."""
+    """Release the lock and remove the lock file."""
     global _lock_fd
     if _lock_fd:
         try:
-            fcntl.flock(_lock_fd, fcntl.LOCK_UN)
+            if _IS_WINDOWS:
+                try:
+                    msvcrt.locking(_lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+                except (IOError, OSError):
+                    pass
+            else:
+                fcntl.flock(_lock_fd, fcntl.LOCK_UN)
             _lock_fd.close()
         except Exception:
             pass
@@ -67,10 +83,13 @@ def is_locked() -> bool:
     if os.path.islink(_LOCK_PATH):
         return False
     try:
-        fd = open(_LOCK_PATH, "r")
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        # If we got the lock, it wasn't held — release immediately
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        fd = open(_LOCK_PATH, "r+")
+        if _IS_WINDOWS:
+            msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
         fd.close()
         return False
     except (IOError, OSError):

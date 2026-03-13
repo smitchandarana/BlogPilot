@@ -9,7 +9,8 @@ router = APIRouter()
 
 
 def _today_start():
-    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    """Return naive datetime for start of today (SQLite stores naive datetimes)."""
+    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 @router.get("/daily")
@@ -31,7 +32,7 @@ async def daily_analytics():
             Lead.email_status.in_(["FOUND", "VERIFIED"])
         ).count()
     return {
-        "date": datetime.now(timezone.utc).date().isoformat(),
+        "date": datetime.now().date().isoformat(),
         "actions": stats,
         "posts_scanned": posts_scanned,
         "leads_total": leads_total,
@@ -69,7 +70,7 @@ async def weekly_analytics():
         result = []
         for i in range(6, -1, -1):
             day = date.today() - timedelta(days=i)
-            day_start = datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
+            day_start = datetime.combine(day, datetime.min.time())
             day_end = day_start + timedelta(days=1)
 
             rows = (
@@ -114,7 +115,7 @@ async def analytics_summary():
     """Generate a text summary from real stats."""
     from backend.storage.models import ActionLog, Lead, Post
     with get_db() as db:
-        week_start = datetime.now(timezone.utc) - timedelta(days=7)
+        week_start = datetime.now() - timedelta(days=7)
 
         total_actions = db.query(ActionLog).filter(ActionLog.created_at >= week_start).count()
         total_likes = db.query(ActionLog).filter(

@@ -16,24 +16,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture(autouse=True)
-def _test_db(tmp_path, monkeypatch):
+def _test_db(tmp_path):
     """Use a temporary SQLite DB for each test."""
+    import backend.storage.database as db_module
+    from backend.utils.config_loader import load_config
+
     db_path = str(tmp_path / "test.db")
-    monkeypatch.setenv("DATABASE_PATH", db_path)
+    db_module._DB_PATH = db_path
+    db_module._engine = None
+    db_module.SessionLocal = None
 
-    from backend.storage import database
-    database._engine = None
-    database._SessionLocal = None
-    database.Base.metadata.clear()
-
-    # Re-import models so they register with the new Base
-    import importlib
-    from backend.storage import models
-    importlib.reload(models)
-    importlib.reload(database)
-
-    database.init_db()
+    load_config()
+    db_module.init_db()
     yield
+    db_module._engine = None
+    db_module.SessionLocal = None
 
 
 @pytest.fixture
@@ -56,10 +53,15 @@ class TestPipelineE2E:
         from backend.storage.database import get_db
         from backend.storage.models import Post, ActionLog, Budget
 
-        # Seed budget rows
+        # Ensure budget rows exist with correct limits (init_db seeds them)
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=30, count_today=0))
-            db.add(Budget(action_type="comments", limit_per_day=12, count_today=0))
+            for at, lim in [("likes", 30), ("comments", 12)]:
+                row = db.query(Budget).filter_by(action_type=at).first()
+                if row:
+                    row.limit_per_day = lim
+                    row.count_today = 0
+                else:
+                    db.add(Budget(action_type=at, limit_per_day=lim, count_today=0))
             db.commit()
 
         post_data = {
@@ -77,9 +79,12 @@ class TestPipelineE2E:
         like_btn.click = AsyncMock()
         mock_page.query_selector = AsyncMock(side_effect=_like_button_mock(like_btn))
 
+        async def _noop_delay(*args, **kwargs):
+            pass
+
         with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None)), \
              patch("backend.core.pipeline._in_activity_window", return_value=True), \
-             patch("backend.automation.human_behavior.random_delay", new_callable=lambda: AsyncMock), \
+             patch("backend.automation.human_behavior.random_delay", _noop_delay), \
              patch("backend.api.websocket.schedule_broadcast"):
 
             from backend.core import pipeline
@@ -102,10 +107,15 @@ class TestPipelineE2E:
         from backend.storage.database import get_db
         from backend.storage.models import Post, Budget
 
-        # Seed budget at limit
+        # Set budget to exhausted
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=30, count_today=30))
-            db.add(Budget(action_type="comments", limit_per_day=12, count_today=12))
+            for at, lim, used in [("likes", 30, 30), ("comments", 12, 12)]:
+                row = db.query(Budget).filter_by(action_type=at).first()
+                if row:
+                    row.limit_per_day = lim
+                    row.count_today = used
+                else:
+                    db.add(Budget(action_type=at, limit_per_day=lim, count_today=used))
             db.commit()
 
         post_data = {
@@ -116,9 +126,12 @@ class TestPipelineE2E:
             "comment_count": 20,
         }
 
+        async def _noop_delay2(*args, **kwargs):
+            pass
+
         with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None)), \
              patch("backend.core.pipeline._in_activity_window", return_value=True), \
-             patch("backend.automation.human_behavior.random_delay", new_callable=lambda: AsyncMock), \
+             patch("backend.automation.human_behavior.random_delay", side_effect=_noop_delay2), \
              patch("backend.api.websocket.schedule_broadcast"):
 
             from backend.core import pipeline
@@ -139,26 +152,32 @@ class TestPipelineE2E:
 class TestBudgetSafety:
     """Verify budget enforcement at every layer."""
 
+    def _upsert_budget(self, db, action_type, limit, count):
+        from backend.storage.models import Budget
+        row = db.query(Budget).filter_by(action_type=action_type).first()
+        if row:
+            row.limit_per_day = limit
+            row.count_today = count
+        else:
+            db.add(Budget(action_type=action_type, limit_per_day=limit, count_today=count))
+        db.commit()
+
     def test_budget_check_blocks_when_exhausted(self):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
         from backend.storage import budget_tracker
 
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=10, count_today=10))
-            db.commit()
+            self._upsert_budget(db, "likes", 10, 10)
 
         with get_db() as db:
             assert budget_tracker.check("likes", db) is False
 
     def test_budget_check_allows_under_limit(self):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
         from backend.storage import budget_tracker
 
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=10, count_today=5))
-            db.commit()
+            self._upsert_budget(db, "likes", 10, 5)
 
         with get_db() as db:
             assert budget_tracker.check("likes", db) is True
@@ -169,8 +188,7 @@ class TestBudgetSafety:
         from backend.storage import budget_tracker
 
         with get_db() as db:
-            db.add(Budget(action_type="comments", limit_per_day=12, count_today=3))
-            db.commit()
+            self._upsert_budget(db, "comments", 12, 3)
 
         with get_db() as db:
             budget_tracker.increment("comments", db)
@@ -179,13 +197,11 @@ class TestBudgetSafety:
 
     def test_midnight_reset_clears_all(self):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
         from backend.storage import budget_tracker
 
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=30, count_today=25))
-            db.add(Budget(action_type="comments", limit_per_day=12, count_today=11))
-            db.commit()
+            self._upsert_budget(db, "likes", 30, 25)
+            self._upsert_budget(db, "comments", 12, 11)
 
         with get_db() as db:
             budget_tracker.reset_all(db)
@@ -195,12 +211,10 @@ class TestBudgetSafety:
 
     def test_unlimited_budget_always_allows(self):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
         from backend.storage import budget_tracker
 
         with get_db() as db:
-            db.add(Budget(action_type="feed_scans", limit_per_day=0, count_today=999))
-            db.commit()
+            self._upsert_budget(db, "feed_scans", 0, 999)
 
         with get_db() as db:
             assert budget_tracker.check("feed_scans", db) is True
@@ -209,15 +223,25 @@ class TestBudgetSafety:
 class TestInteractionEngineBudget:
     """Verify interaction engine checks budget before every action."""
 
+    def _upsert_budget(self, db, action_type, limit, count):
+        from backend.storage.models import Budget
+        row = db.query(Budget).filter_by(action_type=action_type).first()
+        if row:
+            row.limit_per_day = limit
+            row.count_today = count
+        else:
+            db.add(Budget(action_type=action_type, limit_per_day=limit, count_today=count))
+        db.commit()
+
     def test_like_blocked_by_budget(self, mock_page):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
+
+        async def _noop(*a, **kw): pass
 
         with get_db() as db:
-            db.add(Budget(action_type="likes", limit_per_day=5, count_today=5))
-            db.commit()
+            self._upsert_budget(db, "likes", 5, 5)
 
-        with patch("backend.automation.human_behavior.random_delay", new_callable=lambda: AsyncMock), \
+        with patch("backend.automation.human_behavior.random_delay", side_effect=_noop), \
              patch("backend.api.websocket.schedule_broadcast"):
             from backend.automation.interaction_engine import InteractionEngine
             ie = InteractionEngine()
@@ -226,13 +250,13 @@ class TestInteractionEngineBudget:
 
     def test_comment_blocked_by_budget(self, mock_page):
         from backend.storage.database import get_db
-        from backend.storage.models import Budget
+
+        async def _noop(*a, **kw): pass
 
         with get_db() as db:
-            db.add(Budget(action_type="comments", limit_per_day=3, count_today=3))
-            db.commit()
+            self._upsert_budget(db, "comments", 3, 3)
 
-        with patch("backend.automation.human_behavior.random_delay", new_callable=lambda: AsyncMock), \
+        with patch("backend.automation.human_behavior.random_delay", side_effect=_noop), \
              patch("backend.api.websocket.schedule_broadcast"):
             from backend.automation.interaction_engine import InteractionEngine
             ie = InteractionEngine()

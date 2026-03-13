@@ -11,22 +11,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture(autouse=True)
-def _test_db(tmp_path, monkeypatch):
+def _test_db(tmp_path):
+    import backend.storage.database as db_module
+    from backend.utils.config_loader import load_config
+
     db_path = str(tmp_path / "test.db")
-    monkeypatch.setenv("DATABASE_PATH", db_path)
+    db_module._DB_PATH = db_path
+    db_module._engine = None
+    db_module.SessionLocal = None
 
-    from backend.storage import database
-    database._engine = None
-    database._SessionLocal = None
-    database.Base.metadata.clear()
-
-    import importlib
-    from backend.storage import models
-    importlib.reload(models)
-    importlib.reload(database)
-
-    database.init_db()
+    load_config()
+    db_module.init_db()
     yield
+    db_module._engine = None
+    db_module.SessionLocal = None
 
 
 def _seed_campaign_and_lead(db):
