@@ -17,6 +17,11 @@ export const engine = {
 export const config = {
   getTopics: () => http.get('/topics'),
   updateTopics: (topics) => http.post('/topics', topics),
+  getAllTopics: () => http.get('/topics/all'),
+  topicPerformance: () => http.get('/topics/performance'),
+  activateTopic: (name) => http.post(`/topics/${encodeURIComponent(name)}/activate`),
+  deactivateTopic: (name) => http.post(`/topics/${encodeURIComponent(name)}/deactivate`),
+  hashtagSuggestions: (name) => http.get(`/topics/${encodeURIComponent(name)}/hashtags`),
   getSettings: () => http.get('/settings'),
   updateSettings: (settings) => http.put('/settings', settings),
   getPrompts: () => http.get('/prompts'),
@@ -25,6 +30,8 @@ export const config = {
   resetPrompt: (name) => http.get(`/prompts/${name}/default`),
   testPrompt: (prompt_name, variables) =>
     http.post('/prompts/test', { prompt_name, variables }),
+  getGroqKeyStatus: () => http.get('/api-keys/groq'),
+  saveGroqKey: (api_key) => http.post('/api-keys/groq', { api_key }),
 }
 
 export const analytics = {

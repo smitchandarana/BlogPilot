@@ -45,6 +45,9 @@ export default function Settings() {
   const [form, setForm] = useState(DEFAULT_SETTINGS)
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
+  const [groqStatus, setGroqStatus] = useState(null) // { configured, masked_key }
+  const [savingKey, setSavingKey] = useState(false)
+  const [keySaved, setKeySaved] = useState(false)
   const [liPassword, setLiPassword] = useState('')
   const [liEmail, setLiEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -65,7 +68,21 @@ export default function Settings() {
         storage: d.storage || DEFAULT_SETTINGS.storage,
       })
     }).catch(() => {})
+    configApi.getGroqKeyStatus().then((res) => setGroqStatus(res.data)).catch(() => {})
   }, [])
+
+  const handleSaveGroqKey = async () => {
+    if (!apiKey.trim()) return
+    setSavingKey(true)
+    try {
+      const res = await configApi.saveGroqKey(apiKey.trim())
+      setGroqStatus(res.data)
+      setApiKey('')
+      setKeySaved(true)
+      setTimeout(() => setKeySaved(false), 3000)
+    } catch { /* */ }
+    finally { setSavingKey(false) }
+  }
 
   const set = (section, key, val) =>
     setForm((f) => ({ ...f, [section]: { ...f[section], [key]: val } }))
@@ -134,20 +151,45 @@ export default function Settings() {
       <SectionCard title="AI Configuration" description="Groq API settings for comment generation and scoring.">
         <div className="flex flex-col gap-4">
           <InputRow label="Groq API Key">
-            <div className="relative">
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="gsk_••••••••••••••••"
-                className={`${inputCls} pr-10`}
-              />
-              <button
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none"
-              >
-                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+            <div className="flex flex-col gap-2">
+              {groqStatus?.configured && (
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-emerald-400">Configured</span>
+                  <span className="text-slate-500">({groqStatus.masked_key})</span>
+                </div>
+              )}
+              {groqStatus && !groqStatus.configured && (
+                <div className="flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <span className="text-amber-400">Not configured — AI features disabled</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={groqStatus?.configured ? 'Enter new key to replace...' : 'gsk_your_api_key_here'}
+                    className={`${inputCls} pr-10`}
+                  />
+                  <button
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none"
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSaveGroqKey}
+                  disabled={!apiKey.trim() || savingKey}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40"
+                >
+                  {savingKey ? <Loader2 className="h-4 w-4 animate-spin" /> : keySaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                  {keySaved ? 'Saved' : 'Save Key'}
+                </button>
+              </div>
             </div>
           </InputRow>
           <InputRow label="Model">

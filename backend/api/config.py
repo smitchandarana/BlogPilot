@@ -1,4 +1,5 @@
 import os
+import json as _json
 from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -8,7 +9,55 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+_SECRETS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
 _PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply"]
+
+
+# ── API Keys ─────────────────────────────────────────────────────
+
+class ApiKeyUpdate(BaseModel):
+    api_key: str
+
+
+@router.get("/api-keys/groq")
+async def get_groq_key_status():
+    """Check if Groq API key is configured (never returns the actual key)."""
+    key = os.environ.get("GROQ_API_KEY", "")
+    source = "env"
+    if not key:
+        groq_path = os.path.join(_SECRETS_DIR, "groq.json")
+        if os.path.exists(groq_path):
+            try:
+                with open(groq_path, "r") as f:
+                    data = _json.load(f)
+                key = data.get("api_key", "")
+                source = "file"
+            except Exception:
+                pass
+    if key:
+        masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
+        return {"configured": True, "source": source, "masked_key": masked}
+    return {"configured": False, "source": None, "masked_key": None}
+
+
+@router.post("/api-keys/groq")
+async def save_groq_key(body: ApiKeyUpdate):
+    """Save Groq API key to config/.secrets/groq.json."""
+    key = body.api_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty")
+
+    os.makedirs(_SECRETS_DIR, exist_ok=True)
+    groq_path = os.path.join(_SECRETS_DIR, "groq.json")
+    fd = os.open(groq_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, _json.dumps({"api_key": key}).encode("utf-8"))
+    finally:
+        os.close(fd)
+
+    logger.info("Groq API key saved to config/.secrets/groq.json")
+    masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
+    return {"configured": True, "masked_key": masked}
 
 
 # ── Topics ────────────────────────────────────────────────────────
@@ -21,6 +70,56 @@ async def get_topics():
         return topics
     except Exception:
         return []
+
+
+@router.get("/topics/all")
+async def get_all_topics():
+    """Return all topics with their active/paused/available status."""
+    from backend.storage.database import get_db
+    from backend.growth.topic_rotator import topic_rotator
+    with get_db() as db:
+        return topic_rotator.get_all_topics(db)
+
+
+@router.get("/topics/performance")
+async def get_topic_performance():
+    """Return topic performance data."""
+    from backend.storage.database import get_db
+    from backend.growth.topic_rotator import topic_rotator
+    with get_db() as db:
+        data = topic_rotator.get_all_topics(db)
+        return data.get("active", [])
+
+
+@router.post("/topics/{name}/activate")
+async def activate_topic(name: str):
+    """Activate a paused topic."""
+    from backend.storage.database import get_db
+    from backend.growth.topic_rotator import topic_rotator
+    with get_db() as db:
+        result = topic_rotator.activate_topic(name, db)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Topic '{name}' not found or already active")
+        return {"status": "activated", "topic": name}
+
+
+@router.post("/topics/{name}/deactivate")
+async def deactivate_topic(name: str):
+    """Deactivate an active topic."""
+    from backend.storage.database import get_db
+    from backend.growth.topic_rotator import topic_rotator
+    with get_db() as db:
+        result = topic_rotator.deactivate_topic(name, db)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Topic '{name}' not found or already paused")
+        return {"status": "deactivated", "topic": name}
+
+
+@router.get("/topics/{name}/hashtags")
+async def get_hashtag_suggestions(name: str):
+    """Get hashtag suggestions for a topic."""
+    from backend.growth.topic_rotator import topic_rotator
+    return topic_rotator.get_hashtag_suggestions(name)
 
 
 @router.post("/topics")

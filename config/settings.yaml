@@ -8,6 +8,8 @@ schedule:
   - wednesday
   - thursday
   - friday
+  - saturday
+  - sunday
   start_hour: 9
   end_hour: 23
   timezone: Asia/Kolkata

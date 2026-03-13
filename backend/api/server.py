@@ -4,6 +4,7 @@ Restart / shutdown the entire backend (uvicorn) process from the UI.
 """
 
 import os
+import subprocess
 import sys
 import time
 import threading
@@ -58,8 +59,9 @@ async def server_info():
 @router.post("/restart")
 async def restart_server():
     """
-    Gracefully stop the engine, then replace this process with a fresh uvicorn.
-    Uses os.execv() to re-exec — the process is replaced in-place.
+    Gracefully stop the engine, then spawn a fresh uvicorn process and exit.
+    Uses subprocess.Popen + os._exit to avoid Python 3.14 os.execv import
+    shadowing issues (uvicorn's logging.py shadows stdlib logging on re-exec).
     """
     logger.info("Server: restart requested via API")
 
@@ -67,8 +69,14 @@ async def restart_server():
         time.sleep(0.5)  # let the HTTP response flush
         _graceful_engine_stop()
         _release_lock()
-        logger.info("Server: re-execing process...")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        logger.info("Server: spawning new process and exiting...")
+        # Spawn a detached child process with the same arguments
+        subprocess.Popen(
+            [sys.executable] + sys.argv,
+            cwd=os.getcwd(),
+            start_new_session=True,
+        )
+        os._exit(0)
 
     threading.Thread(target=_do_restart, daemon=True).start()
     return {"status": "restarting", "message": "Server will restart momentarily"}

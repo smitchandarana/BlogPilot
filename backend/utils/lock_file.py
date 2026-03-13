@@ -68,12 +68,23 @@ def release():
         except Exception:
             pass
         _lock_fd = None
-    if os.path.exists(_LOCK_PATH) and not os.path.islink(_LOCK_PATH):
+    # On Windows, lock files can't be deleted while another process holds them.
+    # Just unlocking + closing is sufficient — the lock is released either way.
+    if not _IS_WINDOWS and os.path.exists(_LOCK_PATH) and not os.path.islink(_LOCK_PATH):
         try:
             os.remove(_LOCK_PATH)
+        except OSError:
+            pass
+    # Only log if streams are still open (avoids "Logging error" noise during
+    # interpreter shutdown / pytest teardown when atexit handlers fire).
+    import logging as _logging
+    if not _logging.root.handlers or not getattr(_logging.root.handlers[0], 'stream', None):
+        return
+    try:
+        if _logging.root.handlers[0].stream and not _logging.root.handlers[0].stream.closed:
             logger.info("Lock file released")
-        except OSError as e:
-            logger.warning(f"Failed to remove lock file: {e}")
+    except (ValueError, OSError, AttributeError):
+        pass
 
 
 def is_locked() -> bool:

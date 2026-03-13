@@ -96,21 +96,28 @@ class ProfileScraper:
     async def _extract_name(self, page: Page) -> Optional[str]:
         for sel in [
             "h1.text-heading-xlarge",
+            "h1[class*='text-heading-xlarge']",
+            "section.pv-top-card h1",
+            "div[class*='ph5'] h1",
             "h1[class*='inline t-24']",
             "h1",
         ]:
             el = await page.query_selector(sel)
             if el:
                 text = (await el.inner_text()).strip()
-                if text and len(text) < 100:
+                # Filter out non-name content (nav text, empty, overly long)
+                if text and 2 < len(text) < 80 and "\n" not in text:
                     return text
         return None
 
     async def _extract_title(self, page: Page) -> Optional[str]:
         for sel in [
             "div.text-body-medium.break-words",
-            "div[class*='text-body-medium']",
-            "div.ph5 .text-body-medium",
+            "div[class*='text-body-medium'][class*='break-words']",
+            "section.pv-top-card div.text-body-medium",
+            "div[class*='ph5'] div.text-body-medium",
+            "div[class*='pv-text-details'] .text-body-medium",
+            "div[data-generated-suggestion-target]",
         ]:
             el = await page.query_selector(sel)
             if el:
@@ -120,10 +127,24 @@ class ProfileScraper:
         return None
 
     async def _extract_company(self, page: Page) -> Optional[str]:
+        # Strategy 1: aria-label based (most reliable)
         for sel in [
             "button[aria-label*='Current company' i] span",
             "span[aria-label*='Current company' i]",
+            "a[aria-label*='Current company' i] span",
+        ]:
+            el = await page.query_selector(sel)
+            if el:
+                text = (await el.inner_text()).strip()
+                if text:
+                    return text
+        # Strategy 2: experience section top entry
+        for sel in [
             "li.pv-text-details__right-panel-item span.t-14",
+            "section[id*='experience'] li:first-child span.t-14.t-normal",
+            "div[class*='experience'] a[href*='/company/'] span",
+            "section.pv-top-card a[href*='/company/'] span",
+            "a[href*='/company/'] div[class*='t-14']",
         ]:
             el = await page.query_selector(sel)
             if el:
@@ -135,15 +156,23 @@ class ProfileScraper:
     async def _extract_degree(self, page: Page) -> Optional[int]:
         """Return 1, 2, or 3 for connection degree; None if unknown."""
         try:
-            el = await page.query_selector(
-                "span.dist-value, "
-                "span[class*='distance-badge'] span[aria-hidden='true']"
-            )
-            if el:
-                text = (await el.inner_text()).strip()
-                match = re.search(r"(\d)", text)
-                if match:
-                    return int(match.group(1))
+            for sel in [
+                "span.dist-value",
+                "span[class*='distance-badge'] span[aria-hidden='true']",
+                "span[class*='distance-badge']",
+                "span.pvs-header__subtitle span[aria-hidden='true']",
+            ]:
+                el = await page.query_selector(sel)
+                if el:
+                    text = (await el.inner_text()).strip()
+                    match = re.search(r"(\d)", text)
+                    if match:
+                        return int(match.group(1))
+            # Fallback: search full page text for degree badge patterns
+            body_text = await page.text_content("section.pv-top-card") or ""
+            degree_match = re.search(r"(\d)(?:st|nd|rd)\s*degree", body_text, re.IGNORECASE)
+            if degree_match:
+                return int(degree_match.group(1))
         except Exception as e:
             logger.debug(f"Degree extraction error: {e}")
         return None
