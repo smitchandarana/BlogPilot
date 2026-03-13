@@ -1,0 +1,220 @@
+BlogPilot — Current State & Improvement Plan
+=============================================
+Date: 2026-03-13
+
+============================
+WHAT EXISTS TODAY (Working)
+============================
+
+BACKEND CORE
+  - Engine lifecycle (start/stop/pause/resume) via state machine
+  - Task queue with priority support
+  - Worker pool (3 threads max, hard cap)
+  - APScheduler with SQLite job persistence (feed scan, budget reset, campaign processing, post publishing)
+  - Sliding-window rate limiter (per-action hourly caps)
+  - Circuit breaker (auto-pause on error threshold, CAPTCHA detection)
+  - Full pipeline: feed scan -> deduplicate -> AI score -> viral check -> strategy -> comment -> execute -> log
+
+BROWSER AUTOMATION
+  - Playwright browser with stealth patches and persistent profile
+  - LinkedIn login with cookie save/load
+  - Feed scanner (scroll, extract posts from DOM, dedup)
+  - Interaction engine (like, comment, connect, follow, endorse) with budget checks and human delays
+  - Human behavior simulation (random delays, slow typing, hover-before-click, scrolling)
+  - Post publisher (navigate to compose, type slowly, submit)
+
+AI LAYER (all via Groq)
+  - Relevance classifier (score 0-10 with reason)
+  - Comment generator (tone-aware, anti-generic rules)
+  - Post generator (topic + style + tone)
+  - Connection note writer (300 char limit)
+  - Reply generator (thread context aware)
+  - Prompt loader with hot-reload from prompts/*.txt
+
+EMAIL ENRICHMENT
+  - DOM email scraper (1st degree profiles)
+  - Pattern generator (8 patterns from name+domain)
+  - SMTP verifier (MX lookup + RCPT TO handshake)
+  - Hunter.io client (optional, key-gated)
+  - Orchestrator (tries methods in priority order)
+
+CAMPAIGNS & GROWTH
+  - Campaign engine (multi-step sequences: visit/follow/connect/message/inmail/endorse/wait)
+  - Enrollment with next_action_at scheduling
+  - Viral detector (engagement velocity calculation)
+  - Engagement strategy (smart mode: score-based action decisions)
+  - Influencer monitor (stub — scheduler fires but minimal logic)
+
+STORAGE
+  - SQLite with SQLAlchemy ORM
+  - 8 tables: posts, leads, actions_log, campaigns, campaign_enrollments, budget, settings, scheduled_posts
+  - Post state tracking, engagement logging, budget tracking, lead CRUD
+
+API ENDPOINTS
+  - Engine control: start/stop/pause/resume/status/scan-now
+  - Config: topics CRUD, settings read, prompts CRUD + test
+  - Campaigns: full CRUD, enroll, stats
+  - Leads: list with filters, enrich single/bulk, CSV export
+  - Content: schedule post, publish now, queue management
+  - WebSocket: live broadcasts for state/activity/budget/alerts/leads
+
+FRONTEND (React + Vite + Tailwind)
+  - 10 page shells with routing and sidebar nav
+  - Engine toggle (start/stop/pause with loading states)
+  - Budget bars (color-coded progress)
+  - Activity feed (WebSocket-driven scrolling log)
+  - Campaign builder (step cards, message editor)
+  - Prompt editor with test panel (wired to Groq)
+  - Dashboard (partially wired to real data)
+  - Content studio (generate + schedule working)
+  - Leads page (list + enrich + export working)
+
+TESTS
+  - Storage layer (init, post state, budget, leads)
+  - Utils (encryption roundtrip, lock file)
+  - AI client (retry logic, timeouts, rate limits, JSON parsing)
+  - Feed scanner (DOM extraction with mocks)
+  - Email enrichment (patterns, SMTP, orchestration)
+
+
+==============================
+WHAT NEEDS FIXING (Bugs/Gaps)
+==============================
+
+1. Profile scraper — referenced everywhere in pipeline but actual implementation missing or incomplete
+2. Settings persistence — PUT /settings reads YAML but doesn't write back changes to file
+3. Analytics endpoints — weekly, top-topics, summary, campaign-funnel all return stubs/empty data
+4. Influencer monitor — scheduler job fires but check_all() is basically a stub
+5. CAPTCHA handling — detected and engine pauses, but no recovery flow or user guidance
+6. handle_security_challenge() in linkedin_login.py is a stub
+7. send_message() and inmail in interaction_engine — referenced but not fully coded
+8. Comment preview/approval mode — mentioned in CONTEXT.md but no UI flow exists
+9. Budget tracker not wired to BudgetBar via WebSocket (listed incomplete in TASKS.md)
+10. Circuit breaker has no manual reset button in UI
+
+
+================================
+WHAT NEEDS WIRING (UI -> Backend)
+================================
+
+1. EngineControl page — form layout exists but no API calls to save settings
+2. Topics page — layout exists but not wired to GET/PUT /topics or /settings
+3. FeedEngagement page — layout + mock tables, no real data fetching
+4. Analytics page — shows recharts with hardcoded mock data, not calling /analytics endpoints
+5. Settings page — form exists but PUT doesn't persist to settings.yaml
+6. Dashboard counters — partially wired, budget bars need WebSocket budget_update events
+7. Campaign stats — endpoint exists but returns mock funnel data
+
+
+==================================
+WHAT TO ADD (New Features/Improvements)
+==================================
+
+SECURITY (Priority: High)
+  - Replace hostname-based key derivation with PBKDF2 + random salt (current encryption is weak)
+  - Encrypt Groq and Hunter API key files (currently stored as plaintext JSON)
+  - Add os.chmod(0o600) on all sensitive files (keys, credentials, cookies)
+  - Fix lock file race condition (use fcntl.flock instead of TOCTOU check)
+  - Add symlink check before writing lock file
+  - Restrict CORS methods to only GET/POST/PUT/OPTIONS (currently allows all)
+  - Add input validation on prompt content (size limits, sanitization)
+  - Add rate limiting middleware on API endpoints (prevent abuse of /prompts/test)
+
+TESTING (Priority: High)
+  - End-to-end test: engine start -> feed scan -> AI score -> comment -> log -> WebSocket
+  - Budget safety test: verify check called before every action, midnight reset works
+  - Pipeline integration test with mocked Playwright + Groq
+  - Campaign execution test: create -> enroll -> advance steps -> complete
+  - WebSocket broadcast tests
+  - Frontend component tests (at least Dashboard, Leads, Campaigns)
+
+ANALYTICS (Priority: Medium)
+  - Implement GET /analytics/weekly — 7 days of grouped action stats from DB
+  - Implement GET /analytics/top-topics — tag actions with topics, query aggregates
+  - Add topic_tag column to ActionLog model for topic-level analytics
+  - Implement GET /analytics/summary — AI-generated weekly summary with real stats
+  - Implement campaign funnel stats (enrolled/connected/replied/converted from real data)
+  - Wire Analytics.jsx to real endpoints (remove all hardcoded mock data)
+
+RESILIENCE (Priority: Medium)
+  - Add graceful shutdown handling (drain queue, save state, close browser cleanly)
+  - Add session recovery — if engine crashes mid-pipeline, resume from last known state
+  - Add cookie expiry detection and auto-refresh
+  - Add proxy support for browser (config option)
+  - Add user-agent rotation
+  - Improve CAPTCHA flow — show instructions in UI, wait for user to solve, then resume
+
+USER EXPERIENCE (Priority: Medium)
+  - Wire EngineControl, Topics, FeedEngagement, Settings pages to real APIs
+  - Add real-time post preview before commenting (preview_comments config option)
+  - Add manual circuit breaker reset button in Dashboard
+  - Add notification system (toast messages for important events)
+  - Add dark mode toggle
+  - Add keyboard shortcuts for common actions
+  - Show connection degree badges in Leads table
+  - Add undo/cancel for scheduled posts
+
+CONTENT & ENGAGEMENT (Priority: Low)
+  - Reply monitoring — detect when someone replies to your comments, auto-reply
+  - Comment thread tracking — see full conversation history per post
+  - A/B testing for comment styles — track which tone gets more engagement
+  - Post performance tracking — monitor likes/comments on your published posts
+  - Content calendar view — visual timeline of scheduled posts
+  - Hashtag performance analytics — which hashtags drive most engagement
+
+DATA & EXPORT (Priority: Low)
+  - Lead scoring model — score leads based on engagement history
+  - CRM integration hooks (HubSpot, Salesforce export)
+  - Weekly email digest of engagement stats
+  - Backup/restore for SQLite database
+  - Import leads from CSV
+  - Export engagement log as CSV/JSON
+
+MONITORING & OBSERVABILITY (Priority: Low)
+  - Health check dashboard — show status of all modules (browser, AI, DB, scheduler)
+  - Action success rate tracking over time
+  - LinkedIn detection risk score (based on action patterns)
+  - Alert thresholds (email/slack notifications when budget exhausted or errors spike)
+  - Log viewer in UI (search and filter engine.log)
+
+DOCUMENTATION (Priority: Low)
+  - README with real setup instructions
+  - API documentation (auto-generated from FastAPI)
+  - Troubleshooting guide for common LinkedIn issues
+  - Configuration reference guide
+
+
+=============================
+SUGGESTED PRIORITY ORDER
+=============================
+
+Phase 1 — Fix What's Broken
+  1. Implement profile scraper properly
+  2. Fix settings persistence (write back to YAML)
+  3. Wire remaining UI pages (EngineControl, Topics, FeedEngagement, Settings, Analytics)
+  4. Implement analytics endpoints with real DB queries
+
+Phase 2 — Security Hardening
+  5. Fix encryption key derivation
+  6. Encrypt all secrets files
+  7. Add file permission hardening
+  8. Fix lock file vulnerability
+
+Phase 3 — Testing
+  9. End-to-end pipeline test
+  10. Budget safety tests
+  11. Campaign execution tests
+  12. WebSocket tests
+
+Phase 4 — Polish
+  13. Comment preview/approval flow
+  14. CAPTCHA recovery UX
+  15. Circuit breaker reset UI
+  16. Notification toasts
+  17. README and docs
+
+Phase 5 — New Features
+  18. Reply monitoring
+  19. Lead scoring
+  20. Content calendar
+  21. CRM export hooks
