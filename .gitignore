@@ -2,6 +2,7 @@
 
 # Secrets — NEVER commit
 config/.secrets
+config/.secrets.salt
 .env
 *.key
 
@@ -33,6 +34,9 @@ ui/.env
 # Logs
 logs/
 *.log
+
+# Screenshots (dev artifacts)
+temporary screenshots/
 
 # OS
 .DS_Store
