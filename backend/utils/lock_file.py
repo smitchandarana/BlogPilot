@@ -19,6 +19,15 @@ else:
     import fcntl
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Return True if a process with the given PID exists."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 def acquire() -> bool:
     """Acquire single-instance lock."""
     global _lock_fd
@@ -27,6 +36,17 @@ def acquire() -> bool:
     if os.path.islink(_LOCK_PATH):
         logger.error(f"Lock path is a symlink — refusing to acquire: {_LOCK_PATH}")
         return False
+
+    # Clear stale lock left by a dead process (e.g. after os._exit or crash)
+    if os.path.exists(_LOCK_PATH) and not os.path.islink(_LOCK_PATH):
+        try:
+            with open(_LOCK_PATH, "r") as f:
+                old_pid = int(f.read().strip())
+            if not _is_pid_alive(old_pid):
+                os.remove(_LOCK_PATH)
+                logger.info(f"Cleared stale lock from dead PID {old_pid}")
+        except Exception:
+            pass
 
     try:
         _lock_fd = open(_LOCK_PATH, "w")
@@ -59,6 +79,7 @@ def release():
         try:
             if _IS_WINDOWS:
                 try:
+                    _lock_fd.seek(0)  # must unlock from same position as lock
                     msvcrt.locking(_lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
                 except (IOError, OSError):
                     pass

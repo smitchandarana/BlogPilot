@@ -120,6 +120,23 @@ Hashtag/search scanning runs after home feed scan (config-gated).
 
 ---
 
+## Comment Approval Flow
+
+When `feed_engagement.preview_comments: true` (default), comments are NOT posted automatically.
+Pipeline stores comment as `state=PREVIEW` in DB and broadcasts `post_preview` WS event.
+Dashboard `PreviewQueue` panel shows pending cards — user can edit, approve, or reject.
+
+```
+Approve → POST /engine/approve-comment → run_approve_comment() → worker → browser posts comment → state=ACTED
+Reject  → POST /engine/reject-comment  → state=SKIPPED (no browser)
+Load    → GET  /engine/pending-previews → returns all PREVIEW posts from DB
+```
+
+UI component: `ui/src/components/PreviewQueue.jsx`
+Entry point:  `backend/core/pipeline.py :: run_approve_comment(post_id, comment_text)`
+
+---
+
 ## WebSocket Events
 
 `engine_state | activity | budget_update | alert | post_preview | lead_added | stats_update`

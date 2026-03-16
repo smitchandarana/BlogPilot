@@ -201,13 +201,14 @@ class TestPromptLoader:
         finally:
             pl_module._PROMPTS_DIR = original
 
-    def test_format_raises_on_missing_variable(self):
+    def test_format_falls_back_on_missing_variable(self):
+        """format() uses manual substitution when format_map fails (unescaped braces)."""
         from backend.ai.prompt_loader import PromptLoader
         import backend.ai.prompt_loader as pl_module
 
         tmpdir = tempfile.mkdtemp()
         with open(os.path.join(tmpdir, "relevance.txt"), "w") as f:
-            f.write("Hello {missing_var}")
+            f.write("Hello {name}, result: {missing_var}")
         for name in ["comment", "post", "note", "reply"]:
             with open(os.path.join(tmpdir, f"{name}.txt"), "w") as f:
                 f.write("")
@@ -217,8 +218,11 @@ class TestPromptLoader:
         try:
             loader = PromptLoader()
             loader.load_all()
-            with pytest.raises(KeyError):
-                loader.format("relevance")
+            # Should not raise — falls back to manual substitution
+            result = loader.format("relevance", name="World")
+            assert "Hello World" in result
+            # Unresolved placeholder left as-is
+            assert "{missing_var}" in result
         finally:
             pl_module._PROMPTS_DIR = original
 

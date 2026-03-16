@@ -5,6 +5,7 @@ import { useEngine } from '../hooks/useEngine'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
 import ActivityFeed from '../components/ActivityFeed'
+import PreviewQueue from '../components/PreviewQueue'
 import { analytics, engine as engineApi } from '../api/client'
 
 const STAT_DEFS = [
@@ -157,6 +158,8 @@ export default function Dashboard() {
       )}
 
       <EngineToggle />
+
+      <PreviewQueue />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {STAT_DEFS.map(({ key, label, icon: Icon, color }) => (

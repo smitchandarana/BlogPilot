@@ -59,12 +59,13 @@ class Engine:
                 f"Cannot start from state {current.value} — stop the engine first"
             )
         logger.info("Engine starting…")
-        # Reset stale budget counters if midnight cron was missed
+        # Reset stale budget counters if midnight cron was missed, then sync from ActionLog
         try:
             from backend.storage.database import get_db
             from backend.storage import budget_tracker
             with get_db() as db:
                 budget_tracker.reset_if_stale(db)
+                budget_tracker.sync_from_actions(db)
         except Exception as exc:
             logger.warning(f"Engine: budget stale-check failed: {exc}")
         # Run auto-tuner if stale (>24h since last tune)

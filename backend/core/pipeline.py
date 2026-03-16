@@ -106,6 +106,18 @@ def process_post(post_data: dict):
         logger.error(f"Pipeline: process_post failed: {e}", exc_info=True)
 
 
+def run_approve_comment(post_id: str, comment_text: str):
+    """
+    Sync entry point — called by worker pool when user approves a preview comment.
+    Opens the browser, posts the comment on LinkedIn, updates DB state.
+    """
+    logger.info(f"Pipeline: run_approve_comment triggered — post_id={post_id}")
+    try:
+        asyncio.run(_async_approve_comment(post_id, comment_text))
+    except Exception as e:
+        logger.error(f"Pipeline: run_approve_comment failed: {e}", exc_info=True)
+
+
 # ── Async pipeline implementation ─────────────────────────────────────────
 
 async def _async_feed_scan():
@@ -217,6 +229,126 @@ async def _async_process_single(post_data: dict):
         ie = InteractionEngine(circuit_breaker=cb)
         with get_db() as db:
             await _process_post(post_data, page, ie, db, engine, groq_client, prompt_loader)
+    finally:
+        await browser.close()
+
+
+async def _async_approve_comment(post_id: str, comment_text: str):
+    """
+    Post a user-approved comment on LinkedIn.
+
+    Flow:
+      1. Load post record from DB.
+      2. Check comment budget.
+      3. Open browser + login.
+      4. Call interaction_engine.comment_post().
+      5. Update post state (ACTED / FAILED).
+      6. Log quality metrics + broadcast WebSocket events.
+    """
+    from backend.automation.browser import BrowserManager
+    from backend.automation.linkedin_login import LinkedInLogin
+    from backend.automation.interaction_engine import InteractionEngine
+    from backend.storage.database import get_db
+    from backend.storage import budget_tracker, post_state
+    from backend.storage.models import Post
+    from backend.core.engine import get_engine
+
+    engine = get_engine()
+    cb = engine.circuit_breaker if engine else None
+
+    # ── Load post record ───────────────────────────────────────────────────
+    with get_db() as db:
+        post = db.query(Post).filter_by(id=post_id).first()
+        if not post:
+            logger.error(f"Pipeline: approve_comment — post {post_id} not found")
+            return
+        url = post.url
+        author = post.author_name or "Unknown"
+        matched_topic = post.topic_tag or ""
+        post_text_for_log = post.text or ""
+
+    # ── Budget check ───────────────────────────────────────────────────────
+    with get_db() as db:
+        if not budget_tracker.check("comments", db):
+            logger.warning("Pipeline: approve_comment — comment budget exhausted")
+            post_state.update_state(url, "SKIPPED", db, skip_reason="budget exhausted at approval")
+            try:
+                from backend.api.websocket import schedule_broadcast
+                schedule_broadcast("activity", {
+                    "action": "COMMENT",
+                    "target": author,
+                    "result": "SKIPPED",
+                    "comment": "Comment budget exhausted",
+                })
+            except Exception:
+                pass
+            return
+
+    # ── Open browser + login ───────────────────────────────────────────────
+    browser = BrowserManager()
+    try:
+        await browser.launch()
+        page = await browser.get_page()
+
+        login = LinkedInLogin()
+        if not await login.is_logged_in(page):
+            ok = await login.login(page)
+            if not ok:
+                logger.error("Pipeline: approve_comment — LinkedIn login failed")
+                return
+
+        ie = InteractionEngine(circuit_breaker=cb)
+
+        # ── Post the comment ───────────────────────────────────────────────
+        with get_db() as db:
+            ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
+
+            final_state = "ACTED" if ok else "FAILED"
+            post_state.update_state(
+                url, final_state, db,
+                action_taken="COMMENT",
+                comment_text=comment_text,
+            )
+
+            if ok:
+                # Log quality metrics (angle=approved so learning loop can track manual edits)
+                try:
+                    from backend.storage import quality_log
+                    quality_log.log_comment(
+                        db=db, post_id=url, post_text=post_text_for_log,
+                        comment_used=comment_text, quality_score=0.0,
+                        candidate_count=1, topic=matched_topic,
+                        all_candidates=None, angle="approved",
+                    )
+                except Exception as e:
+                    logger.debug(f"Pipeline: approve quality log error — {e}")
+
+                # Broadcast budget state to Dashboard
+                try:
+                    from backend.api.websocket import schedule_broadcast
+                    for row in budget_tracker.get_all(db):
+                        schedule_broadcast("budget_update", {
+                            "action_type": row.action_type,
+                            "count": row.count_today,
+                            "limit": row.limit_per_day,
+                        })
+                except Exception as e:
+                    logger.debug(f"Pipeline: approve budget broadcast error — {e}")
+
+        # Broadcast activity event (always, success or fail)
+        try:
+            from backend.api.websocket import schedule_broadcast
+            schedule_broadcast("activity", {
+                "action": "COMMENT",
+                "target": author,
+                "result": "SUCCESS" if ok else "FAILED",
+                "comment": comment_text,
+            })
+        except Exception:
+            pass
+
+        logger.info(f"Pipeline: approve_comment — {final_state} for '{author}'")
+
     finally:
         await browser.close()
 

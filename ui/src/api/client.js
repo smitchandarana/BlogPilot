@@ -13,6 +13,9 @@ export const engine = {
   status: () => http.get('/engine/status'),
   resetCircuitBreaker: () => http.post('/engine/reset-circuit-breaker'),
   scanNow: () => http.post('/engine/scan-now'),
+  pendingPreviews: () => http.get('/engine/pending-previews'),
+  approveComment: (post_id, comment_text) => http.post('/engine/approve-comment', { post_id, comment_text }),
+  rejectComment: (post_id) => http.post('/engine/reject-comment', { post_id }),
 }
 
 export const config = {

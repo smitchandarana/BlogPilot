@@ -86,4 +86,4 @@ OUTPUT FORMAT:
 
 Return ONLY a valid JSON object. No markdown. No commentary. No text before or after.
 
-{"score": <integer 0-10>, "reason": "<one concise sentence explaining why this score was given>"}
+{{"score": <integer 0-10>, "reason": "<one concise sentence explaining why this score was given>"}}

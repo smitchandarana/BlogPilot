@@ -86,13 +86,23 @@ class PromptLoader:
     def format(self, prompt_name: str, **kwargs) -> str:
         """
         Fill {variables} in the template and return the formatted string.
-        Missing keys raise KeyError; extra keys are ignored.
+        Uses safe substitution: unresolved placeholders are left as-is
+        (handles accidental single-brace JSON in prompts without crashing).
         """
         template = self.get(prompt_name)
         try:
             return template.format_map(kwargs)
-        except KeyError as e:
-            raise KeyError(f"PromptLoader.format('{prompt_name}'): missing variable {e}") from e
+        except KeyError:
+            # Fallback: replace only known variables, leave everything else intact.
+            # This prevents a broken prompt from crashing the entire pipeline.
+            result = template
+            for key, value in kwargs.items():
+                result = result.replace("{" + key + "}", str(value))
+            logger.warning(
+                f"PromptLoader: format_map failed for '{prompt_name}' — "
+                f"used manual substitution (prompt may have unescaped braces)"
+            )
+            return result
 
     def get_variables(self, prompt_name: str) -> List[str]:
         """Return list of {variable} names found in the template."""

@@ -18,6 +18,18 @@ Do NOT implement a module already marked [x].
 → Remaining: M7 runtime validation (4-hour unattended run)
 → Phase 2 (Chrome Extension) begins after M7 is validated.
 
+### Post-Sprint Enhancement: Comment Approval Queue ✅
+Human-in-the-loop approval flow for AI-generated comments. Comments are held in PREVIEW state until approved or rejected via Dashboard.
+
+- [x] `backend/core/pipeline.py` — `run_approve_comment(post_id, comment_text)` sync entry point + `_async_approve_comment()`: opens browser, posts approved comment, updates state ACTED/FAILED, logs quality + budgets
+- [x] `backend/api/engine.py` — `GET /engine/pending-previews` (returns PREVIEW posts), `POST /engine/approve-comment` (queues to worker pool), `POST /engine/reject-comment` (marks SKIPPED, no browser)
+- [x] `ui/src/components/PreviewQueue.jsx` — NEW: Dashboard panel showing pending comments; editable AI comment, Approve/Reject buttons, live via WebSocket `post_preview` events
+- [x] `ui/src/pages/Dashboard.jsx` — added `<PreviewQueue />` between engine toggle and stats grid
+- [x] `ui/src/api/client.js` — `pendingPreviews()`, `approveComment()`, `rejectComment()` added to engine export
+
+### Post-Sprint Fix: Lock File Reliability ✅
+- [x] `backend/utils/lock_file.py` — Fixed `msvcrt.locking` position bug on Windows (`seek(0)` before `LK_UNLCK`); added stale-lock auto-cleanup on startup (checks if PID in lock file is alive, removes if dead)
+
 ### Post-Sprint Enhancement: Specific Subtopic Extraction
 - [x] AI-powered subtopic extraction from research snippets (replaces broad topic matching)
 - [x] `prompts/topic_extractor.txt` — new prompt for extracting specific subtopics
@@ -318,3 +330,4 @@ All previously known issues have been resolved:
 - ~~Server restart API (os.execv)~~ — Fixed: now uses `subprocess.Popen` + `os._exit` instead of `os.execv`
 - ~~Profile scraper selectors~~ — Fixed: expanded fallback selectors for name, title, company, degree
 - ~~Lock file cleanup on Windows~~ — Fixed: skip file deletion on Windows, suppress log-during-teardown noise
+- ~~Lock file stale on crash/os._exit~~ — Fixed: `seek(0)` before `LK_UNLCK` + auto-cleanup of dead-PID locks on startup
