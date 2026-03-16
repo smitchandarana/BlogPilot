@@ -71,6 +71,12 @@ Avoid:
 - corporate buzzwords (synergy, leverage, pivot, ecosystem, journey)
 - generic LinkedIn clichés like "data is the new oil"
 - motivational fluff
+Call-to-action rule:
+
+Include a natural call-to-action near the end of the post inviting readers to learn more or explore solutions at:
+phoenixsolution.in
+
+Do not make it overly promotional. Integrate it naturally within the content.
 
 End with ONE hashtag line (3–5 relevant hashtags related to analytics, reporting, dashboards, or business intelligence).
 

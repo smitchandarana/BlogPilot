@@ -43,9 +43,9 @@ delays:
   typing_speed_wpm_max: 65
 modules:
   feed_engagement: true
-  campaigns: true
+  campaigns: false
   content_studio: true
-  email_enrichment: true
+  email_enrichment: false
   viral_detection: true
   influencer_monitor: true
   reply_monitoring: false
