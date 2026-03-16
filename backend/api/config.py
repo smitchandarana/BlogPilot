@@ -83,12 +83,34 @@ async def get_all_topics():
 
 @router.get("/topics/performance")
 async def get_topic_performance():
-    """Return topic performance data."""
+    """Return topic performance data including is_active/is_paused for UI status chips."""
+    from backend.storage.database import get_db
+    from backend.storage.models import TopicPerformance
+    with get_db() as db:
+        rows = db.query(TopicPerformance).all()
+        return [
+            {
+                "topic": r.topic,
+                "engagement_rate": r.engagement_rate,
+                "avg_score": r.avg_score,
+                "posts_engaged": r.posts_engaged,
+                "posts_seen": r.posts_seen,
+                "is_active": r.is_active,
+                "is_paused": r.is_paused,
+                "pause_reason": r.pause_reason or "",
+            }
+            for r in rows
+        ]
+
+
+@router.post("/topics/run-cycle")
+async def run_topic_rotation_cycle():
+    """Manually trigger a topic rotation cycle immediately."""
     from backend.storage.database import get_db
     from backend.growth.topic_rotator import topic_rotator
     with get_db() as db:
-        data = topic_rotator.get_all_topics(db)
-        return data.get("active", [])
+        report = topic_rotator.run_iteration_cycle(db)
+    return report
 
 
 @router.post("/topics/{name}/activate")

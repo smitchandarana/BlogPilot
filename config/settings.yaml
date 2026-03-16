@@ -52,7 +52,7 @@ modules:
 feed_engagement:
   mode: smart
   preview_comments: true
-  min_relevance_score: 6
+  min_relevance_score: 9
   score_for_profile_visit: 8
   score_for_connection: 10
   max_posts_per_scan: 30
@@ -147,6 +147,15 @@ research:
   min_subtopic_score: 4.0
   duplicate_detection:
     enabled: true
+topic_rotation:
+  enabled: true
+  cycle_interval_hours: 24
+  min_posts_before_scoring: 10
+  low_engagement_threshold: 0.15
+  target_active_count: 8
+  max_new_topics_per_cycle: 2
+  min_active_topics: 5
+  retry_paused_after_days: 7
 learning:
   enabled: true
   comment_monitor_interval_hours: 4

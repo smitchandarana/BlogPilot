@@ -5,7 +5,7 @@ Auto-rotation engine for topics. Tracks engagement performance per topic,
 demotes underperformers, and promotes fresh topics on a 24-hour cycle.
 """
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 from backend.utils.logger import get_logger
 from backend.utils.config_loader import get as cfg_get, load_config
@@ -107,7 +107,7 @@ class TopicRotator:
                 row.is_active = True
                 row.is_paused = False
                 row.pause_reason = None
-                row.last_rotated = datetime.now(timezone.utc)
+                row.last_rotated = datetime.utcnow()
             db.commit()
 
             # Sync to settings.yaml
@@ -152,7 +152,7 @@ class TopicRotator:
                 db.flush()
 
             row.posts_seen += 1
-            row.last_used = datetime.now(timezone.utc)
+            row.last_used = datetime.utcnow()
 
             if action_taken != "SKIP":
                 row.posts_engaged += 1
@@ -189,7 +189,7 @@ class TopicRotator:
         """
         from backend.storage.models import TopicPerformance
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         min_posts = int(cfg_get("topic_rotation.min_posts_before_scoring", 10))
         low_threshold = float(cfg_get("topic_rotation.low_engagement_threshold", 0.15))
         target_active = int(cfg_get("topic_rotation.target_active_count", 8))

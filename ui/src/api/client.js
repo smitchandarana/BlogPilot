@@ -26,6 +26,7 @@ export const config = {
   activateTopic: (name) => http.post(`/topics/${encodeURIComponent(name)}/activate`),
   deactivateTopic: (name) => http.post(`/topics/${encodeURIComponent(name)}/deactivate`),
   hashtagSuggestions: (name) => http.get(`/topics/${encodeURIComponent(name)}/hashtags`),
+  runIteration: () => http.post('/topics/run-cycle'),
   getSettings: () => http.get('/settings'),
   updateSettings: (settings) => http.put('/settings', settings),
   getPrompts: () => http.get('/prompts'),
