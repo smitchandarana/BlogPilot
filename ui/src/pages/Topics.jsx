@@ -6,6 +6,7 @@ const INDUSTRIES = [
   'Manufacturing', 'Retail & E-Commerce', 'Financial Services & Banking',
   'Healthcare & Pharmaceuticals', 'Logistics & Supply Chain', 'Real Estate',
   'Information Technology', 'Consulting', 'Education', 'Hospitality',
+  'Automotive', 'FMCG / Consumer Goods', 'Professional Services',
 ]
 
 const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Data Visualization']

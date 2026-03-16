@@ -14,8 +14,8 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**All Sprints 1–8 COMPLETE.** Phase 1 development is finished.
-→ Remaining: README.md documentation + M7 runtime validation (4-hour unattended run)
+**All Sprints 1–8 COMPLETE. Self-Learning Engine COMPLETE.** Phase 1 development is finished.
+→ Remaining: M7 runtime validation (4-hour unattended run)
 → Phase 2 (Chrome Extension) begins after M7 is validated.
 
 ### Post-Sprint Enhancement: Specific Subtopic Extraction
@@ -29,6 +29,36 @@ Do NOT implement a module already marked [x].
 - [x] `ui/src/api/client.js` — clearAll method added to research API
 - [x] `ui/src/pages/ContentStudio.jsx` — domain badge on topic cards + "Clear All" button
 - [x] `config/settings.yaml` — max_subtopics_per_domain, max_total_subtopics, min_subtopic_score
+
+### Post-Sprint Enhancement: Self-Learning Engine ✅
+6 self-learning capabilities: comment quality learning, topic targeting, scoring calibration, timing optimization, random scan intervals, hashtag/topic search scanning.
+
+#### Phase A — Wire Existing Scaffolding
+- [x] `backend/core/pipeline.py` — wire quality logging after comment post, topic matching via `_match_topic()`, pass `topic_tag` to actions, call `topic_rotator.record_engagement()`
+- [x] `backend/automation/interaction_engine.py` — add `topic_tag` param to `like_post()`, `comment_post()`, thread through to `engagement_log.write_action()`
+- [x] `backend/api/content.py` — wire `quality_log.log_post()` after successful post publish
+
+#### Phase B — Scheduler Randomization + Hashtag Scanning
+- [x] `backend/core/scheduler.py` — add APScheduler `jitter` to all interval jobs (feed_scan ±300s, campaign ±180s, rotation ±1800s, research ±600s)
+- [x] `backend/automation/hashtag_scanner.py` — NEW: scan LinkedIn hashtag feeds + content search results, random subset per session
+- [x] `backend/core/pipeline.py` — integrate hashtag/search scanning after home feed scan (config-gated)
+
+#### Phase C — Learning Feedback Loops
+- [x] `backend/learning/__init__.py` — NEW: learning package init
+- [x] `backend/learning/comment_monitor.py` — NEW: scheduler job revisits posts, checks if our comment got a reply, updates CommentQualityLog
+- [x] `backend/learning/scoring_calibrator.py` — NEW: groups posts by score bucket, calculates engagement/reply rates, recommends optimal_min_score
+- [x] `backend/learning/timing_analyzer.py` — NEW: groups actions by hour/day, finds best engagement windows, returns recommendations
+- [x] `backend/api/analytics.py` — 4 new learning endpoints: comment-quality, post-quality, scoring-calibration, timing
+- [x] `backend/core/scheduler.py` — register comment_monitor job (every 4h ±600s)
+
+#### Phase D — Auto-Tuning + UI
+- [x] `backend/learning/auto_tuner.py` — NEW: auto-adjusts `min_relevance_score` (±0.5/cycle, bounded 4.0-9.0, requires 50+ posts) + narrows activity hours
+- [x] `backend/ai/comment_generator.py` — enriches prompts with best-performing angle from engagement data
+- [x] `backend/core/scheduler.py` — register auto_tune job (every 24h ±3600s)
+- [x] `backend/core/engine.py` — call `auto_tuner.tune_if_stale(db)` on engine start
+- [x] `ui/src/pages/Analytics.jsx` — Learning Insights section: comment quality stats, score calibration bars, timing heatmap, angle distribution
+- [x] `ui/src/api/client.js` — 4 learning API methods added to analytics export
+- [x] `config/settings.yaml` — full `learning:` config block + hashtag/search scanning + jitter settings
 
 ---
 
@@ -100,7 +130,7 @@ Do NOT implement a module already marked [x].
 - [x] backend/core/state_manager.py — engine state FSM, transitions, getters
 - [x] backend/core/task_queue.py — queue.Queue wrapper, priority support
 - [x] backend/core/worker_pool.py — ThreadPoolExecutor max=3, submit(), drain()
-- [x] backend/core/scheduler.py — APScheduler setup, SQLite job store (6 jobs: feed_scan, hourly_reset, budget_reset, campaign_processing, post_publishing, topic_rotation)
+- [x] backend/core/scheduler.py — APScheduler setup, SQLite job store (8 jobs: feed_scan, hourly_reset, budget_reset, campaign_processing, post_publishing, topic_rotation, comment_monitor, auto_tune)
 - [x] backend/core/rate_limiter.py — per-action hourly cap checks
 - [x] backend/core/circuit_breaker.py — error rate monitor, auto-pause trigger + auto-resume timer
 - [x] backend/core/engine.py — master engine class, wires all core modules
@@ -222,7 +252,7 @@ Do NOT implement a module already marked [x].
 - [x] Budget safety tests (check/increment/reset/unlimited)
 - [x] Campaign execution tests (test_campaigns.py — enrollment, step advancement, completion)
 - [x] run_tests.py — master test runner with config checks, credential validation, full suite
-- [x] All 65 tests passing (test_utils, test_storage, test_ai_client, test_campaigns, test_e2e, test_enrichment, test_feed_scanner)
+- [x] All 94 tests passing (test_utils, test_storage, test_ai_client, test_campaigns, test_e2e, test_enrichment, test_feed_scanner, test_research)
 
 ### Packaging & Distribution
 - [x] launcher.py — single entry point for dev and EXE modes (auto-opens browser)
@@ -266,7 +296,7 @@ Do NOT implement a module already marked [x].
 
 ---
 
-## Test Suite Summary (65/65 passing)
+## Test Suite Summary (94/94 passing)
 
 | Suite | Tests | Status |
 |---|---|---|
@@ -277,7 +307,8 @@ Do NOT implement a module already marked [x].
 | test_e2e.py | 10 | ✅ |
 | test_enrichment.py | 11 | ✅ |
 | test_feed_scanner.py | 10 | ✅ |
-| **Total** | **65** | **✅ All passing** |
+| test_research.py | 29 | ✅ |
+| **Total** | **94** | **✅ All passing** |
 
 ---
 

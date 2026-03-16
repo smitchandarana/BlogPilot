@@ -59,6 +59,22 @@ class Engine:
                 f"Cannot start from state {current.value} — stop the engine first"
             )
         logger.info("Engine starting…")
+        # Reset stale budget counters if midnight cron was missed
+        try:
+            from backend.storage.database import get_db
+            from backend.storage import budget_tracker
+            with get_db() as db:
+                budget_tracker.reset_if_stale(db)
+        except Exception as exc:
+            logger.warning(f"Engine: budget stale-check failed: {exc}")
+        # Run auto-tuner if stale (>24h since last tune)
+        try:
+            from backend.storage.database import get_db
+            from backend.learning.auto_tuner import tune_if_stale
+            with get_db() as db:
+                tune_if_stale(db)
+        except Exception as exc:
+            logger.warning(f"Engine: auto-tune stale-check failed: {exc}")
         self._start_time = time.time()
         self.state_manager.start()          # STOPPED → RUNNING
         self.scheduler.start()

@@ -37,6 +37,7 @@ profile visit/scrape      → backend/automation/profile_scraper.py
 like/comment/connect      → backend/automation/interaction_engine.py
 random delays/typing      → backend/automation/human_behavior.py
 post publishing           → backend/automation/post_publisher.py
+hashtag/search scanning   → backend/automation/hashtag_scanner.py
 Groq API wrapper          → backend/ai/groq_client.py
 prompt file loader        → backend/ai/prompt_loader.py
 score post 0-10           → backend/ai/relevance_classifier.py
@@ -48,6 +49,7 @@ viral velocity check      → backend/growth/viral_detector.py
 watch specific profiles   → backend/growth/influencer_monitor.py
 decide like/comment/skip  → backend/growth/engagement_strategy.py
 multi-step sequences      → backend/growth/campaign_engine.py
+topic rotation            → backend/growth/topic_rotator.py
 email orchestrator        → backend/enrichment/email_enricher.py
 1st degree DOM email      → backend/enrichment/dom_email_scraper.py
 pattern generation        → backend/enrichment/pattern_generator.py
@@ -59,6 +61,11 @@ post seen/acted/skipped   → backend/storage/post_state.py
 log every action          → backend/storage/engagement_log.py
 daily budget counters     → backend/storage/budget_tracker.py
 lead CRUD                 → backend/storage/leads_store.py
+quality metrics logging   → backend/storage/quality_log.py
+comment reply monitor     → backend/learning/comment_monitor.py
+score calibration         → backend/learning/scoring_calibrator.py
+timing analysis           → backend/learning/timing_analyzer.py
+auto-tune thresholds      → backend/learning/auto_tuner.py
 topic research orchestr.  → backend/research/topic_researcher.py
 Reddit scanner            → backend/research/reddit_scanner.py
 RSS/Atom scanner          → backend/research/rss_scanner.py
@@ -75,7 +82,7 @@ single instance lock      → backend/utils/lock_file.py
 
 ## DB Tables (names only)
 
-`posts` `leads` `actions_log` `campaigns` `campaign_enrollments` `budget` `settings` `researched_topics` `research_snippets`
+`posts` `leads` `actions_log` `campaigns` `campaign_enrollments` `budget` `settings` `researched_topics` `research_snippets` `scheduled_posts` `comment_quality_log` `post_quality_log` `topic_performance`
 
 Full schema → ARCHITECTURE.md § Database Schema
 
@@ -99,15 +106,17 @@ visits: 50/day   inmails: 5/day      posts: 5/day
 
 ---
 
-## Pipeline Order (10 steps)
+## Pipeline Order (12 steps)
 
 ```
-1. Scheduler → 2. Feed Scan → 3. Deduplicate → 4. AI Score
-5. Viral Check → 6. Strategy Decision → 7. Comment Generate
-8. Human Delay → 9. Execute Action → 10. Log + WebSocket Push
+1. Scheduler → 2. Feed Scan (+Hashtag/Search Scan) → 3. Deduplicate
+4. AI Score → 5. Topic Match → 6. Viral Check → 7. Strategy Decision
+8. Comment Generate → 9. Human Delay → 10. Execute Action
+11. Quality Log + Topic Tracking → 12. Log + WebSocket Push
 ```
 
 Profile visit + email enrichment triggered if score ≥ 8.
+Hashtag/search scanning runs after home feed scan (config-gated).
 
 ---
 
@@ -144,11 +153,12 @@ Analytics /analytics  |  Prompts /prompts  |  Settings /settings
 ## Dependency Rules (no circular imports)
 
 ```
-api → core, storage, growth
+api → core, storage, growth, learning
 core/pipeline → automation, ai, growth, enrichment, storage
 automation → utils only
 ai → utils, storage only
 growth → ai, storage, core/state_manager only
+learning → storage, utils, ai only
 enrichment → storage, utils only
 storage → utils only
 utils → nothing internal
@@ -198,4 +208,33 @@ note:             {first_name} {title} {company} {shared_context} {topics}
 reply:            {original_post} {your_comment} {reply_to_comment} {replier_name}
 topic_extractor:  {domain} {snippet_count} {snippets_summary}
 topic_scorer:     {topic} {snippet_count} {snippets_summary} {engagement_history}
+```
+
+---
+
+## Self-Learning Pipeline
+
+```
+1. Pipeline posts comment → quality_log.log_comment() stores score, angle, candidates
+2. Pipeline matches topic → topic_rotator.record_engagement() tracks per-topic performance
+3. Comment Monitor (4h scheduler): revisits posts → checks for replies → updates got_reply
+4. Scoring Calibrator: groups posts by score bucket → calculates engagement rates → recommends threshold
+5. Timing Analyzer: groups actions by hour/day → finds best engagement windows
+6. Auto-Tuner (24h scheduler): adjusts min_relevance_score ±0.5/cycle, narrows activity hours
+7. Comment Generator: queries best angle from engagement data → enriches prompts
+```
+
+Scheduler jobs: `comment_monitor` (4h ±600s jitter), `auto_tune` (24h ±3600s jitter).
+Auto-tuner also runs on engine start if stale (>24h since last tune).
+All learning features gated by `learning.enabled` config.
+
+---
+
+## Learning API Endpoints
+
+```
+GET /analytics/learning/comment-quality    → reply rates, angle distribution, avg quality
+GET /analytics/learning/post-quality       → post quality stats
+GET /analytics/learning/scoring-calibration → score bucket engagement rates + recommendation
+GET /analytics/learning/timing             → hourly/daily action counts + best hours/days
 ```

@@ -255,3 +255,37 @@ async def comment_history(limit: int = 50):
         }
         for e in entries
     ]
+
+
+# ── Learning / Self-Improvement Endpoints ─────────────────────────────────
+
+@router.get("/learning/comment-quality")
+async def learning_comment_quality():
+    """Return comment quality statistics for the learning dashboard."""
+    from backend.storage import quality_log
+    with get_db() as db:
+        return quality_log.get_comment_quality_stats(db)
+
+
+@router.get("/learning/post-quality")
+async def learning_post_quality():
+    """Return post quality statistics."""
+    from backend.storage import quality_log
+    with get_db() as db:
+        return quality_log.get_post_quality_stats(db)
+
+
+@router.get("/learning/scoring-calibration")
+async def learning_scoring_calibration():
+    """Return score-vs-outcome calibration data."""
+    from backend.learning.scoring_calibrator import scoring_calibrator
+    with get_db() as db:
+        return scoring_calibrator.analyze(db)
+
+
+@router.get("/learning/timing")
+async def learning_timing():
+    """Return hour/day engagement pattern analysis."""
+    from backend.learning.timing_analyzer import timing_analyzer
+    with get_db() as db:
+        return timing_analyzer.analyze(db)

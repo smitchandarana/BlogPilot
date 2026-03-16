@@ -14,6 +14,7 @@ schedule:
   end_hour: 23
   timezone: Asia/Kolkata
   feed_scan_interval_minutes: 20
+  feed_scan_jitter_seconds: 300
 daily_budget:
   feed_scans: 0
   likes: 30
@@ -50,12 +51,16 @@ modules:
   reply_monitoring: false
 feed_engagement:
   mode: smart
-  preview_comments: false
+  preview_comments: true
   min_relevance_score: 6
   score_for_profile_visit: 8
   score_for_connection: 10
   max_posts_per_scan: 30
   scroll_passes: 3
+  hashtag_scan_enabled: false
+  hashtag_scan_count: 3
+  search_scan_enabled: false
+  search_scan_count: 2
 viral_detection:
   likes_per_hour_threshold: 50
   comments_per_hour_threshold: 10
@@ -142,9 +147,113 @@ research:
   min_subtopic_score: 4.0
   duplicate_detection:
     enabled: true
+learning:
+  enabled: true
+  comment_monitor_interval_hours: 4
+  comment_monitor_lookback_hours: 48
+  comment_monitor_max_per_check: 10
+  auto_tune_enabled: false
+  auto_tune_min_posts: 50
+  scoring_threshold_min: 4.0
+  scoring_threshold_max: 9.0
+  scoring_threshold_max_change: 0.5
 topics:
 - Business Intelligence
 - Data Analytics
 - Reporting Solutions
 - Dashboard Design
 - Data Visualization
+- Business Reporting
+- KPI Tracking
+- Financial Reporting
+- Sales Analytics
+- Operations Analytics
+- Data-Driven Decision Making
+- Power BI
+- Tableau
+- Excel Automation
+- Data Strategy
+- Business Performance
+- Revenue Analytics
+- Customer Analytics
+- Supply Chain Analytics
+- HR Analytics
+hashtags:
+- '#businessintelligence'
+- '#dataanalytics'
+- '#dataviz'
+- '#datavisualization'
+- '#reporting'
+- '#businessreporting'
+- '#analytics'
+- '#datadriven'
+- '#kpi'
+- '#dashboard'
+- '#datainsights'
+- '#businessanalytics'
+- '#powerbi'
+- '#tableau'
+- '#looker'
+- '#qliksense'
+- '#microsoftfabric'
+- '#snowflake'
+- '#databricks'
+- '#datascience'
+- '#machinelearning'
+- '#predictiveanalytics'
+- '#dataengineering'
+- '#datapipeline'
+- '#datagovernance'
+- '#businessstrategy'
+- '#businessgrowth'
+- '#datadrivengrowth'
+- '#financialreporting'
+- '#salesanalytics'
+- '#revenueanalytics'
+- '#digitaltransformation'
+- '#automation'
+- '#operationalexcellence'
+- '#datastorytelling'
+- '#businessmetrics'
+keyword_blacklist:
+- looking for a job
+- open to work
+- hiring
+- we are hiring
+- job opening
+- apply now
+- click the link in bio
+- DM me for details
+- limited seats
+- webinar registration
+- free download
+- buy now
+- discount
+- offer ends
+- promo code
+- check out my course
+- just launched my course
+- affiliate
+- MLM
+- network marketing
+- crypto
+- NFT
+- forex trading
+- get rich
+- passive income
+target_industries:
+- Manufacturing
+- Retail & E-Commerce
+- Financial Services & Banking
+- Healthcare & Pharmaceuticals
+- Logistics & Supply Chain
+- Real Estate
+- Information Technology
+- Consulting
+- Education
+- Hospitality
+- Automotive
+- FMCG / Consumer Goods
+- Professional Services
+influencer_watchlist: []
+competitor_watchlist: []

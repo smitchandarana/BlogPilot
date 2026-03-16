@@ -103,10 +103,11 @@ class Scheduler:
 
     def _register_default_jobs(self):
         interval = int(cfg_get("schedule.feed_scan_interval_minutes", 20))
+        feed_jitter = int(cfg_get("schedule.feed_scan_jitter_seconds", 300))
 
         self._scheduler.add_job(
             _job_feed_scan,
-            IntervalTrigger(minutes=interval),
+            IntervalTrigger(minutes=interval, jitter=feed_jitter),
             id="feed_scan",
             replace_existing=True,
         )
@@ -124,7 +125,7 @@ class Scheduler:
         )
         self._scheduler.add_job(
             _job_campaign_processing,
-            IntervalTrigger(minutes=30),
+            IntervalTrigger(minutes=30, jitter=180),
             id="campaign_processing",
             replace_existing=True,
         )
@@ -138,7 +139,7 @@ class Scheduler:
         if cfg_get("topic_rotation.enabled", True):
             self._scheduler.add_job(
                 _job_topic_rotation,
-                IntervalTrigger(hours=cycle_hours),
+                IntervalTrigger(hours=cycle_hours, jitter=1800),
                 id="topic_rotation_cycle",
                 replace_existing=True,
             )
@@ -146,16 +147,34 @@ class Scheduler:
         if cfg_get("research.enabled", True):
             self._scheduler.add_job(
                 _job_topic_research,
-                IntervalTrigger(hours=research_hours),
+                IntervalTrigger(hours=research_hours, jitter=600),
                 id="topic_research",
+                replace_existing=True,
+            )
+        # Learning: comment monitor — check for replies
+        monitor_hours = int(cfg_get("learning.comment_monitor_interval_hours", 4))
+        if cfg_get("learning.enabled", True):
+            self._scheduler.add_job(
+                _job_comment_monitor,
+                IntervalTrigger(hours=monitor_hours, jitter=600),
+                id="comment_monitor",
+                replace_existing=True,
+            )
+        # Learning: auto-tuner — adjust thresholds
+        if cfg_get("learning.auto_tune_enabled", False):
+            self._scheduler.add_job(
+                _job_auto_tune,
+                IntervalTrigger(hours=24, jitter=3600),
+                id="auto_tune",
                 replace_existing=True,
             )
         logger.info(
             f"Scheduler: default jobs registered "
-            f"(feed_scan every {interval} min, hourly_reset, budget_reset, "
-            f"campaign_processing every 30 min, post_publishing every 1 min, "
-            f"topic_rotation every {cycle_hours} h, "
-            f"topic_research every {research_hours} h)"
+            f"(feed_scan every {interval} min ±{feed_jitter}s, hourly_reset, budget_reset, "
+            f"campaign_processing every 30 min ±180s, post_publishing every 1 min, "
+            f"topic_rotation every {cycle_hours} h ±1800s, "
+            f"topic_research every {research_hours} h ±600s, "
+            f"comment_monitor every {monitor_hours} h, auto_tune every 24h)"
         )
 
 
@@ -341,3 +360,28 @@ def _job_topic_rotation():
         )
     except Exception as exc:
         logger.warning(f"Scheduler: topic_rotation error: {exc}")
+
+
+def _job_comment_monitor():
+    """Check recent comments for replies — feeds self-learning loop."""
+    logger.info("Scheduler: comment_monitor fired")
+    try:
+        from backend.core.engine import get_engine
+        from backend.core.state_manager import EngineState
+        eng = get_engine()
+        if eng is None or eng.state_manager.get() != EngineState.RUNNING:
+            return
+        from backend.learning.comment_monitor import run_comment_monitor
+        run_comment_monitor()
+    except Exception as exc:
+        logger.warning(f"Scheduler: comment_monitor error: {exc}")
+
+
+def _job_auto_tune():
+    """Auto-adjust scoring thresholds and schedule based on engagement data."""
+    logger.info("Scheduler: auto_tune fired")
+    try:
+        from backend.learning.auto_tuner import job_auto_tune
+        job_auto_tune()
+    except Exception as exc:
+        logger.warning(f"Scheduler: auto_tune error: {exc}")

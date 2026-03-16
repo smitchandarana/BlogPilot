@@ -39,5 +39,15 @@ def reset_all(db: Session):
     logger.info("Daily budget counters reset")
 
 
+def reset_if_stale(db: Session):
+    """Reset budget if last reset was before today (handles missed midnight resets)."""
+    row = db.query(Budget).first()
+    if not row or not row.last_reset_at:
+        return
+    if row.last_reset_at.date() < datetime.now(timezone.utc).date():
+        logger.info("Budget stale (last reset was yesterday or earlier) — resetting now")
+        reset_all(db)
+
+
 def get_all(db: Session) -> list:
     return db.query(Budget).all()

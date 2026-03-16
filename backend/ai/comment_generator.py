@@ -167,6 +167,71 @@ def _load_winning_examples(db) -> list:
         return []
 
 
+def _load_angle_insight(db) -> str:
+    """
+    Query CommentQualityLog for the best-performing angle based on reply rate.
+    Returns a prompt hint string or "" if insufficient data.
+    """
+    if db is None:
+        return ""
+
+    try:
+        from backend.storage.models import CommentQualityLog
+        from sqlalchemy import func
+
+        # Need at least 10 comments with reply data
+        checked = (
+            db.query(CommentQualityLog)
+            .filter(CommentQualityLog.got_reply.isnot(None))
+            .count()
+        )
+        if checked < 10:
+            return ""
+
+        # Find angle with best reply rate (minimum 3 samples)
+        # Use two queries for simplicity and SQLite compatibility
+        angle_rows = (
+            db.query(
+                CommentQualityLog.angle,
+                func.count(CommentQualityLog.id).label("total"),
+            )
+            .filter(CommentQualityLog.got_reply.isnot(None))
+            .group_by(CommentQualityLog.angle)
+            .having(func.count(CommentQualityLog.id) >= 3)
+            .all()
+        )
+
+        if not angle_rows:
+            return ""
+
+        best_angle = ""
+        best_rate = 0.0
+        for angle, total in angle_rows:
+            reply_count = (
+                db.query(CommentQualityLog)
+                .filter(
+                    CommentQualityLog.angle == angle,
+                    CommentQualityLog.got_reply == True,
+                )
+                .count()
+            )
+            rate = reply_count / total if total > 0 else 0
+            if rate > best_rate:
+                best_rate = rate
+                best_angle = angle
+
+        if best_angle and best_rate > 0.1:
+            return (
+                f"Insight: Comments using the '{best_angle}' approach have a "
+                f"{best_rate:.0%} reply rate. Consider this angle."
+            )
+
+        return ""
+    except Exception as e:
+        logger.debug(f"Angle insight load skipped: {e}")
+        return ""
+
+
 # ── Fallback: single-comment generation (old path) ──────────────────────
 
 async def _generate_single(
@@ -243,13 +308,18 @@ async def generate(
 
     candidate_count = int(cfg_get("quality.comment_candidates", 3))
 
-    # ── Step 1: Load winning examples for few-shot ──
+    # ── Step 1: Load winning examples + angle insights for few-shot ──
     winning_examples = _load_winning_examples(db)
     examples_block = ""
     if winning_examples:
         examples_block = "\n\nHere are examples of high-performing comments for reference:\n"
         for i, ex in enumerate(winning_examples, 1):
             examples_block += f"  Example {i}: {ex}\n"
+
+    # Add best-performing angle insight from engagement data
+    angle_insight = _load_angle_insight(db)
+    if angle_insight:
+        examples_block += f"\n{angle_insight}\n"
 
     # ── Step 2: Generate candidates ──
     try:

@@ -7,35 +7,45 @@ Write ONE original LinkedIn post.
 
 Topic: {topic}
 
+This represents the central idea or problem the post must explore. 
+Focus on ONE clear insight related to reporting, dashboards, or data-driven decision making.
+
 Post Style: {style}
 Options: Thought Leadership / Story / Tips List / Question / Data Insight / Contrarian Take
 
 Tone: {tone}
 Options: Professional / Conversational / Bold / Educational
 
-Target length: {word_count} words (approximately)
+Target length: {word_count} words (±20%).
 
 Rules:
 
-Start with a strong hook that stops the scroll. Use one of these:
-- a surprising observation
-- a bold opinion
-- a common mistake
-- a short real-world scenario
+Start with a strong hook that stops the scroll. Hooks should be concrete or provocative.
 
-Focus on ONE clear insight about reporting, dashboards, or data-driven decision making.
+Allowed hook types:
+- surprising observation
+- bold opinion
+- common mistake
+- short real-world scenario
 
-Write for B2B leaders who care about:
-- saving time on reporting
-- understanding business performance
-- making faster decisions
+Avoid generic hooks such as:
+- "Most companies struggle with..."
+- "Here's something people get wrong..."
+
+Focus on ONE clear insight about reporting, dashboards, or business data.
+
+Ground the post in realistic business situations such as:
+- messy spreadsheets
+- manual reporting
+- inconsistent dashboards
+- slow monthly reporting cycles
 
 Formatting:
 - Use short paragraphs
 - Add line breaks for readability
 - Avoid large blocks of text
 
-Style-specific rules:
+Style rules:
 
 Tips List:
 - Max 5 tips
@@ -48,12 +58,21 @@ Story:
 Question:
 - End with a question inviting specific answers
 
+Thought Leadership:
+- Present a strong opinion about how businesses approach analytics or reporting.
+
+Data Insight:
+- Include a statistic, benchmark, or observation about business reporting practices.
+
+Contrarian Take:
+- Challenge a common belief about dashboards, analytics, or reporting.
+
 Avoid:
 - corporate buzzwords (synergy, leverage, pivot, ecosystem, journey)
-- filler phrases
-- generic motivational tone
+- generic LinkedIn clichés like "data is the new oil"
+- motivational fluff
 
-End with ONE hashtag line (3–5 hashtags).
+End with ONE hashtag line (3–5 relevant hashtags related to analytics, reporting, dashboards, or business intelligence).
 
 Output ONLY the post text.
 No title.

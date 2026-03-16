@@ -42,7 +42,7 @@ class InteractionEngine:
 
     # ── Like ────────────────────────────────────────────────────────────────
 
-    async def like_post(self, page: Page, post_url: str, db=None, author_name: str = "") -> bool:
+    async def like_post(self, page: Page, post_url: str, db=None, author_name: str = "", topic_tag: str = "") -> bool:
         if not self._budget_ok(ACTION_LIKE, db):
             return False
         await random_delay(
@@ -53,7 +53,7 @@ class InteractionEngine:
         if not ok:
             await asyncio.sleep(2)
             ok = await self._attempt_like(page, post_url)
-        self._record(ok, ACTION_LIKE, post_url, db, target_name=author_name)
+        self._record(ok, ACTION_LIKE, post_url, db, target_name=author_name, topic_tag=topic_tag)
         return ok
 
     async def _attempt_like(self, page: Page, post_url: str) -> bool:
@@ -88,7 +88,7 @@ class InteractionEngine:
     # ── Comment ────────────────────────────────────────────────────────────
 
     async def comment_post(
-        self, page: Page, post_url: str, comment_text: str, db=None, author_name: str = ""
+        self, page: Page, post_url: str, comment_text: str, db=None, author_name: str = "", topic_tag: str = ""
     ) -> bool:
         if not self._budget_ok(ACTION_COMMENT, db):
             return False
@@ -100,7 +100,7 @@ class InteractionEngine:
         if not ok:
             await asyncio.sleep(3)
             ok = await self._attempt_comment(page, post_url, comment_text)
-        self._record(ok, ACTION_COMMENT, post_url, db, comment_text=comment_text, target_name=author_name)
+        self._record(ok, ACTION_COMMENT, post_url, db, comment_text=comment_text, target_name=author_name, topic_tag=topic_tag)
         return ok
 
     async def _attempt_comment(
@@ -460,6 +460,7 @@ class InteractionEngine:
         db,
         comment_text: Optional[str] = None,
         target_name: str = "",
+        topic_tag: str = "",
     ) -> None:
         """Log result, increment budget, update circuit breaker, broadcast WS event."""
         result = "SUCCESS" if success else "FAILED"
@@ -492,6 +493,7 @@ class InteractionEngine:
                     result=result,
                     db=db,
                     comment_text=comment_text,
+                    topic_tag=topic_tag,
                 )
             except Exception as e:
                 logger.warning(f"Engagement log write error: {e}")

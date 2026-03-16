@@ -100,7 +100,7 @@ class TestPipelineE2E:
             post = db.query(Post).first()
             assert post is not None
             assert post.author_name == "Test Author"
-            assert post.state in ("ACTED", "SCORED", "SKIPPED")
+            assert post.state in ("ACTED", "SCORED", "SKIPPED", "PREVIEW")
 
     def test_budget_exhausted_skips_action(self, mock_page):
         """When budget is exhausted, pipeline should skip the action."""

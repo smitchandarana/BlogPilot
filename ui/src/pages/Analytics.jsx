@@ -38,6 +38,9 @@ export default function Analytics() {
   const [summaryText, setSummaryText] = useState('')
   const [dailyStats, setDailyStats] = useState({})
   const [loading, setLoading] = useState(true)
+  const [commentQuality, setCommentQuality] = useState(null)
+  const [calibration, setCalibration] = useState(null)
+  const [timing, setTiming] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -84,6 +87,15 @@ export default function Analytics() {
           leadsTotal: daily.leads_total || 0,
           emailsFound: daily.emails_found || 0,
         })
+        // Learning insights
+        const [cqRes, calRes, timRes] = await Promise.all([
+          analytics.learningCommentQuality().catch(() => ({ data: null })),
+          analytics.learningCalibration().catch(() => ({ data: null })),
+          analytics.learningTiming().catch(() => ({ data: null })),
+        ])
+        setCommentQuality(cqRes.data)
+        setCalibration(calRes.data)
+        setTiming(timRes.data)
       } catch {
         // keep empty state
       } finally {
@@ -188,6 +200,146 @@ export default function Analytics() {
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Weekly Summary</h2>
         <p className="text-sm leading-relaxed text-slate-400">{summaryText}</p>
       </div>
+
+      {/* ── Learning Insights ─────────────────────────────────────── */}
+      <div className="mt-2">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-100">Learning Insights</h2>
+        <p className="mt-0.5 text-sm text-slate-500">Self-learning feedback from engagement data.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Comments Logged"
+          value={commentQuality?.total_comments ?? 0}
+          sub="Quality tracked"
+          color="text-sky-300"
+        />
+        <StatCard
+          label="Avg Quality Score"
+          value={commentQuality?.avg_quality_score?.toFixed(1) ?? '0.0'}
+          sub="Out of 10"
+          color="text-violet-300"
+        />
+        <StatCard
+          label="Reply Rate"
+          value={commentQuality?.total_comments > 0 ? `${(commentQuality.reply_rate * 100).toFixed(0)}%` : 'N/A'}
+          sub={`${commentQuality?.got_reply_count ?? 0} replies`}
+          color="text-emerald-400"
+        />
+        <StatCard
+          label="Scored Posts"
+          value={calibration?.total_posts ?? 0}
+          sub="For calibration"
+          color="text-amber-400"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Score calibration */}
+        <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Score Calibration</h2>
+          {calibration?.buckets?.length > 0 ? (
+            <div className="space-y-3">
+              {calibration.buckets.map((b) => {
+                const pct = Math.round(b.rate * 100)
+                return (
+                  <div key={b.range} className="flex items-center gap-3">
+                    <span className="w-12 text-right text-xs font-mono text-slate-400">{b.range}</span>
+                    <div className="flex-1 h-5 bg-slate-800 rounded overflow-hidden">
+                      <div
+                        className="h-full rounded flex items-center px-2 transition-[width] duration-500"
+                        style={{
+                          width: `${Math.max(pct, 4)}%`,
+                          backgroundColor: pct > 50 ? '#10b981' : pct > 20 ? '#f59e0b' : '#64748b',
+                        }}
+                      >
+                        <span className="text-[10px] font-bold text-white">{pct}%</span>
+                      </div>
+                    </div>
+                    <span className="w-16 text-right text-xs text-slate-500">{b.acted}/{b.total}</span>
+                  </div>
+                )
+              })}
+              {calibration.recommendation && (
+                <p className="mt-3 text-xs text-slate-500 italic">{calibration.recommendation}</p>
+              )}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-slate-500">No calibration data yet.</p>
+          )}
+        </div>
+
+        {/* Timing heatmap */}
+        <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Activity by Hour</h2>
+          {timing?.total_actions > 0 ? (
+            <div>
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: 24 }, (_, h) => {
+                  const count = timing.hourly?.[h] ?? 0
+                  const maxCount = Math.max(...Object.values(timing.hourly || {}), 1)
+                  const intensity = count / maxCount
+                  return (
+                    <div
+                      key={h}
+                      className="flex flex-col items-center"
+                      title={`${h}:00 — ${count} actions`}
+                    >
+                      <div
+                        className="w-5 h-5 rounded-sm"
+                        style={{
+                          backgroundColor: count === 0
+                            ? 'rgba(100,116,139,0.15)'
+                            : `rgba(124,58,237,${0.2 + intensity * 0.8})`,
+                        }}
+                      />
+                      <span className="text-[8px] text-slate-600 mt-0.5">{h}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {timing.best_hours?.length > 0 && (
+                  <span className="text-xs text-slate-400">
+                    Best hours: <span className="text-emerald-400 font-medium">
+                      {timing.best_hours.map(h => `${h}:00`).join(', ')}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {timing.best_days?.length > 0 && (
+                  <span className="text-xs text-slate-400">
+                    Best days: <span className="text-violet-300 font-medium">
+                      {timing.best_days.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')}
+                    </span>
+                  </span>
+                )}
+              </div>
+              {timing.recommendation && (
+                <p className="mt-2 text-xs text-slate-500 italic">{timing.recommendation}</p>
+              )}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-slate-500">No timing data yet.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Comment angle performance */}
+      {commentQuality?.top_angles && Object.values(commentQuality.top_angles).some(v => v > 0) && (
+        <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Comment Angle Distribution</h2>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(commentQuality.top_angles).map(([angle, count]) => (
+              <div key={angle} className="rounded-lg bg-slate-800 px-4 py-2 border border-slate-700/40">
+                <span className="text-xs text-slate-400 capitalize">{angle}</span>
+                <p className="text-lg font-semibold text-violet-300">{count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

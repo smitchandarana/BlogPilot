@@ -155,8 +155,28 @@ async def _async_feed_scan():
         ie = InteractionEngine(circuit_breaker=cb)
 
         with get_db() as db:
-            # Step 3: Deduplication happens inside scan()
+            # Step 2a: Scan home feed (deduplication happens inside scan())
             posts = await scanner.scan(page, db=db)
+
+            # Step 2b: Hashtag/search scanning (if enabled)
+            if cfg_get("feed_engagement.hashtag_scan_enabled", False) or \
+               cfg_get("feed_engagement.search_scan_enabled", False):
+                try:
+                    from backend.automation.hashtag_scanner import HashtagScanner
+                    from backend.storage import post_state as _ps
+                    ht_scanner = HashtagScanner()
+                    hashtags = cfg_get("hashtags", []) or []
+                    topics = cfg_get("topics", []) or []
+                    extra = await ht_scanner.scan_multiple(page, hashtags, topics)
+                    # Deduplicate extra posts against DB
+                    for ep in extra:
+                        ep_url = ep.get("url", "")
+                        if ep_url and not _ps.is_seen(ep_url, db):
+                            posts.append(ep)
+                    logger.info(f"Pipeline: +{len(extra)} posts from hashtag/search scan")
+                except Exception as e:
+                    logger.warning(f"Pipeline: hashtag scan error — {e}")
+
             if not posts:
                 logger.info("Pipeline: no new posts found")
                 return
@@ -224,6 +244,19 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
         comment_count=int(post.get("comment_count", 0)),
     )
 
+    # Step 3b: Blacklist check — skip before AI scoring to save API calls
+    blacklist = cfg_get("keyword_blacklist", [])
+    if blacklist:
+        text_lower = (post.get("text") or "").lower()
+        for phrase in blacklist:
+            if phrase.lower() in text_lower:
+                post_state.update_state(
+                    url, "SKIPPED", db,
+                    skip_reason=f"blacklist: '{phrase}'",
+                )
+                logger.info(f"Pipeline: BLACKLIST skip '{author}' matched '{phrase}'")
+                return
+
     # Step 4: Score for relevance (Groq AI)
     score = await _score_post(post, groq_client, prompt_loader)
     min_score = float(cfg_get("feed_engagement.min_relevance_score", 6))
@@ -239,6 +272,9 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
 
     post_state.update_state(url, "SCORED", db, relevance_score=score)
     logger.info(f"Pipeline: scored '{author}' score={score:.1f}")
+
+    # Match post against configured topics for performance tracking
+    matched_topic = _match_topic(post)
 
     # Step 5: Viral check — adjust queue priority (informational at this stage)
     try:
@@ -269,10 +305,16 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
 
     # Step 7: Generate comment (Groq AI — Sprint 5; stub now)
     comment_text: Optional[str] = None
+    comment_quality_score: float = 0.0
+    comment_angle: str = "unknown"
+    comment_candidate_count: int = 0
     if action in ("COMMENT", "LIKE_AND_COMMENT"):
         comment_result = await _generate_comment(post, groq_client, prompt_loader)
         if isinstance(comment_result, dict):
             comment_text = comment_result.get("comment", "")
+            comment_quality_score = float(comment_result.get("quality_score", 0))
+            comment_angle = comment_result.get("angle", "unknown")
+            comment_candidate_count = int(comment_result.get("candidate_count", 0))
             # Reject low-quality or explicitly rejected comments
             if comment_result.get("rejected") or not comment_text:
                 reasons = comment_result.get("reject_reasons", ["empty"])
@@ -322,14 +364,25 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     acted = False
 
     if action in ("LIKE", "LIKE_AND_COMMENT"):
-        ok = await ie.like_post(page, url, db=db)
+        ok = await ie.like_post(page, url, db=db, topic_tag=matched_topic)
         if ok:
             acted = True
 
     if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text:
-        ok = await ie.comment_post(page, url, comment_text, db=db)
+        ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
         if ok:
             acted = True
+            # Log comment quality metrics for self-learning
+            try:
+                from backend.storage import quality_log
+                quality_log.log_comment(
+                    db=db, post_id=url, post_text=post.get("text", ""),
+                    comment_used=comment_text, quality_score=comment_quality_score,
+                    candidate_count=comment_candidate_count, topic=matched_topic,
+                    all_candidates=None, angle=comment_angle,
+                )
+            except Exception as e:
+                logger.debug(f"Pipeline: comment quality log error — {e}")
 
     # Step 10: Update post state + WebSocket
     final_state = "ACTED" if acted else "FAILED"
@@ -354,6 +407,14 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
                 })
         except Exception as e:
             logger.debug(f"Pipeline: budget broadcast error — {e}")
+
+    # Track topic engagement for performance-based rotation
+    if acted and matched_topic:
+        try:
+            from backend.growth.topic_rotator import topic_rotator
+            topic_rotator.record_engagement(matched_topic, score, action, db)
+        except Exception as e:
+            logger.debug(f"Pipeline: topic engagement tracking error — {e}")
 
     # High-score profile visit (leads to email enrichment in Sprint 6)
     visit_threshold = float(cfg_get("feed_engagement.score_for_profile_visit", 8))
@@ -539,3 +600,31 @@ def _in_activity_window() -> bool:
         return day_name in [d.lower() for d in active_days] and start <= now.hour < end
     except Exception:
         return True  # Fail open — don't block engine on config error
+
+
+def _match_topic(post: dict) -> str:
+    """
+    Match post text against configured topics. Returns best matching topic or "".
+    Simple word-overlap — picks the topic with the most word matches.
+    """
+    text = (post.get("text") or "").lower()
+    if not text:
+        return ""
+
+    topics = cfg_get("topics", [])
+    if not topics:
+        return ""
+
+    best_topic = ""
+    best_overlap = 0
+    text_words = set(text.split())
+
+    for topic in topics:
+        topic_str = str(topic).lower()
+        topic_words = set(topic_str.split())
+        overlap = len(topic_words & text_words)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_topic = str(topic)
+
+    return best_topic if best_overlap > 0 else ""

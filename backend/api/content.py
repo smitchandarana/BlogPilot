@@ -244,6 +244,22 @@ async def _async_publish(post_id: str, text: str) -> None:
             except Exception:
                 pass
 
+        # Post quality logging for self-learning
+        if success:
+            try:
+                from backend.storage import quality_log
+                with _get_db() as db_ql:
+                    quality_log.log_post(
+                        db=db_ql,
+                        topic=post.topic if post else "",
+                        style=post.style if post else "",
+                        post_text=text,
+                        quality_score=0.0,  # score not available at publish time
+                        was_published=True,
+                    )
+            except Exception:
+                pass
+
         # Budget tracking
         if success:
             try:

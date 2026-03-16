@@ -12,6 +12,7 @@ export const engine = {
   resume: () => http.post('/engine/resume'),
   status: () => http.get('/engine/status'),
   resetCircuitBreaker: () => http.post('/engine/reset-circuit-breaker'),
+  scanNow: () => http.post('/engine/scan-now'),
 }
 
 export const config = {
@@ -44,6 +45,10 @@ export const analytics = {
   skippedPosts: (limit = 50) => http.get('/analytics/skipped-posts', { params: { limit } }),
   actedPosts: (limit = 50) => http.get('/analytics/acted-posts', { params: { limit } }),
   commentHistory: (limit = 50) => http.get('/analytics/comment-history', { params: { limit } }),
+  learningCommentQuality: () => http.get('/analytics/learning/comment-quality'),
+  learningPostQuality: () => http.get('/analytics/learning/post-quality'),
+  learningCalibration: () => http.get('/analytics/learning/scoring-calibration'),
+  learningTiming: () => http.get('/analytics/learning/timing'),
 }
 
 export const campaigns = {
