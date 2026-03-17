@@ -6,18 +6,11 @@ Usage:
     output = await client.complete(system_prompt, user_prompt)
 """
 import asyncio
+import re
 import time
 from typing import Optional
 
 from groq import AsyncGroq, RateLimitError, APIError
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-)
-import logging
 
 from backend.utils.logger import get_logger
 
@@ -28,12 +21,36 @@ class GroqError(Exception):
     """Raised when a Groq API call fails unrecoverably."""
 
 
+def _parse_rate_limit(error: RateLimitError) -> tuple[bool, float]:
+    """
+    Parse a 429 RateLimitError.
+
+    Returns (is_daily_limit, retry_after_seconds).
+    - is_daily_limit=True means the daily TPD quota is exhausted — no point retrying.
+    - retry_after_seconds is parsed from "Please try again in Xm Ys" if present,
+      otherwise defaults to 10s for per-minute limits.
+    """
+    msg = str(error).lower()
+    is_daily = "tokens per day" in msg or " tpd" in msg or "per day" in msg
+
+    # Parse "please try again in 2m30.5s" or "try again in 45s"
+    retry_after = 10.0
+    m = re.search(r"try again in (?:(\d+)m)?(\d+(?:\.\d+)?)s", msg)
+    if m:
+        minutes = int(m.group(1) or 0)
+        seconds = float(m.group(2) or 0)
+        retry_after = minutes * 60 + seconds + 1.0  # +1s buffer
+
+    return is_daily, retry_after
+
+
 class GroqClient:
     """
     Async Groq API wrapper.
 
     Retries up to 2 times with exponential backoff (2s, 4s).
-    On 429 rate-limit, sleeps 60 s before retrying.
+    On 429 per-minute rate-limit, sleeps the retry-after duration (parsed from error).
+    On 429 daily TPD limit, raises GroqError immediately — no point retrying.
     Raises GroqError on unrecoverable failure.
     """
 
@@ -56,8 +73,9 @@ class GroqClient:
         """
         Call Groq chat completion. Returns the text of the first choice.
 
-        Retries twice on transient errors (2 s then 4 s delay).
-        On 429, waits 60 s before retrying.
+        Retries twice on transient errors (2s, 4s backoff).
+        On 429 per-minute limit: sleeps parsed retry-after duration then retries.
+        On 429 daily TPD limit: raises GroqError immediately.
         Raises GroqError if all attempts fail.
         """
         tokens = max_tokens if max_tokens is not None else self.max_tokens
@@ -89,9 +107,17 @@ class GroqClient:
                 return text.strip()
 
             except RateLimitError as e:
-                logger.warning(f"GroqClient: 429 rate-limit hit — sleeping 60 s (attempt {attempt})")
+                is_daily, retry_after = _parse_rate_limit(e)
+                if is_daily:
+                    raise GroqError(
+                        f"Daily Groq token limit (TPD) reached — resets at midnight UTC. "
+                        f"Try again later. ({e})"
+                    )
+                logger.warning(
+                    f"GroqClient: 429 rate-limit hit — sleeping {retry_after:.0f}s (attempt {attempt})"
+                )
                 last_error = e
-                await asyncio.sleep(60)
+                await asyncio.sleep(retry_after)
 
             except asyncio.TimeoutError as e:
                 logger.warning(f"GroqClient: request timed out (attempt {attempt})")

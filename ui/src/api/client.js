@@ -34,7 +34,7 @@ export const config = {
   updatePrompt: (name, text) => http.put(`/prompts/${name}`, { text }),
   resetPrompt: (name) => http.get(`/prompts/${name}/default`),
   testPrompt: (prompt_name, variables) =>
-    http.post('/prompts/test', { prompt_name, variables }),
+    http.post('/prompts/test', { prompt_name, variables }, { timeout: 120000 }),
   getGroqKeyStatus: () => http.get('/api-keys/groq'),
   saveGroqKey: (api_key) => http.post('/api-keys/groq', { api_key }),
 }
@@ -77,7 +77,7 @@ export const content = {
   schedule: (data) => http.post('/content/schedule', data),
   cancel: (id) => http.delete(`/content/queue/${id}`),
   publishNow: (data) => http.post('/content/publish-now', data),
-  generateStructured: (data) => http.post('/content/generate-structured', data, { timeout: 60000 }),
+  generateStructured: (data) => http.post('/content/generate-structured', data, { timeout: 120000 }),
 }
 
 export const intelligence = {
