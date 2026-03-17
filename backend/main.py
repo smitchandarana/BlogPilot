@@ -158,6 +158,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from backend.api.intelligence import router as intelligence_router
+    app.include_router(intelligence_router, prefix="/intelligence", tags=["intelligence"])
+except ImportError:
+    pass
+
 
 @app.get("/health")
 async def health():

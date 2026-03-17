@@ -14,9 +14,43 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**All Sprints 1–8 COMPLETE. Self-Learning Engine COMPLETE.** Phase 1 development is finished.
-→ Remaining: M7 runtime validation (4-hour unattended run)
+**All Sprints 1–8 COMPLETE. Self-Learning Engine COMPLETE. Content Intelligence (Phase A + B + B2) COMPLETE.** Phase 1 development is finished.
+→ Remaining: M7 runtime validation (4-hour unattended run) — use `python scripts/m7_validate.py` to check criteria
 → Phase 2 (Chrome Extension) begins after M7 is validated.
+
+### Post-Sprint Enhancement: Content Intelligence + Structured Post Generation ✅
+Extracts structured insights from research snippets, aggregates patterns, and enables grounded LinkedIn post generation with real signal inputs.
+
+- [x] `backend/storage/models.py` — added `ContentInsight` and `ContentPattern` ORM models
+- [x] `backend/storage/database.py` — migration for `processed_for_insights` column on `research_snippets`
+- [x] `prompts/content_extractor.txt` — AI extraction prompt (subtopic, pain_point, hook_type, content_style, key_insight, audience_segment, sentiment, specificity_score)
+- [x] `prompts/structured_post.txt` — structured post generation prompt with evidence injection + anti-slop rules
+- [x] `backend/ai/prompt_loader.py` — registered `content_extractor` and `structured_post` prompts
+- [x] `backend/research/content_extractor.py` — NEW: batch-processes unprocessed snippets → `ContentInsight` rows via Groq (semaphore=2)
+- [x] `backend/research/pattern_aggregator.py` — NEW: SQL GROUP BY aggregation of insights → `ContentPattern` rows; evidence block generation
+- [x] `backend/api/intelligence.py` — NEW: `/intelligence` router (insights, patterns, patterns/for-generation, extract, status)
+- [x] `backend/main.py` — registered intelligence router at `/intelligence` prefix
+- [x] `backend/ai/post_generator.py` — added `generate_structured()` alongside `generate()` (same return shape, backward compatible)
+- [x] `backend/api/content.py` — added `POST /content/generate-structured` endpoint
+- [x] `config/settings.yaml` — added `content_intelligence:` config block
+- [x] `backend/core/scheduler.py` — added `_job_content_extraction` job (every 4h ±20min jitter)
+- [x] `ui/src/api/client.js` — added `intelligence` export + `generateStructured` to content export
+- [x] `ui/src/pages/ContentStudio.jsx` — mode toggle (Quick/Structured), IntelligencePanel (click-to-fill), structured form (subtopic, audience, pain_point, hook_intent, belief_to_challenge, core_insight, proof_type)
+- [x] `backend/storage/models.py` — added `GenerationSession` model (Phase B)
+- [x] `backend/storage/database.py` — migration to create `generation_sessions` table
+- [x] `backend/api/intelligence.py` — added `POST /intelligence/extract-text`, `POST /intelligence/session`, `GET /intelligence/preferences` endpoints
+- [x] `backend/learning/content_preference_learner.py` — NEW: mines GenerationSession history for best hook types, audiences, styles; returns defaults for auto-fill
+- [x] `ui/src/api/client.js` — added `extractText`, `logSession`, `preferences` to intelligence export
+- [x] `ui/src/pages/ContentStudio.jsx` — Phase B: auto-fill structured form from learned preferences; "Learn from Content" paste panel with Extract & Learn; session tracking (logSession on generate, publish, schedule)
+- [x] `ui/src/pages/Dashboard.jsx` — intelligence status widget: total insights, total patterns, unprocessed snippets count, last extraction date
+- [x] `backend/api/intelligence.py` — added `GET /intelligence/patterns/{pattern_id}` endpoint (pattern + supporting insights for drilldown)
+- [x] `ui/src/api/client.js` — added `patternDetail(id)` to intelligence export
+- [x] `backend/learning/content_preference_learner.py` — added `top_posts` (top 3 published sessions by quality score) to preferences response
+- [x] `backend/ai/post_generator.py` — `generate_structured()` accepts `style_examples` list; injects as `{style_reference}` block in prompt when provided
+- [x] `prompts/structured_post.txt` — added `{style_reference}` placeholder at end of prompt
+- [x] `backend/api/content.py` — `StructuredGenerateRequest` accepts `style_examples`; passes through to `generate_structured()`
+- [x] `ui/src/pages/ContentStudio.jsx` — InsightDrilldownModal (click ✦ on any pattern → modal showing supporting insights + "Use this insight" fill-all); "Write like my best posts" button (injects top published sessions as style reference into next generate call)
+- [x] `scripts/m7_validate.py` — NEW: M7 runtime validation script (9 checks: DB, actions today, budget enforcement, midnight reset, feed scan activity, circuit breaker, error rate, analytics queries, content intelligence)
 
 ### Post-Sprint Enhancement: Comment Approval Queue ✅
 Human-in-the-loop approval flow for AI-generated comments. Comments are held in PREVIEW state until approved or rejected via Dashboard.

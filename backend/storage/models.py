@@ -214,6 +214,7 @@ class ResearchSnippet(Base):
     snippet = Column(Text)
     engagement_signal = Column(Integer, default=0)  # upvotes/likes/comments
     discovered_at = Column(DateTime, default=_utcnow)
+    processed_for_insights = Column(Boolean, default=False)
 
 
 class PostContentHash(Base):
@@ -223,4 +224,64 @@ class PostContentHash(Base):
     content_hash = Column(String(64), unique=True, nullable=False)  # SHA256 of normalized text
     post_id = Column(String(64))           # FK to scheduled_posts.id
     text_preview = Column(String(500))     # first 500 chars for debugging
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class GenerationSession(Base):
+    """Tracks each structured post generation — inputs, outputs, edits, final action."""
+    __tablename__ = "generation_sessions"
+
+    id = Column(String(64), primary_key=True)      # UUID
+    topic = Column(String(256))
+    subtopic = Column(String(256))
+    audience = Column(String(256))
+    pain_point = Column(Text)
+    hook_intent = Column(String(32))               # CONTRARIAN | QUESTION | STAT | STORY | TREND | MISTAKE
+    proof_type = Column(String(32))
+    style = Column(String(64))
+    tone = Column(String(64))
+    generated_text = Column(Text)                  # raw output from Groq
+    final_text = Column(Text)                      # text user actually published (may differ)
+    quality_score = Column(Float, default=0.0)
+    edit_distance_ratio = Column(Float, default=0.0)  # 0=unchanged, 1=completely rewritten
+    action = Column(String(32), default="pending")    # pending | published | discarded | scheduled
+    published_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class ContentInsight(Base):
+    """Structured AI-extracted insights from research snippets."""
+    __tablename__ = "content_insights"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snippet_id = Column(Integer, ForeignKey("research_snippets.id"), nullable=True)
+    topic = Column(String(256))
+    subtopic = Column(String(256))
+    pain_point = Column(String(512))
+    hook_type = Column(String(64))         # CONTRARIAN | QUESTION | STAT | STORY | TREND | MISTAKE
+    content_style = Column(String(64))     # TACTICAL | STRATEGIC | PERSONAL | EDUCATIONAL | PROVOCATIVE
+    key_insight = Column(Text)
+    audience_segment = Column(String(128))
+    sentiment = Column(String(32))         # POSITIVE | NEGATIVE | NEUTRAL | MIXED
+    specificity_score = Column(Float, default=0.0)
+    source_engagement = Column(Integer, default=0)
+    source_type = Column(String(32))       # REDDIT | RSS | HN | LINKEDIN | MANUAL
+    times_used_in_generation = Column(Integer, default=0)
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class ContentPattern(Base):
+    """Aggregated recurring patterns computed from content_insights."""
+    __tablename__ = "content_patterns"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pattern_type = Column(String(64), nullable=False)  # PAIN_POINT | HOOK | AUDIENCE | TOPIC_TREND
+    pattern_value = Column(String(512), nullable=False)
+    frequency = Column(Integer, default=1)
+    avg_engagement = Column(Float, default=0.0)
+    example_insight_ids = Column(JSON, default=list)
+    domain = Column(String(256), nullable=True)
+    first_seen_at = Column(DateTime, default=_utcnow)
+    last_seen_at = Column(DateTime, default=_utcnow)
     created_at = Column(DateTime, default=_utcnow)

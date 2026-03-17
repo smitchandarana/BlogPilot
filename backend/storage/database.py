@@ -55,6 +55,32 @@ def init_db():
     except Exception:
         pass  # table may not exist yet on first run
 
+    # Migrate: add processed_for_insights column to research_snippets if missing
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if "research_snippets" in inspector.get_table_names():
+            cols = [c["name"] for c in inspector.get_columns("research_snippets")]
+            if "processed_for_insights" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE research_snippets ADD COLUMN processed_for_insights BOOLEAN DEFAULT 0"
+                    ))
+                logger.info("Migration: added 'processed_for_insights' column to research_snippets")
+    except Exception:
+        pass
+
+    # Migrate: create generation_sessions table if missing (Phase B)
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        if "generation_sessions" not in inspector.get_table_names():
+            from backend.storage.models import GenerationSession
+            GenerationSession.__table__.create(engine)
+            logger.info("Migration: created 'generation_sessions' table")
+    except Exception:
+        pass
+
     # Seed budget rows from config
     try:
         from backend.utils.config_loader import get as cfg_get

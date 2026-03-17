@@ -52,7 +52,7 @@ class GroqClient:
         self.temperature = float(temperature)
         self._client = AsyncGroq(api_key=api_key)
 
-    async def complete(self, system: str, user: str) -> str:
+    async def complete(self, system: str, user: str, max_tokens: Optional[int] = None) -> str:
         """
         Call Groq chat completion. Returns the text of the first choice.
 
@@ -60,6 +60,7 @@ class GroqClient:
         On 429, waits 60 s before retrying.
         Raises GroqError if all attempts fail.
         """
+        tokens = max_tokens if max_tokens is not None else self.max_tokens
         attempt = 0
         last_error: Optional[Exception] = None
 
@@ -74,7 +75,7 @@ class GroqClient:
                             {"role": "system", "content": system},
                             {"role": "user", "content": user},
                         ],
-                        max_tokens=self.max_tokens,
+                        max_tokens=tokens,
                         temperature=self.temperature,
                     ),
                     timeout=30.0,

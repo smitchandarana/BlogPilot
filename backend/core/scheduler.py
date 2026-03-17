@@ -168,6 +168,16 @@ class Scheduler:
                 id="auto_tune",
                 replace_existing=True,
             )
+        # Content intelligence: extract insights from research snippets
+        extraction_hours = int(cfg_get("content_intelligence.extraction_interval_hours", 4))
+        extraction_jitter = int(cfg_get("content_intelligence.extraction_jitter_seconds", 1200))
+        if cfg_get("content_intelligence.enabled", True):
+            self._scheduler.add_job(
+                _job_content_extraction,
+                IntervalTrigger(hours=extraction_hours, jitter=extraction_jitter),
+                id="content_extraction",
+                replace_existing=True,
+            )
         logger.info(
             f"Scheduler: default jobs registered "
             f"(feed_scan every {interval} min ±{feed_jitter}s, hourly_reset, budget_reset, "
@@ -302,7 +312,7 @@ def _job_topic_research():
                 os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
             )
             api_key = None
-            if os.path.exists(secrets_path):
+            if os.path.isfile(secrets_path):
                 with open(secrets_path, "r") as f:
                     for line in f:
                         if line.startswith("groq_api_key="):
@@ -385,3 +395,75 @@ def _job_auto_tune():
         job_auto_tune()
     except Exception as exc:
         logger.warning(f"Scheduler: auto_tune error: {exc}")
+
+
+def _job_content_extraction():
+    """Extract structured insights from unprocessed research snippets."""
+    logger.info("Scheduler: content_extraction fired")
+    try:
+        import asyncio
+        from backend.utils.config_loader import get as _cfg
+        from backend.storage.database import get_db
+        from backend.research.content_extractor import ContentExtractor
+        from backend.research.pattern_aggregator import PatternAggregator
+
+        # Build AI deps
+        groq_client = None
+        prompt_loader = None
+        try:
+            import os
+            from backend.ai.groq_client import GroqClient
+            from backend.ai.prompt_loader import PromptLoader
+            from backend.utils.encryption import decrypt
+
+            api_key = os.environ.get("GROQ_API_KEY")
+            if not api_key:
+                secrets_path = os.path.normpath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
+                )
+                if os.path.exists(secrets_path):
+                    with open(secrets_path, "r") as f:
+                        for line in f:
+                            if line.startswith("groq_api_key="):
+                                encrypted = line.strip().split("=", 1)[1]
+                                api_key = decrypt(encrypted)
+                                break
+
+            if api_key:
+                groq_client = GroqClient(
+                    api_key=api_key,
+                    model=_cfg("ai.model", "llama-3.3-70b-versatile"),
+                    max_tokens=int(_cfg("ai.max_tokens", 500)),
+                    temperature=float(_cfg("ai.temperature", 0.7)),
+                )
+                prompt_loader = PromptLoader()
+                prompt_loader.load_all()
+        except Exception:
+            pass
+
+        if groq_client is None:
+            logger.info("Scheduler: content_extraction skipped — no Groq API key")
+            return
+
+        extractor = ContentExtractor(groq_client=groq_client, prompt_loader=prompt_loader)
+        agg = PatternAggregator()
+
+        batch_size = int(_cfg("content_intelligence.extraction_batch_size", 20))
+        with get_db() as db:
+            insights = asyncio.run(extractor.extract_from_snippets(db, batch_size=batch_size))
+
+        if insights:
+            with get_db() as db:
+                agg.aggregate_patterns(db)
+
+        try:
+            from backend.api.websocket import schedule_broadcast
+            schedule_broadcast("extraction_complete", {
+                "insights_created": len(insights),
+            })
+        except Exception:
+            pass
+
+        logger.info(f"Scheduler: content_extraction complete — {len(insights)} insights created")
+    except Exception as exc:
+        logger.warning(f"Scheduler: content_extraction error: {exc}")

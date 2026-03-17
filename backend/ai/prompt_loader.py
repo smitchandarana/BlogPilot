@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 _PROMPTS_DIR = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
 )
-_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply", "comment_candidate", "comment_scorer", "post_scorer", "post_with_context", "topic_scorer", "topic_extractor"]
+_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply", "comment_candidate", "comment_scorer", "post_scorer", "post_with_context", "topic_scorer", "topic_extractor", "content_extractor", "structured_post"]
 
 _VAR_RE = re.compile(r"\{(\w+)\}")
 

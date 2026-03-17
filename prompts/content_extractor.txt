@@ -1,0 +1,24 @@
+You are a content intelligence analyst. Extract structured insights from this content piece.
+
+Source: {source_type}
+Title: {title}
+Content:
+{content}
+
+Domain context: {domain}
+
+Extract the following fields. Be specific and concrete — avoid vague generalities.
+
+1. subtopic: The specific subject, technique, or concept discussed. Must be narrow and actionable (e.g. "real-time anomaly detection in Power BI", "KPI design for executive dashboards"). NOT broad like "data analytics" or "AI".
+2. pain_point: What problem, frustration, or challenge does this content address? Use the language of the audience. If no clear pain point exists, write "none".
+3. hook_type: What angle would make a LinkedIn reader stop scrolling? Pick ONE: CONTRARIAN (challenges a belief), QUESTION (poses a specific question), STAT (surprising number or data), STORY (real scenario or anecdote), TREND (something changing now), MISTAKE (common error being made)
+4. content_style: How is this content framed? Pick ONE: TACTICAL (how-to, step-by-step), STRATEGIC (big picture thinking), PERSONAL (individual experience), EDUCATIONAL (teaching a concept), PROVOCATIVE (challenges status quo)
+5. key_insight: The single most interesting takeaway that could ground a LinkedIn post. One sentence. Must be specific enough to quote or reference.
+6. audience_segment: Who would care most about this? Be specific (e.g. "Finance directors at mid-market manufacturing firms", "Data engineers at Series B startups"). NOT "business professionals".
+7. sentiment: Overall tone of the content. Pick ONE: POSITIVE, NEGATIVE, NEUTRAL, MIXED
+8. specificity_score: How concrete is the content? 0 = pure opinion or fluff with no evidence, 10 = specific data, methods, tools, or case studies. Rate honestly.
+
+Respond with ONLY valid JSON matching this exact structure:
+{{"subtopic": "", "pain_point": "", "hook_type": "", "content_style": "", "key_insight": "", "audience_segment": "", "sentiment": "", "specificity_score": 0}}
+
+Do not include any text outside the JSON. No markdown. No explanation.

@@ -10,9 +10,16 @@ Write ONE reply to {replier_name}'s comment.
 Rules:
 - Keep it 1-3 sentences. Conversation, not an essay.
 - Build on what they said specifically. Show you read their reply.
-- Either agree and add something, respectfully push back, or ask a follow-up question.
+- Either agree and add something new, respectfully push back with a concrete reason, or ask one narrow follow-up question.
 - Sound natural and human. You are mid-conversation, not writing a formal response.
-- Do NOT start with "Great point {replier_name}!" or similar empty openers.
 - Do NOT pitch anything.
+
+VOICE RULES (absolute):
+- NEVER open with: "Great point" / "Exactly" / "Absolutely" / "Totally agree" / "I agree" / "Well said"
+- NEVER use: "resonates" / "game-changer" / "at the end of the day" / "actionable" / "moving the needle" / "paradigm shift"
+- NEVER refer to {replier_name} in third person ("they mention...", "Sarah says...")
+- NEVER hedge with empty softeners — if you agree, still add something; if you disagree, say it plainly
+- NEVER use em dashes (—) for dramatic pauses — they signal AI instantly
+- If you ask a follow-up question, it must be specific and answerable in one sentence — not an invitation to write an essay
 
 Write ONLY the reply text. No explanation.

@@ -1,14 +1,20 @@
-Score this LinkedIn post draft for quality before publishing.
-PhoenixSolution is a business intelligence and reporting solutions company.
-Only high-quality posts that position us as experts should be published.
+Score this LinkedIn post draft for publish quality.
 
-Scoring criteria (each 0-2, total 0-10):
+Scoring criteria (each 0–2, total 0–10):
 
-  original_insight:  Contains a non-obvious claim, observation, or data point
-  specific_claim:    Makes at least one concrete, specific statement (not vague)
-  hook_strength:     First sentence would stop a scroller
-  conversation_hook: Ends with something that invites comments or discussion
-  readability:       Well-structured, flows naturally, not jargon-heavy
+  original_insight:  Non-obvious claim or observation — not common knowledge, not generic advice
+  specific_claim:    Concrete statement naming a role, tool, number, or scenario — not vague assertions
+  hook_strength:     First sentence would stop a scroller — specific, surprising, or viscerally relatable
+  conversation_hook: Ends in a way that invites real response — not "What are your thoughts?" or "Agree?"
+  readability:       Short paragraphs, natural flow, no jargon walls — sounds like a real person wrote it
+
+AUTOMATIC SCORE PENALTIES (subtract from total before returning):
+- Fabricated statistic with no source (e.g. "73% of companies...", "studies show..."): -2
+- Generic opener applicable to any topic ("In today's world...", "Most companies...", "Did you know..."): -2
+- Cliché conclusion ("adapt or be left behind", "future belongs to those who..."): -1
+- Force-fit unrelated example or evidence (topic drift): -1
+- Contains a URL or external link not part of the requested content: -2
+  EXCEPTION: phoenixsolution.in and any sub-pages (e.g. phoenixsolution.in/blog/...) are the author's own brand domain — do NOT penalise these. Only penalise third-party URLs or unrelated external links.
 
 Post draft:
 {post_text}
@@ -17,5 +23,5 @@ Topic: {topic}
 Style: {style}
 Target audience: {target_audience}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON. Apply all penalties. Minimum total is 0, maximum is 10:
 {{"original_insight": 0, "specific_claim": 0, "hook_strength": 0, "conversation_hook": 0, "readability": 0, "total": 0, "publish_recommendation": true, "rejection_reason": null, "improvement_suggestion": "one sentence on what would make this better"}}

@@ -1,6 +1,13 @@
 engine:
   enabled: true
   log_level: INFO
+content_intelligence:
+  enabled: false
+  extraction_interval_hours: 4
+  extraction_batch_size: 20
+  extraction_jitter_seconds: 1200
+  min_specificity_score: 3.0
+  pattern_refresh_after_extraction: true
 schedule:
   active_days:
   - monday
@@ -75,7 +82,7 @@ circuit_breaker:
   pause_duration_minutes: 30
   captcha_detected_action: pause
 quality:
-  min_comment_score: 8
+  min_comment_score: 6
   min_post_score: 7
   comment_candidates: 3
   max_recent_comments_for_diversity: 20

@@ -77,6 +77,21 @@ export const content = {
   schedule: (data) => http.post('/content/schedule', data),
   cancel: (id) => http.delete(`/content/queue/${id}`),
   publishNow: (data) => http.post('/content/publish-now', data),
+  generateStructured: (data) => http.post('/content/generate-structured', data, { timeout: 60000 }),
+}
+
+export const intelligence = {
+  insights: (params) => http.get('/intelligence/insights', { params }),
+  patterns: (params) => http.get('/intelligence/patterns', { params }),
+  patternsForGeneration: (topic) =>
+    http.get('/intelligence/patterns/for-generation', { params: { topic } }),
+  extract: () => http.post('/intelligence/extract', null, { timeout: 120000 }),
+  extractText: (text, source = 'MANUAL') =>
+    http.post('/intelligence/extract-text', { text, source }, { timeout: 60000 }),
+  logSession: (data) => http.post('/intelligence/session', data),
+  preferences: () => http.get('/intelligence/preferences'),
+  status: () => http.get('/intelligence/status'),
+  patternDetail: (id) => http.get(`/intelligence/patterns/${id}`),
 }
 
 export const research = {

@@ -39,6 +39,21 @@ class PublishNowRequest(BaseModel):
     style: Optional[str] = None
 
 
+class StructuredGenerateRequest(BaseModel):
+    topic: str
+    subtopic: Optional[str] = None
+    pain_point: Optional[str] = None
+    audience: Optional[str] = None
+    hook_intent: Optional[str] = None      # CONTRARIAN | QUESTION | STAT | STORY | TREND | MISTAKE
+    belief_to_challenge: Optional[str] = None
+    core_insight: Optional[str] = None
+    proof_type: Optional[str] = None       # STAT | STORY | EXAMPLE | ANALOGY | FRAMEWORK
+    style: str = "Thought Leadership"
+    tone: str = "Professional"
+    word_count: int = 150
+    style_examples: Optional[list] = None  # Top published posts for style matching
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────
 
 @router.get("/queue")
@@ -172,6 +187,102 @@ async def publish_now(body: PublishNowRequest, force: bool = Query(False)):
     engine.worker_pool.submit(_publish_single, post_id, body.text)
     logger.info(f"Content: publish-now submitted for post {post_id}")
     return {"status": "queued", "post_id": post_id}
+
+
+@router.post("/generate-structured")
+async def generate_structured_post(body: StructuredGenerateRequest):
+    """
+    Generate a LinkedIn post from structured inputs + content intelligence evidence.
+    Returns same shape as existing generation endpoints.
+    """
+    # Build AI deps
+    try:
+        import os
+        from backend.ai.groq_client import GroqClient
+        from backend.ai.prompt_loader import PromptLoader
+        from backend.utils.config_loader import get as cfg_get
+        from backend.utils.encryption import decrypt
+
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            secrets_path = os.path.normpath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
+            )
+            if os.path.isfile(secrets_path):
+                with open(secrets_path, "r") as f:
+                    for line in f:
+                        if line.startswith("groq_api_key="):
+                            encrypted = line.strip().split("=", 1)[1]
+                            api_key = decrypt(encrypted)
+                            break
+        if not api_key:
+            secrets_json = os.path.normpath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
+            )
+            if os.path.exists(secrets_json):
+                import json as _json
+                with open(secrets_json) as f:
+                    data = _json.load(f)
+                    api_key = data.get("api_key", "")
+                if api_key:
+                    try:
+                        api_key = decrypt(api_key)
+                    except Exception:
+                        pass
+
+        if not api_key:
+            raise HTTPException(status_code=503, detail="Groq API key not configured")
+
+        groq_client = GroqClient(
+            api_key=api_key,
+            model=str(cfg_get("ai.model", "llama-3.3-70b-versatile")),
+            max_tokens=int(cfg_get("ai.max_tokens", 800)),
+            temperature=float(cfg_get("ai.temperature", 0.7)),
+        )
+        prompt_loader = PromptLoader()
+        prompt_loader.load_all()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Content generate-structured: failed to build AI deps — {e}")
+        raise HTTPException(status_code=503, detail=f"AI setup failed: {e}")
+
+    # Fetch evidence from intelligence layer
+    evidence = ""
+    try:
+        from backend.research.pattern_aggregator import PatternAggregator
+        agg = PatternAggregator()
+        with get_db() as db:
+            evidence = agg.get_evidence_block(
+                body.topic, db, limit=5, subtopic=body.subtopic or ""
+            )
+    except Exception as e:
+        logger.warning(f"Content generate-structured: evidence fetch failed — {e}")
+
+    # Generate post
+    from backend.ai import post_generator
+    structured_inputs = {
+        "topic": body.topic,
+        "subtopic": body.subtopic or body.topic,
+        "pain_point": body.pain_point or "",
+        "audience": body.audience or "",
+        "hook_intent": body.hook_intent or "STORY",
+        "core_insight": body.core_insight or "",
+        "belief_to_challenge": body.belief_to_challenge or "",
+        "proof_type": body.proof_type or "EXAMPLE",
+        "style": body.style,
+        "tone": body.tone,
+        "word_count": body.word_count,
+    }
+
+    result = await post_generator.generate_structured(
+        structured_inputs=structured_inputs,
+        groq_client=groq_client,
+        prompt_loader=prompt_loader,
+        evidence=evidence,
+        style_examples=body.style_examples or None,
+    )
+    return result
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────

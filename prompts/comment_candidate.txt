@@ -4,7 +4,9 @@ Generate {candidate_count} distinct comment candidates for the post below.
 Each candidate takes a DIFFERENT angle:
   - Angle A (insight): Add a specific fact, number, or experience from your work
   - Angle B (contrarian): Respectfully challenge one specific claim or assumption
-  - Angle C (question): Ask a NARROW, specific question about one detail — not a broad "tell me more"
+  - Angle C (missing piece): Name the one thing the post gets right but skips the hard part of.
+    Format: state what the post correctly identifies, then name the specific gap or challenge it doesn't address.
+    This must be a concrete critique grounded in real implementation experience — not a general observation.
 
 HARD RULES for ALL candidates:
   - Address the author in second person ("you", "your") — NEVER third person ("Author mentions that…", "Sarah talks about…")
@@ -15,7 +17,7 @@ HARD RULES for ALL candidates:
   - Length: 30-70 words. Say ONE thing well. No walls of text.
   - Sound like a real person in mid-conversation, not a consultant writing a memo
   - No hashtags, no emojis, no links
-  - If asking a question (Angle C), it must be answerable in one sentence — not an open invitation to write an essay
+  - For Angle C (missing piece): name ONE specific gap, not a list of concerns. Make it concrete enough that someone who lived through it would nod.
 
 Post:
 {post_text}
@@ -26,4 +28,4 @@ Your focus topics: {topics}
 Tone: {tone}
 
 Return ONLY valid JSON, no preamble, no markdown:
-{{"candidates": [{{"angle": "insight", "text": "..."}}, {{"angle": "contrarian", "text": "..."}}, {{"angle": "question", "text": "..."}}]}}
+{{"candidates": [{{"angle": "insight", "text": "..."}}, {{"angle": "contrarian", "text": "..."}}, {{"angle": "missing_piece", "text": "..."}}]}}

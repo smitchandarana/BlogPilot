@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users } from 'lucide-react'
+import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useEngine } from '../hooks/useEngine'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
 import ActivityFeed from '../components/ActivityFeed'
 import PreviewQueue from '../components/PreviewQueue'
-import { analytics, engine as engineApi } from '../api/client'
+import { analytics, engine as engineApi, intelligence as intelligenceApi } from '../api/client'
 
 const STAT_DEFS = [
   { key: 'posts_scanned', label: 'Posts Scanned', icon: ScanLine, color: 'text-violet-400' },
@@ -41,6 +41,7 @@ export default function Dashboard() {
 
   const [budgets, setBudgets] = useState([])
   const [alert, setAlert] = useState(null)
+  const [intelligenceStatus, setIntelligenceStatus] = useState(null)
 
   // Fetch daily stats + budget on mount, refresh every 30s
   useEffect(() => {
@@ -75,6 +76,10 @@ export default function Dashboard() {
     load()
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    intelligenceApi.status().then(res => setIntelligenceStatus(res.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -175,6 +180,40 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {intelligenceStatus && (
+        <div className="rounded-xl border border-violet-700/20 bg-violet-950/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Brain className="h-3.5 w-3.5 text-violet-400" />
+              <span className="text-xs font-semibold text-violet-300">Content Intelligence</span>
+            </div>
+            <div className="flex items-center gap-5 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <Layers className="h-3 w-3 text-slate-500" />
+                <span className="text-xs tabular-nums text-slate-300">{intelligenceStatus.total_insights}</span>
+                <span className="text-[10px] text-slate-600">insights</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Cpu className="h-3 w-3 text-slate-500" />
+                <span className="text-xs tabular-nums text-slate-300">{intelligenceStatus.total_patterns}</span>
+                <span className="text-[10px] text-slate-600">patterns</span>
+              </div>
+              {intelligenceStatus.unprocessed_snippets > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-[10px] text-amber-400">{intelligenceStatus.unprocessed_snippets} snippets pending extraction</span>
+                </div>
+              )}
+              {intelligenceStatus.last_extraction && (
+                <span className="text-[10px] text-slate-600">
+                  Last extracted: {new Date(intelligenceStatus.last_extraction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">

@@ -28,9 +28,14 @@ Allowed hook types:
 - common mistake
 - short real-world scenario
 
-Avoid generic hooks such as:
-- "Most companies struggle with..."
-- "Here's something people get wrong..."
+FORBIDDEN OPENERS — never write any version of these:
+- "Most companies..." / "Many organizations..." / "Businesses today..."
+- "In today's [fast-paced / data-driven / competitive] world..."
+- "I'm excited / proud / thrilled to share..."
+- "Did you know..." (unless a real statistic was provided in the topic)
+- "Here's the thing..." / "The truth is..." / "Here's what nobody tells you..."
+- "Let's talk about..." / "We need to talk about..."
+- Any opener that doesn't name the specific topic or audience in the first two sentences
 
 Focus on ONE clear insight about reporting, dashboards, or business data.
 
@@ -62,10 +67,23 @@ Thought Leadership:
 - Present a strong opinion about how businesses approach analytics or reporting.
 
 Data Insight:
-- Include a statistic, benchmark, or observation about business reporting practices.
+- Use a specific, named observation from a real business scenario (e.g. "A finance team tracking 40 KPIs found only 3 drove 80% of decisions").
+- Do NOT invent statistics or percentages. No "73% of companies..." or "studies show...".
+- A concrete named example beats a made-up number every time.
 
 Contrarian Take:
 - Challenge a common belief about dashboards, analytics, or reporting.
+
+FORBIDDEN CONCLUSIONS — never end with any version of these:
+- "Those who adapt will thrive / survive"
+- "The future belongs to those who..."
+- "What are your thoughts?" (unless asking a specific, answerable question)
+- "Food for thought" / "Agree?" / "Just my two cents"
+- Any sentence asking people to follow, like, or share
+
+STATISTICS RULE:
+If no specific number was provided in the topic, do NOT fabricate one.
+A specific named scenario beats a made-up percentage every time.
 
 Avoid:
 - corporate buzzwords (synergy, leverage, pivot, ecosystem, journey)

@@ -1,10 +1,25 @@
-import { useState, useEffect } from 'react'
-import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink, Trash2 } from 'lucide-react'
-import { config as configApi, content as contentApi, research as researchApi } from '../api/client'
+import { useState, useEffect, useRef } from 'react'
+import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink, Trash2, Zap, Brain, Users, TrendingUp, Target } from 'lucide-react'
+import { config as configApi, content as contentApi, research as researchApi, intelligence as intelligenceApi } from '../api/client'
 
 const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
 const STYLES = ['Thought Leadership', 'Story', 'Tips List', 'Question', 'Data Insight', 'Contrarian Take']
 const TONES = ['Professional', 'Conversational', 'Bold', 'Educational']
+const HOOK_INTENTS = ['CONTRARIAN', 'QUESTION', 'STAT', 'STORY', 'TREND', 'MISTAKE']
+const PROOF_TYPES = ['STAT', 'STORY', 'EXAMPLE', 'ANALOGY', 'FRAMEWORK']
+
+const HOOK_LABELS = {
+  CONTRARIAN: 'Contrarian', QUESTION: 'Question', STAT: 'Statistic',
+  STORY: 'Story', TREND: 'Trend', MISTAKE: 'Mistake',
+}
+const HOOK_DESCRIPTIONS = {
+  CONTRARIAN: 'Challenge a common belief',
+  QUESTION: 'A question they\'re already asking',
+  STAT: 'A surprising number or data point',
+  STORY: 'Start in a specific moment',
+  TREND: 'Something changing right now',
+  MISTAKE: 'A common error you\'ve seen',
+}
 
 const STATUS_STYLES = {
   SCHEDULED: 'bg-violet-500/15 text-violet-300',
@@ -159,6 +174,238 @@ function ResearchTopicCard({ topic, onGenerate, onDismiss }) {
   )
 }
 
+function InsightDrilldownModal({ patternId, patternValue, onClose, onUseInsight }) {
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    intelligenceApi.patternDetail(patternId)
+      .then(res => setData(res.data))
+      .catch(() => setData({ insights: [] }))
+      .finally(() => setLoading(false))
+  }, [patternId])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl border border-slate-700/60 bg-slate-900 shadow-2xl flex flex-col max-h-[80vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-4 border-b border-slate-700/40">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Pattern Evidence</p>
+            <p className="text-sm font-medium text-slate-200 leading-snug">{patternValue}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-300 p-0.5 ml-3 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-3">
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-8 text-xs text-slate-500">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading evidence…
+            </div>
+          )}
+          {!loading && (!data?.insights || data.insights.length === 0) && (
+            <p className="text-center text-xs text-slate-600 py-8">
+              No supporting insights linked to this pattern yet.
+            </p>
+          )}
+          {!loading && data?.insights?.map((ins, i) => (
+            <div key={i} className="rounded-lg border border-slate-700/40 bg-slate-800/60 p-3 flex flex-col gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {ins.hook_type && (
+                  <span className="rounded px-1.5 py-0.5 text-[10px] bg-amber-500/15 text-amber-400">
+                    {HOOK_LABELS[ins.hook_type] || ins.hook_type}
+                  </span>
+                )}
+                {ins.source_type && (
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_STYLES[ins.source_type] || 'text-slate-400'}`}>
+                    {ins.source_type}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-600 ml-auto tabular-nums">
+                  {ins.specificity_score?.toFixed(1)}/10 · {ins.source_engagement} eng
+                </span>
+              </div>
+              {ins.key_insight && (
+                <p className="text-xs text-slate-300 leading-relaxed">{ins.key_insight}</p>
+              )}
+              {ins.pain_point && (
+                <p className="text-[11px] text-slate-500 italic">Pain: {ins.pain_point}</p>
+              )}
+              {ins.audience_segment && (
+                <p className="text-[11px] text-slate-500">Audience: {ins.audience_segment}</p>
+              )}
+              <button
+                onClick={() => { onUseInsight(ins); onClose(); }}
+                className="self-start text-[11px] text-violet-400 hover:text-violet-300 transition-colors focus-visible:outline-none"
+              >
+                → Use this insight
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function IntelligencePanel({ topic, onFillPainPoint, onFillAudience, onFillHook, onUseInsight }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(true)
+  const [drilldown, setDrilldown] = useState(null)
+
+  useEffect(() => {
+    if (!topic) return
+    setLoading(true)
+    intelligenceApi.patternsForGeneration(topic)
+      .then(res => setData(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [topic])
+
+  if (loading) return (
+    <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-500">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading intelligence…
+    </div>
+  )
+
+  const hasData = data && (
+    (data.pain_points?.length > 0) ||
+    (data.hooks?.length > 0) ||
+    (data.audiences?.length > 0)
+  )
+
+  if (!hasData) return (
+    <div className="rounded-lg border border-slate-700/40 bg-slate-900/30 p-3 text-center text-xs text-slate-600">
+      No intelligence data yet for this topic.
+      <br />Run Research to build your content intelligence library.
+    </div>
+  )
+
+  return (
+    <div className="rounded-xl border border-violet-700/30 bg-violet-950/20 overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-3 hover:bg-violet-900/20 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Brain className="h-3.5 w-3.5 text-violet-400" />
+          <span className="text-xs font-semibold text-violet-300">Intelligence Panel</span>
+          <span className="text-[10px] text-violet-500">click to fill fields</span>
+        </div>
+        {open ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 flex flex-col gap-3">
+          {data.pain_points?.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Target className="h-3 w-3 text-red-400" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">Top Pain Points</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {data.pain_points.slice(0, 4).map((p, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <button
+                      onClick={() => onFillPainPoint(p.pattern_value)}
+                      className="flex-1 text-left rounded-lg border border-slate-700/30 bg-slate-900/40 px-2.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:border-violet-600/30 hover:bg-violet-900/20 transition-colors"
+                    >
+                      <span className="text-[10px] tabular-nums text-slate-600 mr-1.5">×{p.frequency}</span>
+                      {p.pattern_value}
+                    </button>
+                    <button
+                      onClick={() => setDrilldown({ id: p.id, value: p.pattern_value })}
+                      className="shrink-0 rounded p-1.5 text-slate-700 hover:text-violet-400 transition-colors"
+                      title="See supporting insights"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.hooks?.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Zap className="h-3 w-3 text-amber-400" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">Effective Hooks (by engagement)</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {data.hooks.map((h, i) => (
+                  <div key={i} className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => onFillHook(h.pattern_value)}
+                      className="rounded-lg border border-slate-700/30 bg-slate-900/40 px-2.5 py-1 text-xs text-slate-400 hover:text-amber-300 hover:border-amber-600/30 hover:bg-amber-900/20 transition-colors"
+                    >
+                      {HOOK_LABELS[h.pattern_value] || h.pattern_value}
+                      {h.avg_engagement > 0 && (
+                        <span className="ml-1 text-[10px] text-slate-600">{Math.round(h.avg_engagement)} eng</span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setDrilldown({ id: h.id, value: h.pattern_value })}
+                      className="rounded p-1 text-slate-700 hover:text-amber-400 transition-colors"
+                      title="See supporting insights"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.audiences?.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Users className="h-3 w-3 text-sky-400" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">Audience Segments</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {data.audiences.slice(0, 3).map((a, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <button
+                      onClick={() => onFillAudience(a.pattern_value)}
+                      className="flex-1 text-left rounded-lg border border-slate-700/30 bg-slate-900/40 px-2.5 py-1.5 text-xs text-slate-400 hover:text-sky-300 hover:border-sky-600/30 hover:bg-sky-900/20 transition-colors"
+                    >
+                      {a.pattern_value}
+                    </button>
+                    <button
+                      onClick={() => setDrilldown({ id: a.id, value: a.pattern_value })}
+                      className="shrink-0 rounded p-1.5 text-slate-700 hover:text-sky-400 transition-colors"
+                      title="See supporting insights"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {drilldown && (
+        <InsightDrilldownModal
+          patternId={drilldown.id}
+          patternValue={drilldown.value}
+          onClose={() => setDrilldown(null)}
+          onUseInsight={onUseInsight}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function ContentStudio() {
   const [topics, setTopics] = useState(DEFAULT_TOPICS)
   const [topic, setTopic] = useState(DEFAULT_TOPICS[0])
@@ -187,8 +434,38 @@ export default function ContentStudio() {
   const [enrichedContext, setEnrichedContext] = useState(null)
   const [generatingFromResearch, setGeneratingFromResearch] = useState(false)
 
+  // Structured mode state
+  const [generationMode, setGenerationMode] = useState('structured') // 'quick' | 'structured'
+  const [structuredInputs, setStructuredInputs] = useState({
+    subtopic: '',
+    pain_point: '',
+    audience: '',
+    hook_intent: 'STORY',
+    belief_to_challenge: '',
+    core_insight: '',
+    proof_type: 'EXAMPLE',
+  })
+
   // Duplicate warning
   const [duplicateWarning, setDuplicateWarning] = useState(null)
+
+  // Preferences auto-fill
+  const [prefsFilled, setPrefsFilled] = useState(false)
+  const prefsLoadedRef = useRef(false)
+  const [topPosts, setTopPosts] = useState([])
+
+  // Manual paste / learn panel
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractResult, setExtractResult] = useState(null)
+
+  // Session tracking for preference learning
+  const [currentSession, setCurrentSession] = useState(null)
+
+  // Style matching — holds top posts to inject into next generate() call
+  const [pendingStyleExamples, setPendingStyleExamples] = useState(null)
+  const [loadingStyleMatch, setLoadingStyleMatch] = useState(false)
 
   useEffect(() => {
     configApi.getTopics().then((res) => {
@@ -209,6 +486,27 @@ export default function ContentStudio() {
   useEffect(() => {
     loadResearchTopics()
     loadResearchStatus()
+  }, [])
+
+  // Auto-fill structured form from learned preferences (once per mount)
+  useEffect(() => {
+    if (prefsLoadedRef.current) return
+    intelligenceApi.preferences().then(res => {
+      const prefs = res.data
+      if (!prefs.has_data) return
+      prefsLoadedRef.current = true
+      setStructuredInputs(prev => ({
+        ...prev,
+        hook_intent: prefs.default_hook || prev.hook_intent,
+        audience: prefs.default_audience || prev.audience,
+      }))
+      if (prefs.default_style) {
+        const matched = STYLES.find(s => s.toLowerCase() === prefs.default_style.toLowerCase())
+        if (matched) setStyle(matched)
+      }
+      if (prefs.top_posts?.length > 0) setTopPosts(prefs.top_posts)
+      setPrefsFilled(true)
+    }).catch(() => {})
   }, [])
 
   const loadResearchTopics = async () => {
@@ -290,22 +588,68 @@ export default function ContentStudio() {
     finally { setQueueLoading(false) }
   }
 
+  const setStructuredField = (key, value) => {
+    setStructuredInputs(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleExtractText = async () => {
+    if (pasteText.trim().length < 50) {
+      alert('Paste at least 50 characters of content to extract from.')
+      return
+    }
+    setExtracting(true)
+    setExtractResult(null)
+    try {
+      const res = await intelligenceApi.extractText(pasteText, 'MANUAL')
+      setExtractResult(res.data)
+      setPasteText('')
+    } catch (e) {
+      alert('Extraction failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   const generate = async () => {
     setGenerating(true)
     setEnrichedContext(null)
     setDuplicateWarning(null)
     setQualityInfo(null)
     try {
-      const res = await configApi.testPrompt('post', { topic, style, tone, word_count: wordCount })
-      setGenerated(res.data.output || '')
+      let data
+      if (generationMode === 'structured') {
+        const payload = {
+          topic, style, tone, word_count: wordCount,
+          ...structuredInputs,
+          ...(pendingStyleExamples ? { style_examples: pendingStyleExamples } : {}),
+        }
+        const res = await contentApi.generateStructured(payload)
+        setPendingStyleExamples(null)
+        data = res.data
+        setGenerated(data.post || '')
+        // Store session inputs for later publish/schedule logging
+        const session = {
+          topic, style, tone,
+          ...structuredInputs,
+          generated_text: data.post || '',
+          quality_score: data.quality_score || 0,
+        }
+        setCurrentSession(session)
+        // Log pending session — fire and forget
+        intelligenceApi.logSession({ ...session, action: 'pending' }).catch(() => {})
+      } else {
+        const res = await configApi.testPrompt('post', { topic, style, tone, word_count: wordCount })
+        data = res.data
+        setGenerated(data.output || data.post || '')
+      }
       const qi = {}
-      if (res.data.quality_score != null) qi.score = res.data.quality_score
-      if (res.data.rejected) qi.rejected = true
-      if (res.data.rejection_reason) qi.reason = res.data.rejection_reason
-      if (res.data.improvement_suggestion) qi.suggestion = res.data.improvement_suggestion
+      if (data.quality_score != null) qi.score = data.quality_score
+      if (data.approved === false) qi.rejected = true
+      if (data.rejection_reason) qi.reason = data.rejection_reason
+      if (data.improvement_suggestion) qi.suggestion = data.improvement_suggestion
       if (Object.keys(qi).length) setQualityInfo(qi)
     } catch (e) {
-      setGenerated(`[Error generating post: ${e.response?.data?.output || e.message}]`)
+      setGenerated(`[Error generating post: ${e.response?.data?.detail || e.message}]`)
     } finally {
       setGenerating(false)
     }
@@ -329,6 +673,14 @@ export default function ContentStudio() {
       setScheduledAt('')
       setDuplicateWarning(null)
       fetchQueue()
+      // Log scheduled session for preference learning
+      if (currentSession) {
+        intelligenceApi.logSession({
+          ...currentSession,
+          final_text: generated,
+          action: 'scheduled',
+        }).catch(() => {})
+      }
     } catch (e) {
       const detail = e.response?.data?.detail
       if (typeof detail === 'object' && detail?.message?.includes('duplicate')) {
@@ -350,6 +702,14 @@ export default function ContentStudio() {
       alert('Post queued for publishing — check the queue for status.')
       setDuplicateWarning(null)
       fetchQueue()
+      // Log published session for preference learning
+      if (currentSession) {
+        intelligenceApi.logSession({
+          ...currentSession,
+          final_text: generated,
+          action: 'published',
+        }).catch(() => {})
+      }
     } catch (e) {
       const detail = e.response?.data?.detail
       if (typeof detail === 'object' && detail?.message?.includes('duplicate')) {
@@ -459,17 +819,122 @@ export default function ContentStudio() {
         )}
       </div>
 
+      {/* ── Learn from Content ───────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 overflow-hidden">
+        <button
+          onClick={() => setPasteOpen(!pasteOpen)}
+          className="w-full flex items-center justify-between p-4 hover:bg-slate-800/60 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Brain className="h-4 w-4 text-emerald-400" />
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">Learn from Content</h2>
+            <span className="text-[10px] text-slate-600">paste a post or article to extract insights</span>
+          </div>
+          {pasteOpen ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+        </button>
+
+        {pasteOpen && (
+          <div className="px-4 pb-4 flex flex-col gap-3">
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder="Paste a LinkedIn post, article excerpt, or any content you want to extract insights from…"
+              rows={5}
+              className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/30"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-600">
+                {pasteText.length > 0 ? `${pasteText.length} chars` : 'Min. 50 characters'}
+              </span>
+              <button
+                onClick={handleExtractText}
+                disabled={extracting || pasteText.trim().length < 50}
+                className="flex items-center gap-2 rounded-lg bg-emerald-700/30 border border-emerald-600/30 px-4 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-700/40 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                {extracting ? 'Extracting…' : 'Extract & Learn'}
+              </button>
+            </div>
+
+            {extractResult && (
+              <div className="rounded-lg border border-emerald-600/20 bg-emerald-900/10 p-3 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-500">Extracted Insight</span>
+                  <button onClick={() => setExtractResult(null)} className="text-slate-600 hover:text-slate-400">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                {extractResult.subtopic && (
+                  <p className="text-xs text-slate-300">
+                    <span className="text-slate-500">Subtopic:</span> {extractResult.subtopic}
+                  </p>
+                )}
+                {extractResult.pain_point && (
+                  <p className="text-xs text-slate-400">
+                    <span className="text-slate-500">Pain point:</span> {extractResult.pain_point}
+                  </p>
+                )}
+                {extractResult.hook_type && (
+                  <p className="text-xs text-slate-400">
+                    <span className="text-slate-500">Hook:</span> {HOOK_LABELS[extractResult.hook_type] || extractResult.hook_type}
+                  </p>
+                )}
+                <div className="flex items-center gap-4 mt-1">
+                  <span className="text-[10px] text-slate-600">
+                    Specificity: <span className="text-slate-400">{extractResult.specificity_score?.toFixed(1)}/10</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (extractResult.topic) setTopic(extractResult.topic)
+                      setStructuredField('subtopic', extractResult.subtopic || '')
+                      setStructuredField('pain_point', extractResult.pain_point || '')
+                      if (extractResult.hook_type) setStructuredField('hook_intent', extractResult.hook_type)
+                      if (extractResult.audience_segment) setStructuredField('audience', extractResult.audience_segment)
+                      if (extractResult.key_insight) setStructuredField('core_insight', extractResult.key_insight)
+                      setGenerationMode('structured')
+                      setPasteOpen(false)
+                      setExtractResult(null)
+                    }}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    → Fill structured form
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── Generator + Output ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left — Generator controls */}
         <div className="flex flex-col gap-5 rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Generate Post</h2>
-            {enrichedContext && (
-              <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[10px] text-violet-300">
-                <Sparkles className="h-3 w-3" /> Context-enriched
-              </span>
-            )}
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-slate-700/60 overflow-hidden text-xs">
+              <button
+                onClick={() => setGenerationMode('quick')}
+                className={`px-3 py-1.5 transition-colors ${
+                  generationMode === 'quick'
+                    ? 'bg-slate-700/60 text-slate-200'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                Quick
+              </button>
+              <button
+                onClick={() => setGenerationMode('structured')}
+                className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${
+                  generationMode === 'structured'
+                    ? 'bg-violet-700/30 text-violet-300'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <Brain className="h-3 w-3" /> Structured
+              </button>
+            </div>
           </div>
 
           {enrichedContext && (
@@ -489,6 +954,7 @@ export default function ContentStudio() {
             </div>
           )}
 
+          {/* Topic — shared by both modes */}
           <div>
             <label className="mb-1.5 block text-xs text-slate-400">Topic</label>
             <select
@@ -500,6 +966,165 @@ export default function ContentStudio() {
             </select>
           </div>
 
+          {/* ── STRUCTURED MODE FIELDS ── */}
+          {generationMode === 'structured' && (
+            <>
+              {prefsFilled && (
+                <div className="flex items-center justify-between rounded-lg border border-slate-700/30 bg-slate-900/40 px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <TrendingUp className="h-3 w-3 text-violet-500" />
+                    Defaults pre-filled from your generation history
+                  </div>
+                  <button
+                    onClick={() => setPrefsFilled(false)}
+                    className="text-slate-700 hover:text-slate-500 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Intelligence Panel */}
+              <IntelligencePanel
+                topic={topic}
+                onFillPainPoint={(v) => setStructuredField('pain_point', v)}
+                onFillAudience={(v) => setStructuredField('audience', v)}
+                onFillHook={(v) => setStructuredField('hook_intent', v)}
+                onUseInsight={(ins) => {
+                  if (ins.subtopic) setStructuredField('subtopic', ins.subtopic)
+                  if (ins.pain_point) setStructuredField('pain_point', ins.pain_point)
+                  if (ins.hook_type) setStructuredField('hook_intent', ins.hook_type)
+                  if (ins.audience_segment) setStructuredField('audience', ins.audience_segment)
+                  if (ins.key_insight) setStructuredField('core_insight', ins.key_insight)
+                }}
+              />
+
+              {topPosts.length > 0 && (
+                <button
+                  onClick={async () => {
+                    setLoadingStyleMatch(true)
+                    try {
+                      const res = await intelligenceApi.preferences()
+                      const fresh = res.data?.top_posts?.length > 0 ? res.data.top_posts : topPosts
+                      setPendingStyleExamples(fresh)
+                      setTopPosts(fresh)
+                      await generate()
+                    } catch (e) {
+                      setGenerated(`[Error: ${e.response?.data?.detail || e.message}]`)
+                    } finally {
+                      setLoadingStyleMatch(false)
+                    }
+                  }}
+                  disabled={generating || loadingStyleMatch}
+                  className="flex items-center gap-2 rounded-lg border border-emerald-700/30 bg-emerald-900/10 px-3 py-2 text-xs text-emerald-400 hover:bg-emerald-900/20 hover:border-emerald-600/40 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  title={`Match the style of your top ${topPosts.length} published posts`}
+                >
+                  {loadingStyleMatch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Write like my best posts
+                  <span className="ml-1 text-[10px] text-emerald-600">({topPosts.length})</span>
+                </button>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Subtopic <span className="text-slate-600">(optional — be specific)</span></label>
+                <input
+                  type="text"
+                  value={structuredInputs.subtopic}
+                  onChange={(e) => setStructuredField('subtopic', e.target.value)}
+                  placeholder="e.g. KPI design for executive dashboards"
+                  className="w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Target Audience</label>
+                <input
+                  type="text"
+                  value={structuredInputs.audience}
+                  onChange={(e) => setStructuredField('audience', e.target.value)}
+                  placeholder="e.g. Finance directors at mid-market companies"
+                  className="w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Pain Point</label>
+                <textarea
+                  value={structuredInputs.pain_point}
+                  onChange={(e) => setStructuredField('pain_point', e.target.value)}
+                  placeholder="What frustration or challenge does your audience face? Use their language."
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Hook Intent</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {HOOK_INTENTS.map((h) => (
+                    <button
+                      key={h}
+                      onClick={() => setStructuredField('hook_intent', h)}
+                      title={HOOK_DESCRIPTIONS[h]}
+                      className={`rounded-lg border px-2 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                        structuredInputs.hook_intent === h
+                          ? 'border-amber-600/50 bg-amber-700/20 text-amber-300'
+                          : 'border-slate-700/40 bg-slate-900/30 text-slate-400 hover:text-slate-300'
+                      }`}
+                    >
+                      {HOOK_LABELS[h]}
+                    </button>
+                  ))}
+                </div>
+                {structuredInputs.hook_intent && (
+                  <p className="mt-1.5 text-[11px] text-slate-600 italic">{HOOK_DESCRIPTIONS[structuredInputs.hook_intent]}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Belief to Challenge <span className="text-slate-600">(optional)</span></label>
+                <input
+                  type="text"
+                  value={structuredInputs.belief_to_challenge}
+                  onChange={(e) => setStructuredField('belief_to_challenge', e.target.value)}
+                  placeholder="e.g. 'More data always leads to better decisions'"
+                  className="w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Core Insight <span className="text-slate-600">(optional — your grounding point)</span></label>
+                <textarea
+                  value={structuredInputs.core_insight}
+                  onChange={(e) => setStructuredField('core_insight', e.target.value)}
+                  placeholder="The one thing you want readers to walk away knowing."
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Proof Type</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PROOF_TYPES.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setStructuredField('proof_type', p)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                        structuredInputs.proof_type === p
+                          ? 'border-sky-600/50 bg-sky-700/20 text-sky-300'
+                          : 'border-slate-700/40 bg-slate-900/30 text-slate-400 hover:text-slate-300'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Style + Tone + Word Count — shared by both modes */}
           <div>
             <label className="mb-1.5 block text-xs text-slate-400">Style</label>
             <div className="grid grid-cols-2 gap-1.5">
@@ -557,10 +1182,16 @@ export default function ContentStudio() {
           <button
             onClick={generate}
             disabled={generating}
-            className="flex items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:bg-violet-600 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98]"
+            className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98] ${
+              generationMode === 'structured'
+                ? 'bg-violet-800 hover:bg-violet-700'
+                : 'bg-violet-700 hover:bg-violet-600'
+            }`}
           >
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-            {generating ? 'Generating…' : 'Generate Post'}
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> :
+              generationMode === 'structured' ? <Brain className="h-4 w-4" /> : <Wand2 className="h-4 w-4" />}
+            {generating ? 'Generating…' :
+              generationMode === 'structured' ? 'Generate (Structured)' : 'Generate Post'}
           </button>
         </div>
 
