@@ -1,6 +1,6 @@
 import time
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -145,7 +145,7 @@ async def get_pending_previews():
 
 class _ApproveRequest(BaseModel):
     post_id: str
-    comment_text: str
+    comment_text: str = Field(..., max_length=1250)
 
 
 @router.post("/approve-comment")
@@ -163,6 +163,17 @@ async def approve_comment(req: _ApproveRequest):
             status_code=409,
             detail="Engine must be RUNNING to post comments. Start the engine first.",
         )
+    from backend.storage.database import get_db
+    from backend.storage.models import Post as _Post
+    with get_db() as _db:
+        _post = _db.query(_Post).filter_by(id=req.post_id).first()
+        if not _post:
+            raise HTTPException(status_code=404, detail=f"Post '{req.post_id}' not found")
+        if _post.state != "PREVIEW":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Post is in state '{_post.state}', not 'PREVIEW'. Cannot approve.",
+            )
     from backend.core.pipeline import run_approve_comment
     future = eng.worker_pool.submit(run_approve_comment, req.post_id, req.comment_text)
     if future is None:

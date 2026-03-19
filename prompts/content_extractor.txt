@@ -17,8 +17,13 @@ Extract the following fields. Be specific and concrete — avoid vague generalit
 6. audience_segment: Who would care most about this? Be specific (e.g. "Finance directors at mid-market manufacturing firms", "Data engineers at Series B startups"). NOT "business professionals".
 7. sentiment: Overall tone of the content. Pick ONE: POSITIVE, NEGATIVE, NEUTRAL, MIXED
 8. specificity_score: How concrete is the content? 0 = pure opinion or fluff with no evidence, 10 = specific data, methods, tools, or case studies. Rate honestly.
+9. mistake: One specific mistake a practitioner makes in this situation, or "none".
+10. false_belief: One commonly held assumption this content challenges, or "none".
+11. contradiction: One thing that contradicts conventional advice here, or "none".
+12. scenario: A named role + specific situation (e.g. "CFO at a 200-person manufacturer"), or "none".
+13. evidence: A specific stat, data point, or case study mentioned, or "none".
 
 Respond with ONLY valid JSON matching this exact structure:
-{{"subtopic": "", "pain_point": "", "hook_type": "", "content_style": "", "key_insight": "", "audience_segment": "", "sentiment": "", "specificity_score": 0}}
+{{"subtopic": "", "pain_point": "", "hook_type": "", "content_style": "", "key_insight": "", "audience_segment": "", "sentiment": "", "specificity_score": 0, "mistake": "", "false_belief": "", "contradiction": "", "scenario": "", "evidence": ""}}
 
 Do not include any text outside the JSON. No markdown. No explanation.

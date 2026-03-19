@@ -82,7 +82,7 @@ class TestPipelineE2E:
         async def _noop_delay(*args, **kwargs):
             pass
 
-        with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None)), \
+        with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None, None)), \
              patch("backend.core.pipeline._in_activity_window", return_value=True), \
              patch("backend.automation.human_behavior.random_delay", _noop_delay), \
              patch("backend.api.websocket.schedule_broadcast"):
@@ -129,7 +129,7 @@ class TestPipelineE2E:
         async def _noop_delay2(*args, **kwargs):
             pass
 
-        with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None)), \
+        with patch("backend.core.pipeline._build_ai_deps", return_value=(None, None, None)), \
              patch("backend.core.pipeline._in_activity_window", return_value=True), \
              patch("backend.automation.human_behavior.random_delay", side_effect=_noop_delay2), \
              patch("backend.api.websocket.schedule_broadcast"):
@@ -218,6 +218,144 @@ class TestBudgetSafety:
 
         with get_db() as db:
             assert budget_tracker.check("feed_scans", db) is True
+
+
+class TestBugFixRegressions:
+    """Regression tests for the 5 bugs fixed in the code review."""
+
+    def _upsert_budget(self, db, action_type, limit, count):
+        from backend.storage.models import Budget
+        row = db.query(Budget).filter_by(action_type=action_type).first()
+        if row:
+            row.limit_per_day = limit
+            row.count_today = count
+        else:
+            db.add(Budget(action_type=action_type, limit_per_day=limit, count_today=count))
+        db.commit()
+
+    def test_profile_visit_skipped_when_budget_exhausted(self, mock_page):
+        """Bug #1: _visit_profile must check profile_visits budget before scraping."""
+        from backend.storage.database import get_db
+
+        with get_db() as db:
+            self._upsert_budget(db, "profile_visits", 5, 5)
+
+        scrape_called = []
+
+        async def _fake_scrape(*a, **kw):
+            scrape_called.append(True)
+            return {}
+
+        with patch("backend.automation.profile_scraper.ProfileScraper.scrape", side_effect=_fake_scrape), \
+             patch("backend.api.websocket.schedule_broadcast"):
+            from backend.core import pipeline
+            db = _get_test_db()
+            asyncio.run(pipeline._visit_profile(
+                "https://linkedin.com/in/test",
+                mock_page,
+                db,
+                score=9.0,
+                engine=None,
+            ))
+
+        assert not scrape_called, "scrape() was called despite profile_visits budget being exhausted"
+
+    def test_profile_visit_increments_budget_on_success(self, mock_page):
+        """Bug #1: _visit_profile must increment profile_visits budget after scraping."""
+        from backend.storage.database import get_db
+        from backend.storage.models import Budget
+
+        with get_db() as db:
+            self._upsert_budget(db, "profile_visits", 10, 0)
+
+        async def _fake_scrape(*a, **kw):
+            return {"linkedin_url": "https://linkedin.com/in/test", "connection_degree": 2}
+
+        with patch("backend.automation.profile_scraper.ProfileScraper.scrape", side_effect=_fake_scrape), \
+             patch("backend.enrichment.email_enricher.EmailEnricher.enrich", return_value={"email": None, "method": None}), \
+             patch("backend.api.websocket.schedule_broadcast"), \
+             patch("backend.utils.config_loader.get", side_effect=lambda k, d=None: {
+                 "email_enrichment.enabled": False,
+                 "feed_engagement.score_for_connection": 10,
+             }.get(k, d)):
+            from backend.core import pipeline
+            db = _get_test_db()
+            asyncio.run(pipeline._visit_profile(
+                "https://linkedin.com/in/test",
+                mock_page,
+                db,
+                score=8.0,
+                engine=None,
+            ))
+
+        with get_db() as db:
+            row = db.query(Budget).filter_by(action_type="profile_visits").first()
+            assert row is not None and row.count_today == 1, (
+                f"profile_visits not incremented after scrape (count_today={row.count_today if row else 'missing'})"
+            )
+
+    def test_approve_comment_rejects_non_preview_state(self):
+        """Bug #2 + Bug #4: approving a post not in PREVIEW state must be rejected."""
+        from backend.storage.database import get_db
+        from backend.storage import post_state
+
+        with get_db() as db:
+            url = "https://linkedin.com/feed/update/urn:li:activity:race123"
+            post_state.mark_seen(url, db)
+            post_state.update_state(url, "ACTED", db, action_taken="COMMENT")
+
+        # Import and call _async_approve_comment — it should return early without doing anything
+        acted = []
+
+        async def _fake_comment(*a, **kw):
+            acted.append(True)
+            return True
+
+        with patch("backend.automation.interaction_engine.InteractionEngine.comment_post", side_effect=_fake_comment), \
+             patch("backend.api.websocket.schedule_broadcast"):
+            from backend.core import pipeline
+            import hashlib
+            post_id = hashlib.sha256(url.encode()).hexdigest()
+            asyncio.run(pipeline._async_approve_comment(post_id, "Hello world"))
+
+        assert not acted, "comment_post() was called on a non-PREVIEW post — double-approval race not prevented"
+
+    def test_approve_comment_locks_post_state_atomically(self):
+        """Bug #2: post state must be set to APPROVING before the browser is opened."""
+        from backend.storage.database import get_db
+        from backend.storage import post_state
+        from backend.storage.models import Post
+
+        with get_db() as db:
+            url = "https://linkedin.com/feed/update/urn:li:activity:atomic456"
+            p = post_state.mark_seen(url, db)
+            post_state.update_state(url, "PREVIEW", db, comment_text="Test comment")
+
+        state_at_browser_open = []
+
+        async def _fake_launch(*a, **kw):
+            # Check the post state in DB at the moment the browser is "opened"
+            with get_db() as db2:
+                from backend.storage.models import Post as P
+                post = db2.query(P).filter(P.url == url).first()
+                state_at_browser_open.append(post.state if post else None)
+            raise RuntimeError("stop here")  # prevent full browser run in test
+
+        with patch("backend.automation.browser.BrowserManager.launch", side_effect=_fake_launch), \
+             patch("backend.api.websocket.schedule_broadcast"):
+            from backend.core import pipeline
+            import hashlib
+            post_id = hashlib.sha256(url.encode()).hexdigest()
+            try:
+                asyncio.run(pipeline._async_approve_comment(post_id, "Test comment"))
+            except RuntimeError as e:
+                if "stop here" not in str(e):
+                    raise
+
+        assert state_at_browser_open, "Browser launch mock was not reached"
+        assert state_at_browser_open[0] == "APPROVING", (
+            f"Post state should be 'APPROVING' before browser opens, got '{state_at_browser_open[0]}'"
+        )
 
 
 class TestInteractionEngineBudget:

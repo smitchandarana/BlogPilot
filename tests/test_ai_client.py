@@ -97,8 +97,8 @@ class TestGroqClient:
                     await client.complete("system", "user")
 
     @pytest.mark.asyncio
-    async def test_rate_limit_sleeps_60s(self):
-        """RateLimitError causes 60-second sleep before retry."""
+    async def test_rate_limit_retries(self):
+        """RateLimitError causes a sleep-then-retry; result is returned on second attempt."""
         from backend.ai.groq_client import GroqClient
         from groq import RateLimitError
 
@@ -127,7 +127,10 @@ class TestGroqClient:
                 result = await client.complete("system", "user")
 
         assert result == "OK after rate limit"
-        assert 60 in sleep_calls
+        assert call_count == 2, "Should have retried once after rate limit"
+        assert len(sleep_calls) >= 1, "Should have slept before retry"
+        # Sleep duration comes from parsed retry-after or fallback; must be > 0
+        assert sleep_calls[0] > 0
 
     def test_raises_on_empty_key(self):
         """GroqClient raises GroqError immediately if api_key is empty."""

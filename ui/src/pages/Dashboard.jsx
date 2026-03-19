@@ -13,8 +13,8 @@ const STAT_DEFS = [
   { key: 'liked', label: 'Liked', icon: ThumbsUp, color: 'text-emerald-400' },
   { key: 'commented', label: 'Commented', icon: MessageSquare, color: 'text-blue-400' },
   { key: 'profiles_visited', label: 'Profiles Visited', icon: Eye, color: 'text-amber-400' },
-  { key: 'emails_found', label: 'Emails Found', icon: Mail, color: 'text-pink-400' },
-  { key: 'leads', label: 'Leads', icon: Users, color: 'text-cyan-400' },
+  { key: 'emails_found', label: 'Emails Found', icon: Mail, color: 'text-blue-400' },
+  { key: 'leads', label: 'Leads', icon: Users, color: 'text-emerald-400' },
 ]
 
 const BUDGET_LABELS = {

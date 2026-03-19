@@ -81,6 +81,28 @@ def init_db():
     except Exception:
         pass
 
+    # Pipeline v2: new ContentInsight fields
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            for col in ["mistake", "false_belief", "contradiction", "scenario", "evidence"]:
+                try:
+                    conn.execute(text(f"ALTER TABLE content_insights ADD COLUMN {col} TEXT"))
+                except Exception as e:
+                    logger.debug(f"Migration: content_insights.{col} already exists ({e})")
+    except Exception:
+        pass
+    # Pipeline v2: GenerationSession angle tracking
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN chosen_angle TEXT"))
+            except Exception as e:
+                logger.debug(f"Migration: generation_sessions.chosen_angle already exists ({e})")
+    except Exception:
+        pass
+
     # Seed budget rows from config
     try:
         from backend.utils.config_loader import get as cfg_get
@@ -104,6 +126,8 @@ def _seed_budget(session, cfg_get):
         "follows": cfg_get("daily_budget.follows", 20),
         "endorsements": cfg_get("daily_budget.endorsements", 10),
         "feed_scans": cfg_get("daily_budget.feed_scans", 0),
+        "messages": cfg_get("daily_budget.messages", 20),
+        "structured_generation": cfg_get("daily_budget.structured_generation", 10),
     }
     for action_type, limit in defaults.items():
         existing = session.query(Budget).filter_by(action_type=action_type).first()

@@ -11,13 +11,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from backend.utils.logger import get_logger
 from backend.storage.database import get_db
 from backend.storage.models import ScheduledPost
+from backend.ai.client_factory import build_ai_client, AIClientUnavailableError
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -197,52 +199,13 @@ async def generate_structured_post(body: StructuredGenerateRequest):
     """
     # Build AI deps
     try:
-        import os
-        from backend.ai.groq_client import GroqClient
         from backend.ai.prompt_loader import PromptLoader
-        from backend.utils.config_loader import get as cfg_get
-        from backend.utils.encryption import decrypt
 
-        api_key = os.environ.get("GROQ_API_KEY")
-        if not api_key:
-            secrets_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-            )
-            if os.path.isfile(secrets_path):
-                with open(secrets_path, "r") as f:
-                    for line in f:
-                        if line.startswith("groq_api_key="):
-                            encrypted = line.strip().split("=", 1)[1]
-                            api_key = decrypt(encrypted)
-                            break
-        if not api_key:
-            secrets_json = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
-            )
-            if os.path.exists(secrets_json):
-                import json as _json
-                with open(secrets_json) as f:
-                    data = _json.load(f)
-                    api_key = data.get("api_key", "")
-                if api_key:
-                    try:
-                        api_key = decrypt(api_key)
-                    except Exception:
-                        pass
-
-        if not api_key:
-            raise HTTPException(status_code=503, detail="Groq API key not configured")
-
-        groq_client = GroqClient(
-            api_key=api_key,
-            model=str(cfg_get("ai.model", "llama-3.3-70b-versatile")),
-            max_tokens=int(cfg_get("ai.max_tokens", 800)),
-            temperature=float(cfg_get("ai.temperature", 0.7)),
-        )
+        groq_client = build_ai_client("generation")
         prompt_loader = PromptLoader()
         prompt_loader.load_all()
-    except HTTPException:
-        raise
+    except AIClientUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Content generate-structured: failed to build AI deps — {e}")
         raise HTTPException(status_code=503, detail=f"AI setup failed: {e}")
@@ -285,7 +248,61 @@ async def generate_structured_post(body: StructuredGenerateRequest):
     return result
 
 
+class PipelineGenerateRequest(BaseModel):
+    topic: str
+    style: str = "Thought Leadership"
+    tone: str = "Professional"
+    word_count: int = 150
+    insight_id: Optional[int] = None
+
+
+@router.post("/generate-v2")
+async def generate_pipeline_post(req: PipelineGenerateRequest):
+    """
+    3-call pipeline: ContentInsight → angle → post → score.
+    Falls back to generate_structured() if no insight found for topic.
+    """
+    from backend.storage.budget_tracker import BudgetTracker
+    with get_db() as db:
+        budget = BudgetTracker()
+        if not budget.check("structured_generation", db):
+            raise HTTPException(
+                status_code=429,
+                detail="Daily generation limit reached (10/day). Try again tomorrow."
+            )
+
+        try:
+            groq_client = build_ai_client("generation")
+        except AIClientUnavailableError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+        prompt_loader = _get_prompt_loader()
+
+        from backend.ai.post_generator import generate_pipeline
+        result = await generate_pipeline(
+            topic=req.topic,
+            style=req.style,
+            tone=req.tone,
+            word_count=req.word_count,
+            groq_client=groq_client,
+            prompt_loader=prompt_loader,
+            db=db,
+            insight_id=req.insight_id,
+        )
+
+        budget.increment("structured_generation", db)
+    return result
+
+
 # ── Internal helpers ──────────────────────────────────────────────────────
+
+
+def _get_prompt_loader():
+    """Return a loaded PromptLoader instance."""
+    from backend.ai.prompt_loader import PromptLoader
+    loader = PromptLoader()
+    loader.load_all()
+    return loader
 
 def _serialize(post: ScheduledPost) -> dict:
     return {

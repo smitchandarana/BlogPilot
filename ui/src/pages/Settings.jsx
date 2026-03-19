@@ -48,6 +48,11 @@ export default function Settings() {
   const [groqStatus, setGroqStatus] = useState(null) // { configured, masked_key }
   const [savingKey, setSavingKey] = useState(false)
   const [keySaved, setKeySaved] = useState(false)
+  const [orKey, setOrKey] = useState('')
+  const [showOrKey, setShowOrKey] = useState(false)
+  const [orStatus, setOrStatus] = useState(null)
+  const [savingOrKey, setSavingOrKey] = useState(false)
+  const [orKeySaved, setOrKeySaved] = useState(false)
   const [liPassword, setLiPassword] = useState('')
   const [liEmail, setLiEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -69,6 +74,7 @@ export default function Settings() {
       })
     }).catch(() => {})
     configApi.getGroqKeyStatus().then((res) => setGroqStatus(res.data)).catch(() => {})
+    configApi.getOpenRouterKeyStatus().then((res) => setOrStatus(res.data)).catch(() => {})
   }, [])
 
   const handleSaveGroqKey = async () => {
@@ -82,6 +88,19 @@ export default function Settings() {
       setTimeout(() => setKeySaved(false), 3000)
     } catch { /* */ }
     finally { setSavingKey(false) }
+  }
+
+  const handleSaveOrKey = async () => {
+    if (!orKey.trim()) return
+    setSavingOrKey(true)
+    try {
+      const res = await configApi.saveOpenRouterKey(orKey.trim())
+      setOrStatus(res.data)
+      setOrKey('')
+      setOrKeySaved(true)
+      setTimeout(() => setOrKeySaved(false), 3000)
+    } catch { /* */ }
+    finally { setSavingOrKey(false) }
   }
 
   const set = (section, key, val) =>
@@ -188,6 +207,57 @@ export default function Settings() {
                 >
                   {savingKey ? <Loader2 className="h-4 w-4 animate-spin" /> : keySaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                   {keySaved ? 'Saved' : 'Save Key'}
+                </button>
+              </div>
+            </div>
+          </InputRow>
+          <InputRow label="OpenRouter API Key">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-slate-500">
+                Free — used for background processing (extraction, relevance scoring, topic research).
+                Get your key at{' '}
+                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
+                  openrouter.ai
+                </a>
+              </p>
+              {orStatus?.configured && (
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-emerald-400">Configured</span>
+                  <span className="text-slate-500">({orStatus.masked_key})</span>
+                </div>
+              )}
+              {orStatus && !orStatus.configured && (
+                <div className="flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <span className="text-amber-400">Not configured — background AI uses Groq (burns daily quota)</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showOrKey ? 'text' : 'password'}
+                    value={orKey}
+                    onChange={(e) => setOrKey(e.target.value)}
+                    placeholder={orStatus?.configured ? 'Enter new key to replace...' : 'sk-or-v1_your_key_here'}
+                    className={`${inputCls} pr-10`}
+                  />
+                  <button
+                    onClick={() => setShowOrKey(!showOrKey)}
+                    aria-label={showOrKey ? 'Hide API key' : 'Show API key'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none"
+                  >
+                    {showOrKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSaveOrKey}
+                  disabled={savingOrKey || !orKey.trim()}
+                  className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                >
+                  {savingOrKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : orKeySaved ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Save className="h-3.5 w-3.5" />}
+                  {orKeySaved ? 'Saved!' : 'Save'}
                 </button>
               </div>
             </div>

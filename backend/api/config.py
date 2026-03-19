@@ -60,6 +60,47 @@ async def save_groq_key(body: ApiKeyUpdate):
     return {"configured": True, "masked_key": masked}
 
 
+@router.get("/api-keys/openrouter")
+async def get_openrouter_key_status():
+    """Check if OpenRouter API key is configured (never returns the actual key)."""
+    key = os.environ.get("OPENROUTER_API_KEY", "")
+    source = "env"
+    if not key:
+        or_path = os.path.join(_SECRETS_DIR, "openrouter.json")
+        if os.path.exists(or_path):
+            try:
+                with open(or_path, "r") as f:
+                    data = _json.load(f)
+                key = data.get("api_key", "")
+                source = "file"
+            except Exception:
+                pass
+    if key:
+        masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
+        return {"configured": True, "source": source, "masked_key": masked}
+    return {"configured": False, "source": None, "masked_key": None}
+
+
+@router.post("/api-keys/openrouter")
+async def save_openrouter_key(body: ApiKeyUpdate):
+    """Save OpenRouter API key to config/.secrets/openrouter.json."""
+    key = body.api_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty")
+
+    os.makedirs(_SECRETS_DIR, exist_ok=True)
+    or_path = os.path.join(_SECRETS_DIR, "openrouter.json")
+    fd = os.open(or_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, _json.dumps({"api_key": key}).encode("utf-8"))
+    finally:
+        os.close(fd)
+
+    logger.info("OpenRouter API key saved to config/.secrets/openrouter.json")
+    masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
+    return {"configured": True, "masked_key": masked}
+
+
 # ── Topics ────────────────────────────────────────────────────────
 
 @router.get("/topics")

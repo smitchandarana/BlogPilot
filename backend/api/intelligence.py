@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from backend.utils.logger import get_logger
 from backend.storage.database import get_db
+from backend.ai.client_factory import build_ai_client
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -322,54 +323,18 @@ def _cfg(key: str, default=None):
 
 
 def _build_ai_deps():
-    """Build GroqClient + PromptLoader from stored credentials."""
+    """Build background AI client + PromptLoader via the client factory."""
     try:
-        import os
-        from backend.ai.groq_client import GroqClient
         from backend.ai.prompt_loader import PromptLoader
-        from backend.utils.encryption import decrypt
 
-        api_key = os.environ.get("GROQ_API_KEY")
-        if not api_key:
-            secrets_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-            )
-            if os.path.isfile(secrets_path):
-                with open(secrets_path, "r") as f:
-                    for line in f:
-                        if line.startswith("groq_api_key="):
-                            encrypted = line.strip().split("=", 1)[1]
-                            api_key = decrypt(encrypted)
-                            break
-
-        if not api_key:
-            # Try JSON secrets file
-            secrets_json = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
-            )
-            if os.path.exists(secrets_json):
-                import json
-                with open(secrets_json) as f:
-                    data = json.load(f)
-                    api_key = data.get("api_key", "")
-                if api_key:
-                    try:
-                        api_key = decrypt(api_key)
-                    except Exception:
-                        pass
-
-        if not api_key:
+        ai_client = build_ai_client("background")
+        if ai_client is None:
+            logger.warning("Intelligence API: no AI key available for background tasks")
             return None, None
 
-        groq_client = GroqClient(
-            api_key=api_key,
-            model=str(_cfg("ai.model", "llama-3.3-70b-versatile")),
-            max_tokens=int(_cfg("ai.max_tokens", 500)),
-            temperature=float(_cfg("ai.temperature", 0.7)),
-        )
         prompt_loader = PromptLoader()
         prompt_loader.load_all()
-        return groq_client, prompt_loader
+        return ai_client, prompt_loader
     except Exception as e:
         logger.warning(f"Intelligence API: failed to build AI deps — {e}")
         return None, None

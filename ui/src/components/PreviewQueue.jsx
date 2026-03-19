@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { Check, X, Edit3, ExternalLink, Clock, MessageSquare } from 'lucide-react'
+import { Check, X, Edit3, ExternalLink, Clock, Loader2, MessageSquare } from 'lucide-react'
 import { engine as engineApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 
@@ -137,7 +137,7 @@ function PreviewCard({ item, onApprove, onReject }) {
         >
           {status === 'approving' ? (
             <>
-              <Clock className="h-3.5 w-3.5 animate-pulse" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Queuing…
             </>
           ) : (

@@ -7,6 +7,8 @@ Scoring criteria (each 0–2, total 0–10):
   hook_strength:     First sentence would stop a scroller — specific, surprising, or viscerally relatable
   conversation_hook: Ends in a way that invites real response — not "What are your thoughts?" or "Agree?"
   readability:       Short paragraphs, natural flow, no jargon walls — sounds like a real person wrote it
+  authority:         Sounds like lived experience and domain expertise, not summarised or generic content
+  novelty:           Framing or insight the reader hasn't encountered in this exact form before
 
 AUTOMATIC SCORE PENALTIES (subtract from total before returning):
 - Fabricated statistic with no source (e.g. "73% of companies...", "studies show..."): -2
@@ -23,5 +25,5 @@ Topic: {topic}
 Style: {style}
 Target audience: {target_audience}
 
-Return ONLY valid JSON. Apply all penalties. Minimum total is 0, maximum is 10:
-{{"original_insight": 0, "specific_claim": 0, "hook_strength": 0, "conversation_hook": 0, "readability": 0, "total": 0, "publish_recommendation": true, "rejection_reason": null, "improvement_suggestion": "one sentence on what would make this better"}}
+Return ONLY valid JSON. Apply all penalties. Score each dimension 0–2 (7 dimensions, raw max = 14). total = round(raw_sum / 14 * 10, 1), then subtract penalties. Minimum total is 0, maximum is 10:
+{{"original_insight": 0, "specific_claim": 0, "hook_strength": 0, "conversation_hook": 0, "readability": 0, "authority": 0, "novelty": 0, "total": 0, "publish_recommendation": true, "rejection_reason": null, "improvement_suggestion": "one sentence on what would make this better"}}

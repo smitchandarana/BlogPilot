@@ -94,3 +94,49 @@ def test_create_lead_upsert():
         l2 = leads_store.create_lead({"linkedin_url": url, "company": "NewCo"}, db)
         assert l1.id == l2.id
         assert l2.company == "NewCo"
+
+
+# ── Bug-fix regression tests ──────────────────────────────────────────────
+
+
+def test_messages_budget_seeded():
+    """Bug #5: 'messages' action type must be seeded so send_message() is tracked."""
+    from backend.storage.models import Budget
+    with get_db() as db:
+        row = db.query(Budget).filter_by(action_type="messages").first()
+        assert row is not None, "'messages' budget row missing — send_message() will be untracked"
+        assert row.limit_per_day == 20
+
+
+def test_structured_generation_budget_seeded():
+    """'structured_generation' budget row must exist for /content/generate-v2 to enforce limits."""
+    from backend.storage.models import Budget
+    with get_db() as db:
+        row = db.query(Budget).filter_by(action_type="structured_generation").first()
+        assert row is not None, "'structured_generation' budget row missing"
+        assert row.limit_per_day == 10
+
+
+def test_get_stats_today_returns_naive_datetime_results():
+    """Bug #3: get_stats_today must use a naive datetime bound so SQLite comparisons work."""
+    from backend.storage import engagement_log
+    from backend.storage.models import ActionLog
+    from datetime import datetime
+
+    with get_db() as db:
+        # Write an action with a naive utcnow timestamp (how models store them)
+        entry = ActionLog(
+            action_type="likes",
+            target_url="https://example.com",
+            target_name="Test",
+            result="SUCCESS",
+            created_at=datetime.utcnow(),
+        )
+        db.add(entry)
+        db.commit()
+
+        stats = engagement_log.get_stats_today(db)
+        assert "likes" in stats, (
+            "get_stats_today returned no rows — likely a tz-aware vs naive datetime mismatch"
+        )
+        assert stats["likes"] >= 1

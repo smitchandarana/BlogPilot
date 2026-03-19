@@ -432,6 +432,7 @@ export default function ContentStudio() {
   const [researchStatus, setResearchStatus] = useState(null)
   const [researchOpen, setResearchOpen] = useState(true)
   const [enrichedContext, setEnrichedContext] = useState(null)
+  const [pipelineTrace, setPipelineTrace] = useState(null)
   const [generatingFromResearch, setGeneratingFromResearch] = useState(false)
 
   // Structured mode state
@@ -559,13 +560,36 @@ export default function ContentStudio() {
     setGeneratingFromResearch(true)
     setEnrichedContext({ topicId: researchTopic.id, topicName: researchTopic.topic, angle: researchTopic.suggested_angle })
     setDuplicateWarning(null)
+    setPipelineTrace(null)
+    setQualityInfo(null)
     try {
-      const res = await researchApi.generateFromTopic(researchTopic.id, {
-        style, tone, word_count: wordCount,
+      const res = await contentApi.generateV2({
+        topic: researchTopic.topic,
+        style,
+        tone,
+        word_count: wordCount,
       })
       const data = res.data
       setGenerated(data.post || '')
       setTopic(researchTopic.topic)
+
+      // Capture pipeline trace
+      if (data.insight_used || data.angle_used || data.hook_used) {
+        setPipelineTrace({
+          insight: data.insight_used,
+          angle_used: data.angle_used,
+          hook_used: data.hook_used,
+          quality_score: data.quality_score,
+          improvement_suggestion: data.improvement_suggestion,
+        })
+      }
+
+      const qi = {}
+      if (data.quality_score != null) qi.score = data.quality_score
+      if (data.approved === false) qi.rejected = true
+      if (data.rejection_reason) qi.reason = data.rejection_reason
+      if (data.improvement_suggestion) qi.suggestion = data.improvement_suggestion
+      if (Object.keys(qi).length) setQualityInfo(qi)
 
       if (data.is_duplicate) {
         setDuplicateWarning({
@@ -615,6 +639,7 @@ export default function ContentStudio() {
     setEnrichedContext(null)
     setDuplicateWarning(null)
     setQualityInfo(null)
+    setPipelineTrace(null)
     try {
       let data
       if (generationMode === 'structured') {
@@ -1242,6 +1267,60 @@ export default function ContentStudio() {
               <span className="font-semibold">Quality: {qualityInfo.score?.toFixed(1) || '—'}/10</span>
               {qualityInfo.rejected && <span>— Rejected: {qualityInfo.reason}</span>}
               {qualityInfo.suggestion && !qualityInfo.rejected && <span>— {qualityInfo.suggestion}</span>}
+            </div>
+          )}
+
+          {pipelineTrace && (
+            <div className="rounded-lg border border-violet-500/20 bg-violet-950/20 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-violet-400 text-sm">✦</span>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-violet-400">Pipeline Trace</h3>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {pipelineTrace.insight && (
+                  <div className="flex gap-3">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 w-14 shrink-0 pt-0.5">Insight</span>
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                      {pipelineTrace.insight.key_insight || pipelineTrace.insight.subtopic || '—'}
+                    </p>
+                  </div>
+                )}
+                {pipelineTrace.angle_used && (
+                  <div className="flex gap-3 items-start">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 w-14 shrink-0 pt-0.5">Angle</span>
+                    <span className="inline-flex items-center rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-300 border border-violet-500/20">
+                      {pipelineTrace.angle_used}
+                    </span>
+                  </div>
+                )}
+                <div className="flex gap-3 items-center">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 w-14 shrink-0">Hook</span>
+                  <div className="flex items-center gap-2">
+                    {pipelineTrace.hook_used && (
+                      <span className="inline-flex items-center rounded-md bg-slate-700/60 px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                        {pipelineTrace.hook_used}
+                      </span>
+                    )}
+                    {pipelineTrace.quality_score != null && (
+                      <span className={`text-xs font-semibold ${
+                        pipelineTrace.quality_score >= 7 ? 'text-emerald-400' :
+                        pipelineTrace.quality_score >= 5 ? 'text-amber-400' : 'text-red-400'
+                      }`}>
+                        {pipelineTrace.quality_score.toFixed(1)}/10
+                        {pipelineTrace.quality_score >= 7 ? ' ✓' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {pipelineTrace.improvement_suggestion && (
+                  <div className="flex gap-3">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 w-14 shrink-0 pt-0.5">Tip</span>
+                    <p className="text-xs text-slate-400 italic leading-relaxed">
+                      → {pipelineTrace.improvement_suggestion}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

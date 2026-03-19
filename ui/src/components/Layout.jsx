@@ -32,7 +32,7 @@ function StatusDot({ status }) {
     status === 'RUNNING'
       ? 'bg-emerald-400'
       : status === 'PAUSED'
-      ? 'bg-yellow-400'
+      ? 'bg-amber-400'
       : 'bg-slate-500'
   return (
     <span
@@ -51,7 +51,7 @@ export default function Layout({ children }) {
         {/* Logo */}
         <div className="px-4 py-5 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <Zap size={18} className="text-blue-400" />
+            <Zap size={18} className="text-violet-400" />
             <span className="text-sm font-semibold text-slate-100 leading-tight">
               LinkedIn AI<br />Growth Engine
             </span>
@@ -76,7 +76,7 @@ export default function Layout({ children }) {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                   isActive
-                    ? 'bg-blue-600/20 text-blue-400 border-r-2 border-blue-400'
+                    ? 'bg-violet-700/20 text-violet-300 border-r-2 border-violet-400'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`
               }

@@ -17,67 +17,47 @@ Pipeline steps (10):
   10. Log + WebSocket push
 """
 import asyncio
-import json
-import os
-from typing import Optional, Tuple
+from typing import Optional
 
 from backend.utils.config_loader import get as cfg_get
 from backend.utils.logger import get_logger
+from backend.ai.client_factory import build_ai_client, AIClientUnavailableError
 
 logger = get_logger(__name__)
 
 
 # ── AI dependency factory ──────────────────────────────────────────────────
 
-def _load_groq_key() -> str:
-    """
-    Resolve GROQ API key.
-    Priority: GROQ_API_KEY env var → config/.secrets/groq.json → empty string.
-    """
-    key = os.environ.get("GROQ_API_KEY", "")
-    if key:
-        return key
-
-    secrets_file = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
-    )
-    if os.path.exists(secrets_file):
-        try:
-            with open(secrets_file, "r") as f:
-                data = json.load(f)
-            return data.get("api_key", "")
-        except Exception as e:
-            logger.warning(f"Pipeline: failed to read groq.json: {e}")
-
-    return ""
-
-
 def _build_ai_deps():
     """
-    Instantiate GroqClient + PromptLoader.
-    Returns (groq_client, prompt_loader) or (None, None) if no API key.
+    Build AI clients + PromptLoader for the pipeline.
+
+    Returns:
+        (background_client, generation_client, prompt_loader)
+
+    background_client — used for relevance scoring (OpenRouter free or Groq fallback).
+    generation_client — used for comment generation (Groq only).
+    Either client may be None if the corresponding key is not configured;
+    callers fall back to heuristics when a client is None.
     """
-    from backend.ai.groq_client import GroqClient, GroqError
     from backend.ai.prompt_loader import PromptLoader
 
-    api_key = _load_groq_key()
-    if not api_key:
-        logger.warning("Pipeline: GROQ_API_KEY not configured — AI steps will use fallback")
-        return None, None
+    loader = PromptLoader()
+    loader.load_all()
 
+    # Background client for relevance scoring
+    background_client = build_ai_client("background")
+    if background_client is None:
+        logger.warning("Pipeline: no background AI client available — relevance scoring will use keyword fallback")
+
+    # Generation client for comment generation
+    generation_client = None
     try:
-        client = GroqClient(
-            api_key=api_key,
-            model=str(cfg_get("ai.model", "llama3-70b-8192")),
-            max_tokens=int(cfg_get("ai.max_tokens", 500)),
-            temperature=float(cfg_get("ai.temperature", 0.7)),
-        )
-        loader = PromptLoader()
-        loader.load_all()
-        return client, loader
-    except GroqError as e:
-        logger.error(f"Pipeline: failed to build GroqClient: {e}")
-        return None, None
+        generation_client = build_ai_client("generation")
+    except AIClientUnavailableError:
+        logger.warning("Pipeline: Groq API key not configured — comment generation will use fallback")
+
+    return background_client, generation_client, loader
 
 
 # ── Public sync entry points (called by worker pool) ──────────────────────
@@ -146,7 +126,7 @@ async def _async_feed_scan():
     cb = engine.circuit_breaker if engine else None
 
     # Build AI deps once per scan (shared across all posts)
-    groq_client, prompt_loader = _build_ai_deps()
+    background_client, generation_client, prompt_loader = _build_ai_deps()
 
     browser = BrowserManager()
     try:
@@ -202,7 +182,7 @@ async def _async_feed_scan():
                     if engine.state_manager.get() != EngineState.RUNNING:
                         logger.info("Pipeline: engine stopped mid-scan — halting")
                         break
-                await _process_post(post, page, ie, db, engine, groq_client, prompt_loader)
+                await _process_post(post, page, ie, db, engine, background_client, generation_client, prompt_loader)
 
     finally:
         await browser.close()
@@ -220,7 +200,7 @@ async def _async_process_single(post_data: dict):
     engine = get_engine()
     cb = engine.circuit_breaker if engine else None
 
-    groq_client, prompt_loader = _build_ai_deps()
+    background_client, generation_client, prompt_loader = _build_ai_deps()
 
     browser = BrowserManager()
     try:
@@ -228,7 +208,7 @@ async def _async_process_single(post_data: dict):
         page = await browser.get_page()
         ie = InteractionEngine(circuit_breaker=cb)
         with get_db() as db:
-            await _process_post(post_data, page, ie, db, engine, groq_client, prompt_loader)
+            await _process_post(post_data, page, ie, db, engine, background_client, generation_client, prompt_loader)
     finally:
         await browser.close()
 
@@ -262,6 +242,15 @@ async def _async_approve_comment(post_id: str, comment_text: str):
         if not post:
             logger.error(f"Pipeline: approve_comment — post {post_id} not found")
             return
+        if post.state != "PREVIEW":
+            logger.warning(
+                f"Pipeline: approve_comment — post {post_id} state is '{post.state}', expected 'PREVIEW'. "
+                "Ignoring (likely a duplicate approval request)."
+            )
+            return
+        # Atomically claim this post to prevent concurrent approvals
+        post.state = "APPROVING"
+        db.commit()
         url = post.url
         author = post.author_name or "Unknown"
         matched_topic = post.topic_tag or ""
@@ -353,7 +342,7 @@ async def _async_approve_comment(post_id: str, comment_text: str):
         await browser.close()
 
 
-async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prompt_loader=None) -> None:
+async def _process_post(post: dict, page, ie, db, engine, background_client=None, generation_client=None, prompt_loader=None) -> None:
     """
     Run the full pipeline (steps 3-10) on a single extracted post.
     """
@@ -389,8 +378,8 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
                 logger.info(f"Pipeline: BLACKLIST skip '{author}' matched '{phrase}'")
                 return
 
-    # Step 4: Score for relevance (Groq AI)
-    score = await _score_post(post, groq_client, prompt_loader)
+    # Step 4: Score for relevance (background AI client — OpenRouter free or Groq fallback)
+    score = await _score_post(post, background_client, prompt_loader)
     min_score = float(cfg_get("feed_engagement.min_relevance_score", 6))
 
     if score < min_score:
@@ -441,7 +430,7 @@ async def _process_post(post: dict, page, ie, db, engine, groq_client=None, prom
     comment_angle: str = "unknown"
     comment_candidate_count: int = 0
     if action in ("COMMENT", "LIKE_AND_COMMENT"):
-        comment_result = await _generate_comment(post, groq_client, prompt_loader)
+        comment_result = await _generate_comment(post, generation_client, prompt_loader)
         if isinstance(comment_result, dict):
             comment_text = comment_result.get("comment", "")
             comment_quality_score = float(comment_result.get("quality_score", 0))
@@ -560,6 +549,11 @@ async def _visit_profile(
     """Visit and scrape a high-value profile; run email enrichment; optionally connect."""
     from backend.automation.profile_scraper import ProfileScraper
     from backend.automation.interaction_engine import InteractionEngine
+    from backend.storage import budget_tracker as _bt
+
+    if not _bt.check("profile_visits", db):
+        logger.info(f"Pipeline: profile_visits budget exhausted — skipping {profile_url}")
+        return
 
     logger.info(f"Pipeline: visiting profile {profile_url}")
     scraper = ProfileScraper()
@@ -587,6 +581,11 @@ async def _visit_profile(
         cb = engine.circuit_breaker if engine else None
         ie = InteractionEngine(circuit_breaker=cb)
         await ie.connect_with(page, profile_url, db=db)
+
+    try:
+        _bt.increment("profile_visits", db)
+    except Exception as e:
+        logger.debug(f"Pipeline: profile_visits budget increment failed — {e}")
 
 
 # ── AI scoring (Groq) ─────────────────────────────────────────────────────

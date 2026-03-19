@@ -10,13 +10,21 @@ Usage:
     insights = await extractor.extract_from_snippets(db, batch_size=20)
 """
 import asyncio
-import json
 from datetime import datetime, timezone
 
 from backend.utils.logger import get_logger
 from backend.utils.config_loader import get as cfg_get
+from backend.ai.utils import parse_json_safe
 
 logger = get_logger(__name__)
+
+
+def _none_if_empty(value) -> str | None:
+    """Return None if value is None, empty string, or the literal string 'none'."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return None if (not s or s.lower() == "none") else s
 
 _SYSTEM = (
     "You are a content intelligence analyst. "
@@ -138,6 +146,11 @@ class ContentExtractor:
                         specificity_score=float(data.get("specificity_score", 0)),
                         source_engagement=snippet.engagement_signal or 0,
                         source_type=snippet.source,
+                        mistake=data.get("mistake"),
+                        false_belief=data.get("false_belief"),
+                        contradiction=data.get("contradiction"),
+                        scenario=data.get("scenario"),
+                        evidence=data.get("evidence"),
                     )
                     db.add(insight)
                     db.commit()
@@ -210,6 +223,11 @@ class ContentExtractor:
                 specificity_score=float(data.get("specificity_score", 0)),
                 source_engagement=0,
                 source_type=source,
+                mistake=data.get("mistake"),
+                false_belief=data.get("false_belief"),
+                contradiction=data.get("contradiction"),
+                scenario=data.get("scenario"),
+                evidence=data.get("evidence"),
             )
             db.add(insight)
             db.commit()
@@ -265,25 +283,12 @@ class ContentExtractor:
         try:
             raw = await self._groq.complete(_SYSTEM, prompt)
             raw = raw.strip()
-            # Strip markdown fences if present
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            # Try to extract first JSON object
-            import re
-            m = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
-            if m:
-                try:
-                    data = json.loads(m.group())
-                except Exception:
-                    logger.warning(f"ContentExtractor: JSON parse failed after regex fallback")
-                    return None
-            else:
-                logger.warning(f"ContentExtractor: no JSON found in response")
-                return None
         except Exception as e:
             logger.warning(f"ContentExtractor: Groq call failed — {e}")
+            return None
+
+        data = parse_json_safe(raw, context="content_extractor")
+        if data is None or not isinstance(data, dict):
             return None
 
         # Normalize and validate
@@ -312,4 +317,9 @@ class ContentExtractor:
             "audience_segment": str(data.get("audience_segment", ""))[:128],
             "sentiment": sentiment,
             "specificity_score": score,
+            "mistake": _none_if_empty(data.get("mistake")),
+            "false_belief": _none_if_empty(data.get("false_belief")),
+            "contradiction": _none_if_empty(data.get("contradiction")),
+            "scenario": _none_if_empty(data.get("scenario")),
+            "evidence": _none_if_empty(data.get("evidence")),
         }

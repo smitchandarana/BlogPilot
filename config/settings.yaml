@@ -2,7 +2,7 @@ engine:
   enabled: true
   log_level: INFO
 content_intelligence:
-  enabled: false
+  enabled: true
   extraction_interval_hours: 4
   extraction_batch_size: 20
   extraction_jitter_seconds: 1200
@@ -32,6 +32,8 @@ daily_budget:
   posts_published: 5
   follows: 20
   endorsements: 10
+  structured_generation: 10
+  messages: 20
 rate_limits:
   likes_per_hour: 8
   comments_per_hour: 4
@@ -58,8 +60,8 @@ modules:
   reply_monitoring: false
 feed_engagement:
   mode: smart
-  preview_comments: true
-  min_relevance_score: 9
+  preview_comments: false
+  min_relevance_score: 6
   score_for_profile_visit: 8
   score_for_connection: 10
   max_posts_per_scan: 30
@@ -95,6 +97,10 @@ ai:
   temperature: 0.7
   retry_attempts: 2
   retry_delay_seconds: 2
+openrouter:
+  model: "openrouter/free"
+  max_tokens: 400
+  temperature: 0.3
 email_enrichment:
   enabled: true
   use_dom_scraper: true

@@ -212,7 +212,7 @@ export default function Analytics() {
           label="Comments Logged"
           value={commentQuality?.total_comments ?? 0}
           sub="Quality tracked"
-          color="text-sky-300"
+          color="text-blue-400"
         />
         <StatCard
           label="Avg Quality Score"

@@ -247,6 +247,7 @@ class GenerationSession(Base):
     action = Column(String(32), default="pending")    # pending | published | discarded | scheduled
     published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
+    chosen_angle = Column(Text, nullable=True)  # angle type + stance from angle_generator
 
 
 class ContentInsight(Base):
@@ -269,6 +270,12 @@ class ContentInsight(Base):
     times_used_in_generation = Column(Integer, default=0)
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
+    # New insight fields for pipeline v2
+    mistake = Column(Text, nullable=True)
+    false_belief = Column(Text, nullable=True)
+    contradiction = Column(Text, nullable=True)
+    scenario = Column(Text, nullable=True)
+    evidence = Column(Text, nullable=True)
 
 
 class ContentPattern(Base):

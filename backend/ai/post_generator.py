@@ -11,6 +11,7 @@ import json
 
 from backend.ai.groq_client import GroqClient, GroqError
 from backend.ai.prompt_loader import PromptLoader
+from backend.ai.utils import parse_json_safe
 from backend.utils.logger import get_logger
 from backend.utils.config_loader import get as cfg_get
 
@@ -196,10 +197,10 @@ async def generate(
             logger.info(f"PostGenerator: post APPROVED — score {quality_score}")
 
     except Exception as e:
-        # If scoring fails, approve by default (don't block on scoring failure)
-        logger.warning(f"PostGenerator: scoring failed ({e}), approving by default")
-        approved = True
+        logger.warning(f"PostGenerator: scoring failed ({e}) — post not approved, user can regenerate")
+        approved = False
         quality_score = 0.0
+        rejection_reason = "Scoring unavailable — regenerate to retry"
 
     return {
         "post": post_text,
@@ -349,9 +350,10 @@ async def generate_structured(
             logger.info(f"PostGenerator (structured): APPROVED — score {quality_score}")
 
     except Exception as e:
-        logger.warning(f"PostGenerator (structured): scoring failed ({e}), approving by default")
-        approved = True
+        logger.warning(f"PostGenerator (structured): scoring failed ({e}) — post not approved, user can regenerate")
+        approved = False
         quality_score = 0.0
+        rejection_reason = "Scoring unavailable — regenerate to retry"
 
     return {
         "post": post_text,
@@ -360,3 +362,138 @@ async def generate_structured(
         "rejection_reason": rejection_reason,
         "improvement_suggestion": improvement_suggestion,
     }
+
+
+async def generate_pipeline(
+    topic: str,
+    style: str,
+    tone: str,
+    word_count: int,
+    groq_client,
+    prompt_loader: PromptLoader,
+    db,
+    insight_id: int | None = None,
+) -> dict:
+    """
+    3-call pipeline: angle_generator → structured_post → post_scorer.
+
+    Uses a ContentInsight from DB (by insight_id or best match for topic) to ground
+    the generation in real signal. Falls back to generate_structured() if no insight found.
+
+    Returns same shape as generate(): {post, quality_score, approved, rejection_reason,
+    improvement_suggestion, angle_used, hook_used, insight_used}
+    """
+    from backend.storage.models import ContentInsight
+
+    # Step 0: Load insight
+    insight = None
+    try:
+        if insight_id:
+            insight = db.query(ContentInsight).filter(ContentInsight.id == insight_id).first()
+        if insight is None:
+            # Best match by topic
+            insight = (
+                db.query(ContentInsight)
+                .filter(ContentInsight.topic.ilike(f"%{topic}%"))
+                .order_by(ContentInsight.specificity_score.desc())
+                .first()
+            )
+    except Exception as e:
+        logger.warning(f"generate_pipeline: DB lookup failed ({e}) — using fallback")
+
+    if insight is None:
+        logger.info(f"generate_pipeline: no ContentInsight for topic='{topic}' — using generate_structured fallback")
+        result = await generate_structured(
+            {"topic": topic, "style": style, "tone": tone, "word_count": word_count},
+            groq_client=groq_client,
+            prompt_loader=prompt_loader,
+        )
+        result.setdefault("angle_used", None)
+        result.setdefault("hook_used", None)
+        result.setdefault("insight_used", None)
+        return result
+
+    # Step 1: Generate angles from insight
+    selected_angle = None
+    hook_used = insight.hook_type or "STORY"
+    angle_used = None
+    try:
+        angle_prompt = prompt_loader.format(
+            "angle_generator",
+            pain_point=insight.pain_point or "Not specified",
+            mistake=insight.mistake or "none",
+            false_belief=insight.false_belief or "none",
+            contradiction=insight.contradiction or "none",
+            scenario=insight.scenario or "none",
+            audience=insight.audience_segment or "Business decision makers",
+            key_insight=insight.key_insight or "Not specified",
+            evidence=insight.evidence or "none",
+        )
+        raw_angles = await groq_client.complete(
+            "You are a LinkedIn content angle strategist. Return ONLY valid JSON.",
+            angle_prompt,
+            max_tokens=400,
+        )
+        angle_data = parse_json_safe(raw_angles, context="angle_generator")
+        if angle_data and isinstance(angle_data, dict):
+            angles = angle_data.get("angles", [])
+            best_idx = int(angle_data.get("best_angle_index", 0))
+            if angles and best_idx < len(angles):
+                best = angles[best_idx]
+                angle_used = best.get("type", "")
+                selected_angle = f"[{angle_used.upper()}] {best.get('stance', '')}"
+                hook_used = angle_used.upper() if angle_used.upper() in _HOOK_INSTRUCTIONS else hook_used
+                logger.info(f"generate_pipeline: angle={angle_used} hook={hook_used}")
+    except Exception as e:
+        logger.warning(f"generate_pipeline: angle generation failed ({e}) — continuing without angle")
+
+    # Step 2: Generate post with structured prompt
+    from backend.research.pattern_aggregator import PatternAggregator
+    evidence_block = ""
+    try:
+        agg = PatternAggregator()
+        evidence_block = agg.get_evidence_block(topic, db) or ""
+    except Exception:
+        pass
+
+    structured_inputs = {
+        "topic": topic,
+        "subtopic": insight.subtopic or topic,
+        "pain_point": insight.pain_point or "",
+        "audience": insight.audience_segment or "Business decision makers",
+        "hook_intent": hook_used,
+        "core_insight": insight.key_insight or "",
+        "belief_to_challenge": insight.false_belief or "",
+        "proof_type": "EXAMPLE",
+        "style": style,
+        "tone": tone,
+        "word_count": word_count,
+        "selected_angle": selected_angle or f"Write from the {hook_used.lower()} angle.",
+    }
+
+    result = await generate_structured(
+        structured_inputs=structured_inputs,
+        groq_client=groq_client,
+        prompt_loader=prompt_loader,
+        evidence=evidence_block,
+    )
+
+    result["angle_used"] = angle_used
+    result["hook_used"] = hook_used
+    result["insight_used"] = {
+        "id": insight.id,
+        "subtopic": insight.subtopic,
+        "pain_point": insight.pain_point,
+        "key_insight": insight.key_insight,
+    }
+
+    # Track usage
+    try:
+        insight.times_used_in_generation = (insight.times_used_in_generation or 0) + 1
+        from datetime import datetime
+        insight.last_used_at = datetime.utcnow()
+        db.commit()
+    except Exception:
+        pass
+
+    return result

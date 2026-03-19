@@ -1,6 +1,8 @@
 import os
 from typing import Callable, Optional
 
+from backend.ai.client_factory import build_ai_client
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger
@@ -293,45 +295,26 @@ def _job_topic_research():
         from backend.utils.config_loader import get as _cfg
         from backend.storage.database import get_db
         from backend.research.topic_researcher import TopicResearcher
+        from backend.ai.prompt_loader import PromptLoader
 
         topics = _cfg("topics", []) or []
         if not topics:
             logger.info("Scheduler: topic_research skipped — no topics configured")
             return
 
-        # Try to init AI clients for scoring
-        groq_client = None
+        # Build background AI client for subtopic extraction and scoring
+        ai_client = build_ai_client("background")
+        if ai_client is None:
+            logger.info("Scheduler: topic_research — no AI client available, running with heuristic fallback")
+
         prompt_loader = None
         try:
-            from backend.ai.groq_client import GroqClient
-            from backend.ai.prompt_loader import PromptLoader
-            from backend.utils.encryption import decrypt
-            import os
+            prompt_loader = PromptLoader()
+            prompt_loader.load_all()
+        except Exception as e:
+            logger.warning(f"Scheduler: topic_research — failed to load prompts: {e}")
 
-            secrets_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-            )
-            api_key = None
-            if os.path.isfile(secrets_path):
-                with open(secrets_path, "r") as f:
-                    for line in f:
-                        if line.startswith("groq_api_key="):
-                            encrypted = line.strip().split("=", 1)[1]
-                            api_key = decrypt(encrypted)
-                            break
-            if api_key:
-                groq_client = GroqClient(
-                    api_key=api_key,
-                    model=_cfg("ai.model", "llama-3.3-70b-versatile"),
-                    max_tokens=int(_cfg("ai.max_tokens", 500)),
-                    temperature=float(_cfg("ai.temperature", 0.7)),
-                )
-                prompt_loader = PromptLoader()
-                prompt_loader.load_all()
-        except Exception:
-            pass
-
-        researcher = TopicResearcher(groq_client=groq_client, prompt_loader=prompt_loader)
+        researcher = TopicResearcher(groq_client=ai_client, prompt_loader=prompt_loader)
 
         with get_db() as db:
             results = asyncio.run(researcher.research_topics(topics, db))
@@ -406,46 +389,23 @@ def _job_content_extraction():
         from backend.storage.database import get_db
         from backend.research.content_extractor import ContentExtractor
         from backend.research.pattern_aggregator import PatternAggregator
+        from backend.ai.prompt_loader import PromptLoader
 
-        # Build AI deps
-        groq_client = None
-        prompt_loader = None
-        try:
-            import os
-            from backend.ai.groq_client import GroqClient
-            from backend.ai.prompt_loader import PromptLoader
-            from backend.utils.encryption import decrypt
-
-            api_key = os.environ.get("GROQ_API_KEY")
-            if not api_key:
-                secrets_path = os.path.normpath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-                )
-                if os.path.exists(secrets_path):
-                    with open(secrets_path, "r") as f:
-                        for line in f:
-                            if line.startswith("groq_api_key="):
-                                encrypted = line.strip().split("=", 1)[1]
-                                api_key = decrypt(encrypted)
-                                break
-
-            if api_key:
-                groq_client = GroqClient(
-                    api_key=api_key,
-                    model=_cfg("ai.model", "llama-3.3-70b-versatile"),
-                    max_tokens=int(_cfg("ai.max_tokens", 500)),
-                    temperature=float(_cfg("ai.temperature", 0.7)),
-                )
-                prompt_loader = PromptLoader()
-                prompt_loader.load_all()
-        except Exception:
-            pass
-
-        if groq_client is None:
-            logger.info("Scheduler: content_extraction skipped — no Groq API key")
+        # Build background AI client for extraction
+        ai_client = build_ai_client("background")
+        if ai_client is None:
+            logger.info("Scheduler: content_extraction skipped — no AI key configured")
             return
 
-        extractor = ContentExtractor(groq_client=groq_client, prompt_loader=prompt_loader)
+        prompt_loader = None
+        try:
+            prompt_loader = PromptLoader()
+            prompt_loader.load_all()
+        except Exception as e:
+            logger.warning(f"Scheduler: content_extraction — failed to load prompts: {e}")
+            return
+
+        extractor = ContentExtractor(groq_client=ai_client, prompt_loader=prompt_loader)
         agg = PatternAggregator()
 
         batch_size = int(_cfg("content_intelligence.extraction_batch_size", 20))

@@ -46,7 +46,7 @@ def get_recent(n: int, db: Session) -> List[ActionLog]:
 
 def get_stats_today(db: Session) -> dict:
     today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
     )
     rows = (
         db.query(ActionLog.action_type, func.count(ActionLog.id))

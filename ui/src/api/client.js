@@ -37,6 +37,8 @@ export const config = {
     http.post('/prompts/test', { prompt_name, variables }, { timeout: 120000 }),
   getGroqKeyStatus: () => http.get('/api-keys/groq'),
   saveGroqKey: (api_key) => http.post('/api-keys/groq', { api_key }),
+  getOpenRouterKeyStatus: () => http.get('/api-keys/openrouter'),
+  saveOpenRouterKey: (api_key) => http.post('/api-keys/openrouter', { api_key }),
 }
 
 export const analytics = {
@@ -78,6 +80,7 @@ export const content = {
   cancel: (id) => http.delete(`/content/queue/${id}`),
   publishNow: (data) => http.post('/content/publish-now', data),
   generateStructured: (data) => http.post('/content/generate-structured', data, { timeout: 120000 }),
+  generateV2: (data) => http.post('/content/generate-v2', data, { timeout: 120000 }),
 }
 
 export const intelligence = {

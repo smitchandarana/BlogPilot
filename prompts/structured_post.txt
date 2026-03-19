@@ -10,6 +10,12 @@ Core insight to land: {core_insight}
 Belief to challenge: {belief_to_challenge}
 Proof type: {proof_type}
 
+SELECTED ANGLE (write toward this):
+{selected_angle}
+
+PRE-COMMITMENT (do this before writing):
+In your head, commit to: "Opening sentence: [specific first sentence]. Core claim: [the one argument this post makes]." Then write the post.
+
 HOOK INSTRUCTION — follow this exactly:
 {hook_intent_instruction}
 
