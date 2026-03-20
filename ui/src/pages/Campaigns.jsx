@@ -36,6 +36,8 @@ export default function Campaigns() {
   const [newSteps, setNewSteps] = useState([])
   const [showEnroll, setShowEnroll] = useState(null)
   const [enrollUrls, setEnrollUrls] = useState('')
+  const [enrollResult, setEnrollResult] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const fetchCampaigns = async () => {
     try {
@@ -77,7 +79,11 @@ export default function Campaigns() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this campaign?')) return
+    setDeleteTarget(id)
+  }
+
+  const confirmDelete = async (id) => {
+    setDeleteTarget(null)
     try {
       await campaignsApi.delete(id)
       setCampaigns((prev) => prev.filter((c) => c.id !== id))
@@ -98,9 +104,10 @@ export default function Campaigns() {
     try {
       await campaignsApi.enroll(showEnroll, ids)
       fetchCampaigns()
-    } catch {}
-    setShowEnroll(null)
-    setEnrollUrls('')
+      setEnrollResult({ success: true, message: `${ids.length} lead${ids.length !== 1 ? 's' : ''} enrolled` })
+    } catch {
+      setEnrollResult({ success: false, message: 'Enrollment failed' })
+    }
   }
 
   return (
@@ -158,12 +165,30 @@ export default function Campaigns() {
                     >
                       {c.status === 'ACTIVE' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                     </button>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {deleteTarget === c.id ? (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-red-700/40 bg-red-900/20 px-2 py-1">
+                        <span className="text-xs text-red-300">Delete?</span>
+                        <button
+                          onClick={() => confirmDelete(c.id)}
+                          className="rounded px-1.5 py-0.5 text-xs font-medium text-red-300 hover:bg-red-700/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(null)}
+                          className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <button onClick={() => toggleExpand(c.id)} className="rounded-lg border border-slate-700/40 p-1.5 text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500">
                       {expanded === c.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </button>
@@ -233,7 +258,7 @@ export default function Campaigns() {
 
       {/* Enroll modal */}
       {showEnroll && (
-        <Modal title="Enroll Leads" onClose={() => setShowEnroll(null)}>
+        <Modal title="Enroll Leads" onClose={() => { setShowEnroll(null); setEnrollUrls(''); setEnrollResult(null) }}>
           <div className="flex flex-col gap-4">
             <p className="text-sm text-slate-400">Paste LinkedIn profile URLs, one per line.</p>
             <textarea
@@ -243,8 +268,13 @@ export default function Campaigns() {
               placeholder={"https://linkedin.com/in/profile-1\nhttps://linkedin.com/in/profile-2"}
               className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
             />
+            {enrollResult && (
+              <p className={`text-xs ${enrollResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                {enrollResult.message}
+              </p>
+            )}
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowEnroll(null)} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+              <button onClick={() => { setShowEnroll(null); setEnrollUrls(''); setEnrollResult(null) }} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
                 Cancel
               </button>
               <button

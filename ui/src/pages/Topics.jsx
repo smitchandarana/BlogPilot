@@ -181,7 +181,7 @@ export default function Topics() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {
-      /* TODO: show error */
+      setToast('Save failed — is the server running?')
     } finally {
       setSaving(false)
     }

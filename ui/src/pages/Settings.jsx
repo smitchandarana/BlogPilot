@@ -48,13 +48,19 @@ export default function Settings() {
   const [groqStatus, setGroqStatus] = useState(null) // { configured, masked_key }
   const [savingKey, setSavingKey] = useState(false)
   const [keySaved, setKeySaved] = useState(false)
+  const [groqKeyError, setGroqKeyError] = useState('')
   const [orKey, setOrKey] = useState('')
   const [showOrKey, setShowOrKey] = useState(false)
   const [orStatus, setOrStatus] = useState(null)
   const [savingOrKey, setSavingOrKey] = useState(false)
   const [orKeySaved, setOrKeySaved] = useState(false)
+  const [orKeyError, setOrKeyError] = useState('')
   const [liPassword, setLiPassword] = useState('')
   const [liEmail, setLiEmail] = useState('')
+  const [liStatus, setLiStatus] = useState(null)
+  const [savingLi, setSavingLi] = useState(false)
+  const [liSaved, setLiSaved] = useState(false)
+  const [liError, setLiError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showConfirmClear, setShowConfirmClear] = useState(false)
@@ -75,32 +81,37 @@ export default function Settings() {
     }).catch(() => {})
     configApi.getGroqKeyStatus().then((res) => setGroqStatus(res.data)).catch(() => {})
     configApi.getOpenRouterKeyStatus().then((res) => setOrStatus(res.data)).catch(() => {})
+    configApi.getLinkedInStatus().then((res) => setLiStatus(res.data)).catch(() => {})
   }, [])
 
   const handleSaveGroqKey = async () => {
     if (!apiKey.trim()) return
     setSavingKey(true)
+    setGroqKeyError('')
     try {
       const res = await configApi.saveGroqKey(apiKey.trim())
       setGroqStatus(res.data)
       setApiKey('')
       setKeySaved(true)
       setTimeout(() => setKeySaved(false), 3000)
-    } catch { /* */ }
-    finally { setSavingKey(false) }
+    } catch (e) {
+      setGroqKeyError(e?.response?.data?.detail || 'Failed to save key')
+    } finally { setSavingKey(false) }
   }
 
   const handleSaveOrKey = async () => {
     if (!orKey.trim()) return
     setSavingOrKey(true)
+    setOrKeyError('')
     try {
       const res = await configApi.saveOpenRouterKey(orKey.trim())
       setOrStatus(res.data)
       setOrKey('')
       setOrKeySaved(true)
       setTimeout(() => setOrKeySaved(false), 3000)
-    } catch { /* */ }
-    finally { setSavingOrKey(false) }
+    } catch (e) {
+      setOrKeyError(e?.response?.data?.detail || 'Failed to save key')
+    } finally { setSavingOrKey(false) }
   }
 
   const set = (section, key, val) =>
@@ -137,14 +148,17 @@ export default function Settings() {
     } catch { /* expected — server is shutting down */ }
   }
 
+  const [saveError, setSaveError] = useState('')
+
   const handleSave = async () => {
     setSaving(true)
+    setSaveError('')
     try {
       await configApi.updateSettings(form)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch {
-      /* backend not running yet in Sprint 2 */
+    } catch (e) {
+      setSaveError(e?.response?.data?.detail || 'Failed to save settings — is the server running?')
     } finally {
       setSaving(false)
     }
@@ -152,19 +166,22 @@ export default function Settings() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-100">Settings</h1>
           <p className="mt-0.5 text-sm text-slate-500">Configure API keys, rate limits, delays, and browser behaviour.</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:bg-violet-600 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98]"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <Save className="h-4 w-4" />}
-          {saved ? 'Saved' : 'Save Changes'}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:bg-violet-600 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98]"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <Save className="h-4 w-4" />}
+            {saved ? 'Saved' : 'Save Changes'}
+          </button>
+          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+        </div>
       </div>
 
       <SectionCard title="AI Configuration" description="Groq API settings for comment generation and scoring.">
@@ -195,6 +212,7 @@ export default function Settings() {
                   />
                   <button
                     onClick={() => setShowKey(!showKey)}
+                    aria-label={showKey ? 'Hide API key' : 'Show API key'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none"
                   >
                     {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -209,6 +227,7 @@ export default function Settings() {
                   {keySaved ? 'Saved' : 'Save Key'}
                 </button>
               </div>
+              {groqKeyError && <p className="text-xs text-red-400 mt-1">{groqKeyError}</p>}
             </div>
           </InputRow>
           <InputRow label="OpenRouter API Key">
@@ -260,10 +279,12 @@ export default function Settings() {
                   {orKeySaved ? 'Saved!' : 'Save'}
                 </button>
               </div>
+              {orKeyError && <p className="text-xs text-red-400 mt-1">{orKeyError}</p>}
             </div>
           </InputRow>
           <InputRow label="Model">
             <select value={form.ai.model} onChange={(e) => set('ai', 'model', e.target.value)} className={inputCls}>
+              <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (recommended)</option>
               <option value="llama3-70b-8192">llama3-70b-8192</option>
               <option value="llama3-8b-8192">llama3-8b-8192</option>
               <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
@@ -284,14 +305,56 @@ export default function Settings() {
         <div className="flex flex-col gap-4">
           <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            Credentials are encrypted on disk. Do not share your config/.secrets file.
+            Credentials are encrypted on disk using Fernet. Never stored or logged in plaintext.
           </div>
+          {liStatus?.configured && (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span className="text-emerald-400">Credentials saved</span>
+              <span className="text-slate-500">— enter new values below to replace</span>
+            </div>
+          )}
+          {liError && (
+            <div className="flex items-center gap-2 text-sm text-red-400">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {liError}
+            </div>
+          )}
           <InputRow label="LinkedIn Email">
             <input type="email" value={liEmail} onChange={(e) => setLiEmail(e.target.value)} placeholder="your@email.com" className={inputCls} />
           </InputRow>
           <InputRow label="LinkedIn Password">
             <input type="password" value={liPassword} onChange={(e) => setLiPassword(e.target.value)} placeholder="••••••••" className={inputCls} />
           </InputRow>
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                if (!liEmail.trim() || !liPassword.trim()) {
+                  setLiError('Both email and password are required')
+                  return
+                }
+                setLiError('')
+                setSavingLi(true)
+                try {
+                  const res = await configApi.saveLinkedInCredentials(liEmail.trim(), liPassword.trim())
+                  setLiStatus({ configured: true })
+                  setLiEmail('')
+                  setLiPassword('')
+                  setLiSaved(true)
+                  setTimeout(() => setLiSaved(false), 3000)
+                } catch (e) {
+                  setLiError(e?.response?.data?.detail || 'Failed to save credentials')
+                } finally {
+                  setSavingLi(false)
+                }
+              }}
+              disabled={savingLi || !liEmail.trim() || !liPassword.trim()}
+              className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40"
+            >
+              {savingLi ? <Loader2 className="h-4 w-4 animate-spin" /> : liSaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {liSaved ? 'Saved & Encrypted' : 'Save Credentials'}
+            </button>
+          </div>
         </div>
       </SectionCard>
 
@@ -501,7 +564,15 @@ export default function Settings() {
                 Cancel
               </button>
               <button
-                onClick={() => setShowConfirmClear(false)}
+                onClick={async () => {
+                  setShowConfirmClear(false)
+                  try {
+                    await serverApi.clearData()
+                    window.location.reload()
+                  } catch (e) {
+                    setSaveError(e?.response?.data?.detail || 'Failed to clear data')
+                  }
+                }}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 Yes, Delete Everything

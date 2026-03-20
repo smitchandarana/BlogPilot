@@ -46,6 +46,7 @@ export default function EngineControl() {
   const [form, setForm] = useState(DEFAULT_SETTINGS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     configApi.getSettings().then((res) => {
@@ -75,12 +76,13 @@ export default function EngineControl() {
 
   const handleSave = async () => {
     setSaving(true)
+    setSaveError('')
     try {
       await configApi.updateSettings(form)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch {
-      /* TODO: show error */
+    } catch (e) {
+      setSaveError(e?.response?.data?.detail || 'Failed to save — is the server running?')
     } finally {
       setSaving(false)
     }
@@ -93,20 +95,23 @@ export default function EngineControl() {
           <h1 className="text-xl font-semibold tracking-tight text-slate-100">Engine Control</h1>
           <p className="mt-0.5 text-sm text-slate-500">Configure modules, activity window, and safety limits.</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:bg-violet-600 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98]"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : saved ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          {saved ? 'Saved' : 'Save Changes'}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-[0_0_16px_rgba(124,58,237,0.2)] transition-[background,box-shadow] duration-200 hover:bg-violet-600 hover:shadow-[0_0_24px_rgba(124,58,237,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-60 active:scale-[0.98]"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : saved ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saved ? 'Saved' : 'Save Changes'}
+          </button>
+          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+        </div>
       </div>
 
       {/* Module toggles */}

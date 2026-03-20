@@ -35,14 +35,17 @@ function PreviewCard({ item, onApprove, onReject }) {
   const [editing, setEditing] = useState(false)
   const [commentText, setCommentText] = useState(item.comment)
   const [status, setStatus] = useState('idle') // idle | approving | approved | rejected
+  const [approveError, setApproveError] = useState('')
 
   const handleApprove = async () => {
     setStatus('approving')
+    setApproveError('')
     try {
       await onApprove(item.post_id, commentText)
       setStatus('approved')
     } catch {
       setStatus('idle')
+      setApproveError('Failed to queue — tap to retry')
     }
   }
 
@@ -129,32 +132,35 @@ function PreviewCard({ item, onApprove, onReject }) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleApprove}
-          disabled={status === 'approving' || !commentText.trim()}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-        >
-          {status === 'approving' ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Queuing…
-            </>
-          ) : (
-            <>
-              <Check className="h-3.5 w-3.5" />
-              Approve & Post
-            </>
-          )}
-        </button>
-        <button
-          onClick={handleReject}
-          disabled={status === 'approving'}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-        >
-          <X className="h-3.5 w-3.5" />
-          Reject
-        </button>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleApprove}
+            disabled={status === 'approving' || !commentText.trim()}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          >
+            {status === 'approving' ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Queuing…
+              </>
+            ) : (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                Approve & Post
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleReject}
+            disabled={status === 'approving'}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+          >
+            <X className="h-3.5 w-3.5" />
+            Reject
+          </button>
+        </div>
+        {approveError && <p className="text-xs text-red-400">{approveError}</p>}
       </div>
     </div>
   )

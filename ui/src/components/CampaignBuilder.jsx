@@ -1,15 +1,24 @@
 import { useState } from 'react'
-import { ChevronUp, ChevronDown, Trash2, Plus, Wand2 } from 'lucide-react'
+import { ChevronUp, ChevronDown, Trash2, Plus, Wand2, Eye, Link2, MessageSquare, Mail, ThumbsUp, Timer } from 'lucide-react'
 import { config as configApi } from '../api/client'
 
-const STEP_TYPES = ['Visit Profile', 'Follow', 'Connect', 'Message', 'InMail', 'Endorse', 'Wait']
+const STEP_TYPES = ['VISIT_PROFILE', 'FOLLOW', 'CONNECT', 'MESSAGE', 'INMAIL', 'ENDORSE', 'WAIT']
+const STEP_LABELS = {
+  VISIT_PROFILE: 'Visit Profile', FOLLOW: 'Follow', CONNECT: 'Connect',
+  MESSAGE: 'Message', INMAIL: 'InMail', ENDORSE: 'Endorse', WAIT: 'Wait',
+}
 const STEP_ICONS = {
-  'Visit Profile': '👁', Follow: '➕', Connect: '🤝',
-  Message: '💬', InMail: '📨', Endorse: '👍', Wait: '⏱',
+  VISIT_PROFILE: <Eye size={16} />,
+  FOLLOW: <Plus size={16} />,
+  CONNECT: <Link2 size={16} />,
+  MESSAGE: <MessageSquare size={16} />,
+  INMAIL: <Mail size={16} />,
+  ENDORSE: <ThumbsUp size={16} />,
+  WAIT: <Timer size={16} />,
 }
 const VARIABLES = ['{first_name}', '{company}', '{title}']
-const HAS_MESSAGE = ['Message', 'InMail']
-const HAS_DAYS = ['Wait']
+const HAS_MESSAGE = ['MESSAGE', 'INMAIL']
+const HAS_DAYS = ['WAIT']
 
 function VariableChips({ onInsert }) {
   return (
@@ -92,10 +101,10 @@ export default function CampaignBuilder({ steps: externalSteps, onChange }) {
       {steps.map((step, idx) => (
         <div key={step.id} className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-4">
           <div className="flex items-center gap-3">
-            <span className="text-lg">{STEP_ICONS[step.type] || '•'}</span>
+            <span className="flex items-center text-slate-400">{STEP_ICONS[step.type] || '•'}</span>
             <div className="flex-1">
               <span className="text-sm font-medium text-slate-200">
-                Step {idx + 1} — {step.type}
+                Step {idx + 1} — {STEP_LABELS[step.type] || step.type}
               </span>
             </div>
             <div className="flex items-center gap-1">
@@ -172,7 +181,7 @@ export default function CampaignBuilder({ steps: externalSteps, onChange }) {
           onChange={(e) => setAddType(e.target.value)}
           className="flex-1 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
         >
-          {STEP_TYPES.map((t) => <option key={t} value={t}>{STEP_ICONS[t]} {t}</option>)}
+          {STEP_TYPES.map((t) => <option key={t} value={t}>{STEP_LABELS[t]}</option>)}
         </select>
         <button
           onClick={addStep}

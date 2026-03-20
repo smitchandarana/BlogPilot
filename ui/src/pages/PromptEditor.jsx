@@ -22,6 +22,7 @@ export default function PromptEditor() {
   const [prompts, setPrompts] = useState(PROMPT_DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
@@ -37,12 +38,13 @@ export default function PromptEditor() {
 
   const handleSave = async () => {
     setSaving(true)
+    setSaveError('')
     try {
       await configApi.updatePrompt(selected, currentText)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch {
-      /* TODO: show error */
+    } catch (e) {
+      setSaveError(e?.response?.data?.detail || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -107,6 +109,8 @@ export default function PromptEditor() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+                {saved && !saveError && <p className="text-xs text-emerald-400">Saved ✓</p>}
                 <button
                   onClick={handleReset}
                   disabled={resetting}

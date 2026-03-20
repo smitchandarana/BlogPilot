@@ -16,6 +16,7 @@ export default function Leads() {
   const [statusFilter, setStatusFilter] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
   const [enriching, setEnriching] = useState(new Set())
+  const [exportError, setExportError] = useState('')
 
   const fetchLeads = async () => {
     try {
@@ -66,6 +67,7 @@ export default function Leads() {
   }
 
   const handleExport = async () => {
+    setExportError('')
     try {
       const res = await leadsApi.export()
       const url = URL.createObjectURL(res.data)
@@ -74,8 +76,8 @@ export default function Leads() {
       a.download = 'leads.csv'
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error('Export failed:', e)
+    } catch {
+      setExportError('Export failed — please try again')
     }
   }
 
@@ -103,6 +105,10 @@ export default function Leads() {
           </button>
         </div>
       </div>
+
+      {exportError && (
+        <p className="text-xs text-red-400">{exportError}</p>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-3">
