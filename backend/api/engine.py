@@ -1,4 +1,5 @@
 import time
+import threading
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from backend.utils.logger import get_logger
@@ -179,6 +180,24 @@ async def approve_comment(req: _ApproveRequest):
     if future is None:
         raise HTTPException(status_code=503, detail="Worker pool is full or engine not RUNNING")
     return {"status": "approval_queued", "post_id": req.post_id}
+
+
+@router.post("/run-comment-monitor")
+async def run_comment_monitor():
+    """
+    Manually trigger the comment monitor — checks recent comments for replies
+    to feed the self-learning loop. Runs in a background thread; returns immediately.
+    """
+    def _run():
+        try:
+            from backend.learning.comment_monitor import run_comment_monitor as _monitor
+            _monitor()
+        except Exception as exc:
+            logger.warning(f"Manual comment_monitor error: {exc}")
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return {"status": "comment_monitor_started"}
 
 
 class _RejectRequest(BaseModel):

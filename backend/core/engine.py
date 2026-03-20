@@ -76,6 +76,23 @@ class Engine:
                 tune_if_stale(db)
         except Exception as exc:
             logger.warning(f"Engine: auto-tune stale-check failed: {exc}")
+        # BUG FIX: Warn user when Groq API key is absent so AI features aren't
+        # silently skipped without any indication in the UI.
+        from backend.ai.client_factory import _load_groq_key
+        if not _load_groq_key():
+            logger.warning("Engine started without Groq API key — AI features will be skipped")
+            try:
+                from backend.api.websocket import schedule_broadcast
+                schedule_broadcast("alert", {
+                    "level": "warning",
+                    "message": (
+                        "Groq API key not configured. AI features disabled. "
+                        "Go to Settings to add your key."
+                    ),
+                })
+            except Exception as ws_exc:
+                logger.debug(f"Engine: could not broadcast API key warning: {ws_exc}")
+
         self._start_time = time.time()
         self.state_manager.start()          # STOPPED → RUNNING
         self.scheduler.start()

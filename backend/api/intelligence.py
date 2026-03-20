@@ -148,18 +148,19 @@ async def trigger_extraction():
     Manually trigger a content extraction run.
     Processes unprocessed research snippets → ContentInsight rows,
     then refreshes ContentPattern aggregations.
+    Uses OpenRouter (background client) — falls back to Groq if no OpenRouter key.
     """
-    groq_client, prompt_loader = _build_ai_deps()
-    if groq_client is None:
+    ai_client, prompt_loader = _build_ai_deps()
+    if ai_client is None:
         raise HTTPException(
             status_code=503,
-            detail="Groq API key not configured — cannot run extraction"
+            detail="No AI key configured (OpenRouter or Groq required) — add one in Settings"
         )
 
     from backend.research.content_extractor import ContentExtractor
     from backend.research.pattern_aggregator import PatternAggregator
 
-    extractor = ContentExtractor(groq_client, prompt_loader)
+    extractor = ContentExtractor(ai_client, prompt_loader)
     agg = PatternAggregator()
 
     with get_db() as db:

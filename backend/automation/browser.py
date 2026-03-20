@@ -6,6 +6,7 @@ NOT a singleton: instantiate per pipeline run, close when done.
 Uses launch_persistent_context so LinkedIn session cookies survive across runs.
 """
 import os
+import threading
 from typing import Optional
 
 from playwright.async_api import async_playwright, BrowserContext, Page, Playwright
@@ -14,6 +15,10 @@ from backend.utils.config_loader import get as cfg_get
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# BUG FIX: Serialize concurrent launch() calls so two workers never try to
+# open the same persistent profile directory simultaneously (Chromium locks it).
+_BROWSER_LAUNCH_LOCK = threading.Lock()
 
 
 class BrowserManager:
@@ -39,6 +44,15 @@ class BrowserManager:
         if self._playwright is None:
             self._playwright = await async_playwright().start()
 
+        # BUG FIX: Hold the module-level lock while launching so that a
+        # concurrent worker (e.g. approval + feed scan) cannot attempt to open
+        # the same profile directory at the same time.  The lock is released
+        # after launch_persistent_context() returns, not at browser.close().
+        with _BROWSER_LAUNCH_LOCK:
+            await self._do_launch()
+
+    async def _do_launch(self) -> None:
+        """Internal: perform the actual Playwright launch (called under lock)."""
         headless = bool(cfg_get("browser.headless", False))
         profile_path = cfg_get("browser.profile_path", "./browser_profile")
         viewport_width = int(cfg_get("browser.viewport_width", 1366))

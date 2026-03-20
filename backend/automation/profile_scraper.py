@@ -22,6 +22,10 @@ class ProfileScraper:
     Saves a Lead record to the database if db is provided.
     """
 
+    def __init__(self, leads_store=None, broadcast_fn=None):
+        self._leads_store = leads_store
+        self._broadcast_fn = broadcast_fn or (lambda event, payload: None)
+
     async def scrape(self, page: Page, profile_url: str, db=None) -> dict:
         """
         Navigate to profile_url, extract all available fields, and return a dict.
@@ -71,21 +75,19 @@ class ProfileScraper:
             f"@ {data['company']} (degree={data['connection_degree']})"
         )
 
-        if db is not None:
+        if db is not None and self._leads_store is not None:
             try:
-                from backend.storage import leads_store
-                leads_store.create_lead(data, db)
+                self._leads_store.create_lead(data, db)
 
                 # Broadcast to UI
                 try:
-                    from backend.api.websocket import schedule_broadcast
-                    schedule_broadcast("lead_added", {
+                    self._broadcast_fn("lead_added", {
                         "name": f"{data['first_name'] or ''} {data['last_name'] or ''}".strip(),
                         "company": data["company"] or "",
                         "email": data["email"],
                     })
-                except Exception:
-                    pass
+                except Exception as bc_exc:
+                    logger.debug(f"Lead broadcast error: {bc_exc}")
             except Exception as e:
                 logger.warning(f"Lead save error: {e}")
 

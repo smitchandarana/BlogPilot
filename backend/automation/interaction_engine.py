@@ -37,8 +37,11 @@ ACTION_VISIT = "profile_visits"
 class InteractionEngine:
     """LinkedIn interaction executor with budget enforcement and safety wrappers."""
 
-    def __init__(self, circuit_breaker=None):
+    def __init__(self, circuit_breaker=None, budget_tracker=None, engagement_log=None, broadcast_fn=None):
         self._cb = circuit_breaker
+        self._budget_tracker = budget_tracker
+        self._engagement_log = engagement_log
+        self._broadcast_fn = broadcast_fn or (lambda event, payload: None)
 
     # ── Like ────────────────────────────────────────────────────────────────
 
@@ -442,15 +445,17 @@ class InteractionEngine:
         """Return False (and log) if the daily budget is exhausted."""
         if db is None:
             return True  # No DB → no budget enforcement (tests / manual runs)
+        if self._budget_tracker is None:
+            logger.warning("InteractionEngine: budget_tracker not injected — budget enforcement skipped")
+            return True
         try:
-            from backend.storage import budget_tracker
-            ok = budget_tracker.check(action_type, db)
+            ok = self._budget_tracker.check(action_type, db)
             if not ok:
                 logger.info(f"Budget exhausted for '{action_type}' — skipping")
             return ok
         except Exception as e:
-            logger.warning(f"Budget check error: {e} — allowing action")
-            return True
+            logger.warning(f"Budget check error: {e} — denying action")
+            return False  # Fail closed — DB error = deny action
 
     def _record(
         self,
@@ -484,32 +489,30 @@ class InteractionEngine:
 
         if db:
             # Engagement log
-            try:
-                from backend.storage import engagement_log
-                engagement_log.write_action(
-                    action_type=action_type,
-                    target_url=target_url,
-                    target_name=target_name,
-                    result=result,
-                    db=db,
-                    comment_text=comment_text,
-                    topic_tag=topic_tag,
-                )
-            except Exception as e:
-                logger.warning(f"Engagement log write error: {e}")
+            if self._engagement_log is not None:
+                try:
+                    self._engagement_log.write_action(
+                        action_type=action_type,
+                        target_url=target_url,
+                        target_name=target_name,
+                        result=result,
+                        db=db,
+                        comment_text=comment_text,
+                        topic_tag=topic_tag,
+                    )
+                except Exception as e:
+                    logger.warning(f"Engagement log write error: {e}")
 
             # Budget increment
-            if success:
+            if success and self._budget_tracker is not None:
                 try:
-                    from backend.storage import budget_tracker
-                    budget_tracker.increment(action_type, db)
+                    self._budget_tracker.increment(action_type, db)
                 except Exception as e:
                     logger.warning(f"Budget increment error: {e}")
 
         # WebSocket broadcast
         try:
-            from backend.api.websocket import schedule_broadcast
-            schedule_broadcast("activity", {
+            self._broadcast_fn("activity", {
                 "action": action_type,
                 "target": target_name,
                 "result": result,

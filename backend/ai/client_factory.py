@@ -30,8 +30,23 @@ class AIClientUnavailableError(Exception):
 
 # ── Key loading ───────────────────────────────────────────────────────────────
 
+def _decrypt_key(stored: str) -> str:
+    """
+    Decrypt a stored API key. Handles both encrypted (Fernet) and legacy plaintext values.
+    Plaintext keys (from before encryption was added) are returned as-is.
+    """
+    if not stored:
+        return stored
+    try:
+        from backend.utils.encryption import decrypt
+        return decrypt(stored)
+    except Exception:
+        # Stored value is plaintext (pre-encryption migration) — return as-is
+        return stored
+
+
 def _load_groq_key() -> Optional[str]:
-    """Load Groq API key from env or config/.secrets/groq.json."""
+    """Load Groq API key from env or config/.secrets/groq.json (decrypts if needed)."""
     key = os.environ.get("GROQ_API_KEY", "").strip()
     if key:
         return key
@@ -40,14 +55,15 @@ def _load_groq_key() -> Optional[str]:
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-            return data.get("api_key", "").strip() or None
+            raw = data.get("api_key", "").strip()
+            return _decrypt_key(raw) or None
         except Exception as e:
             logger.warning(f"client_factory: failed to read groq.json — {e}")
     return None
 
 
 def _load_openrouter_key() -> Optional[str]:
-    """Load OpenRouter API key from env or config/.secrets/openrouter.json."""
+    """Load OpenRouter API key from env or config/.secrets/openrouter.json (decrypts if needed)."""
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if key:
         return key
@@ -56,7 +72,8 @@ def _load_openrouter_key() -> Optional[str]:
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-            return data.get("api_key", "").strip() or None
+            raw = data.get("api_key", "").strip()
+            return _decrypt_key(raw) or None
         except Exception as e:
             logger.warning(f"client_factory: failed to read openrouter.json — {e}")
     return None

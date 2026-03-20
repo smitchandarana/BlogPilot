@@ -1,8 +1,6 @@
 import os
 from typing import Callable, Optional
 
-from backend.ai.client_factory import build_ai_client
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger
@@ -303,6 +301,7 @@ def _job_topic_research():
             return
 
         # Build background AI client for subtopic extraction and scoring
+        from backend.ai.client_factory import build_ai_client
         ai_client = build_ai_client("background")
         if ai_client is None:
             logger.info("Scheduler: topic_research — no AI client available, running with heuristic fallback")
@@ -392,6 +391,7 @@ def _job_content_extraction():
         from backend.ai.prompt_loader import PromptLoader
 
         # Build background AI client for extraction
+        from backend.ai.client_factory import build_ai_client
         ai_client = build_ai_client("background")
         if ai_client is None:
             logger.info("Scheduler: content_extraction skipped — no AI key configured")

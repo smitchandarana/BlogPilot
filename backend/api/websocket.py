@@ -70,11 +70,24 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket, token: Optional[str] = None):
+    """
+    WebSocket endpoint. Accepts an API token via query param:
+      ws://localhost:8000/ws?token=<api_token>
+    Closes with 1008 (policy violation) if the token is missing or invalid.
+    """
+    from backend.utils.auth import get_api_token
+    expected = get_api_token()
+    # token comes from query string: /ws?token=xxx
+    query_token = ws.query_params.get("token", "")
+    if not query_token or query_token != expected:
+        await ws.close(code=1008)
+        logger.warning("WebSocket: rejected unauthenticated connection")
+        return
+
     await manager.connect(ws)
     try:
         while True:
-            # Keep connection alive — client messages ignored for now
             await ws.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(ws)

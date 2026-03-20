@@ -107,6 +107,10 @@ async def _async_feed_scan():
     from backend.automation.feed_scanner import FeedScanner
     from backend.automation.interaction_engine import InteractionEngine
     from backend.storage.database import get_db
+    from backend.storage import post_state as _post_state_mod
+    from backend.storage import budget_tracker as _budget_tracker_mod
+    from backend.storage import engagement_log as _engagement_log_mod
+    from backend.api.websocket import schedule_broadcast
     from backend.core.engine import get_engine
 
     engine = get_engine()
@@ -143,8 +147,13 @@ async def _async_feed_scan():
                 return
 
         # Step 2: Scan feed
-        scanner = FeedScanner()
-        ie = InteractionEngine(circuit_breaker=cb)
+        scanner = FeedScanner(post_state=_post_state_mod)
+        ie = InteractionEngine(
+            circuit_breaker=cb,
+            budget_tracker=_budget_tracker_mod,
+            engagement_log=_engagement_log_mod,
+            broadcast_fn=schedule_broadcast,
+        )
 
         with get_db() as db:
             # Step 2a: Scan home feed (deduplication happens inside scan())
@@ -195,6 +204,9 @@ async def _async_process_single(post_data: dict):
     from backend.automation.browser import BrowserManager
     from backend.automation.interaction_engine import InteractionEngine
     from backend.storage.database import get_db
+    from backend.storage import budget_tracker as _budget_tracker_mod
+    from backend.storage import engagement_log as _engagement_log_mod
+    from backend.api.websocket import schedule_broadcast
     from backend.core.engine import get_engine
 
     engine = get_engine()
@@ -206,7 +218,12 @@ async def _async_process_single(post_data: dict):
     try:
         await browser.launch()
         page = await browser.get_page()
-        ie = InteractionEngine(circuit_breaker=cb)
+        ie = InteractionEngine(
+            circuit_breaker=cb,
+            budget_tracker=_budget_tracker_mod,
+            engagement_log=_engagement_log_mod,
+            broadcast_fn=schedule_broadcast,
+        )
         with get_db() as db:
             await _process_post(post_data, page, ie, db, engine, background_client, generation_client, prompt_loader)
     finally:
@@ -262,8 +279,8 @@ async def _async_approve_comment(post_id: str, comment_text: str):
             logger.warning("Pipeline: approve_comment — comment budget exhausted")
             post_state.update_state(url, "SKIPPED", db, skip_reason="budget exhausted at approval")
             try:
-                from backend.api.websocket import schedule_broadcast
-                schedule_broadcast("activity", {
+                from backend.api.websocket import schedule_broadcast as _sched_bc
+                _sched_bc("activity", {
                     "action": "COMMENT",
                     "target": author,
                     "result": "SKIPPED",
@@ -286,7 +303,14 @@ async def _async_approve_comment(post_id: str, comment_text: str):
                 logger.error("Pipeline: approve_comment — LinkedIn login failed")
                 return
 
-        ie = InteractionEngine(circuit_breaker=cb)
+        from backend.storage import engagement_log as _engagement_log_mod
+        from backend.api.websocket import schedule_broadcast as _sched_bc
+        ie = InteractionEngine(
+            circuit_breaker=cb,
+            budget_tracker=budget_tracker,
+            engagement_log=_engagement_log_mod,
+            broadcast_fn=_sched_bc,
+        )
 
         # ── Post the comment ───────────────────────────────────────────────
         with get_db() as db:
@@ -314,9 +338,8 @@ async def _async_approve_comment(post_id: str, comment_text: str):
 
                 # Broadcast budget state to Dashboard
                 try:
-                    from backend.api.websocket import schedule_broadcast
                     for row in budget_tracker.get_all(db):
-                        schedule_broadcast("budget_update", {
+                        _sched_bc("budget_update", {
                             "action_type": row.action_type,
                             "count": row.count_today,
                             "limit": row.limit_per_day,
@@ -326,8 +349,7 @@ async def _async_approve_comment(post_id: str, comment_text: str):
 
         # Broadcast activity event (always, success or fail)
         try:
-            from backend.api.websocket import schedule_broadcast
-            schedule_broadcast("activity", {
+            _sched_bc("activity", {
                 "action": "COMMENT",
                 "target": author,
                 "result": "SUCCESS" if ok else "FAILED",
@@ -550,13 +572,16 @@ async def _visit_profile(
     from backend.automation.profile_scraper import ProfileScraper
     from backend.automation.interaction_engine import InteractionEngine
     from backend.storage import budget_tracker as _bt
+    from backend.storage import leads_store as _leads_store_mod
+    from backend.storage import engagement_log as _engagement_log_mod
+    from backend.api.websocket import schedule_broadcast
 
     if not _bt.check("profile_visits", db):
         logger.info(f"Pipeline: profile_visits budget exhausted — skipping {profile_url}")
         return
 
     logger.info(f"Pipeline: visiting profile {profile_url}")
-    scraper = ProfileScraper()
+    scraper = ProfileScraper(leads_store=_leads_store_mod, broadcast_fn=schedule_broadcast)
     profile_data = await scraper.scrape(page, profile_url, db=db)
 
     # Email enrichment — page is already on the profile
@@ -579,7 +604,12 @@ async def _visit_profile(
     connect_threshold = float(cfg_get("feed_engagement.score_for_connection", 10))
     if score >= connect_threshold:
         cb = engine.circuit_breaker if engine else None
-        ie = InteractionEngine(circuit_breaker=cb)
+        ie = InteractionEngine(
+            circuit_breaker=cb,
+            budget_tracker=_bt,
+            engagement_log=_engagement_log_mod,
+            broadcast_fn=schedule_broadcast,
+        )
         await ie.connect_with(page, profile_url, db=db)
 
     try:
@@ -729,8 +759,10 @@ def _in_activity_window() -> bool:
 
         day_name = now.strftime("%A").lower()
         return day_name in [d.lower() for d in active_days] and start <= now.hour < end
-    except Exception:
-        return True  # Fail open — don't block engine on config error
+    except Exception as e:
+        # Fail closed — a broken config should not let the engine run 24/7
+        logger.warning(f"Activity window check failed, denying: {e}")
+        return False
 
 
 def _match_topic(post: dict) -> str:

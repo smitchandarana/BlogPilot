@@ -23,6 +23,9 @@ class FeedScanner:
     Scans the LinkedIn feed and returns new, unseen posts.
     """
 
+    def __init__(self, post_state=None):
+        self._post_state = post_state
+
     async def scan(self, page: Page, db=None) -> List[dict]:
         """
         Navigate to feed, scroll, extract posts, and deduplicate.
@@ -195,8 +198,10 @@ class FeedScanner:
 
     def _filter_seen(self, posts: List[dict], db) -> List[dict]:
         """Return only posts not already in the database."""
-        from backend.storage.post_state import is_seen
-        return [p for p in posts if not is_seen(p["url"], db)]
+        if self._post_state is None:
+            logger.warning("FeedScanner: no post_state injected — deduplication disabled, all posts will be processed")
+            return posts
+        return [p for p in posts if not self._post_state.is_seen(p["url"], db)]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

@@ -78,6 +78,8 @@ class OpenRouterClient:
                     timeout=60.0,
                 )
                 latency = time.monotonic() - t0
+                if not response.choices:
+                    raise OpenRouterError("Empty response: no choices returned")
                 text = response.choices[0].message.content or ""
                 logger.info(
                     f"OpenRouterClient: model={self.model} latency={latency:.2f}s "

@@ -289,3 +289,45 @@ async def learning_timing():
     from backend.learning.timing_analyzer import timing_analyzer
     with get_db() as db:
         return timing_analyzer.analyze(db)
+
+
+# ── Token Usage Estimates ─────────────────────────────────────────────────────
+
+_TOKENS_PER_COMMENT = 800
+_TOKENS_PER_SCORE = 400
+_DAILY_LIMIT = 100_000
+
+
+@router.get("/token-usage")
+async def token_usage():
+    """Return estimated Groq token usage for today based on actions logged."""
+    from backend.storage.models import ActionLog
+    with get_db() as db:
+        today = _today_start()
+        comment_count = (
+            db.query(func.count(ActionLog.id))
+            .filter(
+                ActionLog.created_at >= today,
+                ActionLog.action_type == "comments",
+            )
+            .scalar() or 0
+        )
+        score_count = (
+            db.query(func.count(ActionLog.id))
+            .filter(
+                ActionLog.created_at >= today,
+                ActionLog.action_type == "score",
+            )
+            .scalar() or 0
+        )
+
+    estimated_used = (comment_count * _TOKENS_PER_COMMENT) + (score_count * _TOKENS_PER_SCORE)
+    percent_used = round(estimated_used / _DAILY_LIMIT * 100, 1)
+    warning = percent_used > 70
+
+    return {
+        "estimated_used": estimated_used,
+        "daily_limit": _DAILY_LIMIT,
+        "percent_used": percent_used,
+        "warning": warning,
+    }
