@@ -46,3 +46,5 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+tests/live_screenshots/
+.claude/worktrees/

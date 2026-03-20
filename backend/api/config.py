@@ -10,7 +10,8 @@ router = APIRouter()
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
 _SECRETS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply"]
+_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply",
+                 "content_extractor", "structured_post", "topic_extractor", "topic_scorer"]
 
 
 # ── API Keys ─────────────────────────────────────────────────────
@@ -28,9 +29,14 @@ async def get_groq_key_status():
         groq_path = os.path.join(_SECRETS_DIR, "groq.json")
         if os.path.exists(groq_path):
             try:
+                from backend.utils.encryption import decrypt
                 with open(groq_path, "r") as f:
                     data = _json.load(f)
-                key = data.get("api_key", "")
+                raw = data.get("api_key", "")
+                try:
+                    key = decrypt(raw)
+                except Exception:
+                    key = raw  # plaintext fallback
                 source = "file"
             except Exception:
                 pass
@@ -40,9 +46,63 @@ async def get_groq_key_status():
     return {"configured": False, "source": None, "masked_key": None}
 
 
+@router.get("/api-keys/groq/test")
+async def test_groq_key():
+    """Test the stored Groq API key by making a minimal real API call."""
+    import httpx
+
+    # Resolve key: env var takes priority, then encrypted file
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        groq_path = os.path.join(_SECRETS_DIR, "groq.json")
+        if not os.path.isfile(groq_path):
+            return {"valid": False, "error": "No API key configured"}
+        try:
+            from backend.utils.encryption import decrypt
+            with open(groq_path, "r") as f:
+                data = _json.load(f)
+            raw = data.get("api_key", "")
+            if not raw:
+                return {"valid": False, "error": "No API key configured"}
+            try:
+                key = decrypt(raw)
+            except Exception:
+                key = raw  # plaintext fallback
+        except Exception:
+            return {"valid": False, "error": "No API key configured"}
+
+    if not key:
+        return {"valid": False, "error": "No API key configured"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 1,
+                },
+            )
+        if resp.status_code == 200:
+            return {"valid": True, "model": "llama-3.3-70b-versatile"}
+        if resp.status_code == 401:
+            return {"valid": False, "error": "Invalid API key"}
+        logger.warning(f"Groq key test returned unexpected status {resp.status_code}")
+        return {"valid": False, "error": f"Unexpected response: {resp.status_code}"}
+    except Exception as e:
+        logger.error(f"Groq key test failed with exception: {e}")
+        return {"valid": False, "error": f"Connection error: {e}"}
+
+
 @router.post("/api-keys/groq")
 async def save_groq_key(body: ApiKeyUpdate):
-    """Save Groq API key to config/.secrets/groq.json."""
+    """Save Groq API key encrypted to config/.secrets/groq.json."""
+    from backend.utils.encryption import encrypt
     key = body.api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="API key cannot be empty")
@@ -51,11 +111,11 @@ async def save_groq_key(body: ApiKeyUpdate):
     groq_path = os.path.join(_SECRETS_DIR, "groq.json")
     fd = os.open(groq_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, _json.dumps({"api_key": key}).encode("utf-8"))
+        os.write(fd, _json.dumps({"api_key": encrypt(key)}).encode("utf-8"))
     finally:
         os.close(fd)
 
-    logger.info("Groq API key saved to config/.secrets/groq.json")
+    logger.info("Groq API key saved (encrypted) to config/.secrets/groq.json")
     masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
     return {"configured": True, "masked_key": masked}
 
@@ -69,9 +129,14 @@ async def get_openrouter_key_status():
         or_path = os.path.join(_SECRETS_DIR, "openrouter.json")
         if os.path.exists(or_path):
             try:
+                from backend.utils.encryption import decrypt
                 with open(or_path, "r") as f:
                     data = _json.load(f)
-                key = data.get("api_key", "")
+                raw = data.get("api_key", "")
+                try:
+                    key = decrypt(raw)
+                except Exception:
+                    key = raw  # plaintext fallback
                 source = "file"
             except Exception:
                 pass
@@ -83,7 +148,8 @@ async def get_openrouter_key_status():
 
 @router.post("/api-keys/openrouter")
 async def save_openrouter_key(body: ApiKeyUpdate):
-    """Save OpenRouter API key to config/.secrets/openrouter.json."""
+    """Save OpenRouter API key encrypted to config/.secrets/openrouter.json."""
+    from backend.utils.encryption import encrypt
     key = body.api_key.strip()
     if not key:
         raise HTTPException(status_code=400, detail="API key cannot be empty")
@@ -92,13 +158,99 @@ async def save_openrouter_key(body: ApiKeyUpdate):
     or_path = os.path.join(_SECRETS_DIR, "openrouter.json")
     fd = os.open(or_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, _json.dumps({"api_key": key}).encode("utf-8"))
+        os.write(fd, _json.dumps({"api_key": encrypt(key)}).encode("utf-8"))
     finally:
         os.close(fd)
 
-    logger.info("OpenRouter API key saved to config/.secrets/openrouter.json")
+    logger.info("OpenRouter API key saved (encrypted) to config/.secrets/openrouter.json")
     masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
     return {"configured": True, "masked_key": masked}
+
+
+# ── LinkedIn Credentials ──────────────────────────────────────────
+
+class LinkedInCredentials(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/credentials/linkedin")
+async def save_linkedin_credentials(body: LinkedInCredentials):
+    """Save LinkedIn credentials encrypted to config/.secrets/linkedin.json."""
+    from backend.utils.encryption import encrypt
+
+    email = body.email.strip()
+    password = body.password.strip()
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    os.makedirs(_SECRETS_DIR, exist_ok=True)
+    linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
+    payload = _json.dumps({"email": encrypt(email), "password": encrypt(password)})
+    fd = os.open(linkedin_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, payload.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+    logger.info("LinkedIn credentials saved (encrypted)")
+    return {"saved": True, "email_hint": email[:3] + "***" + email[email.find("@"):] if "@" in email else "***"}
+
+
+@router.get("/credentials/linkedin")
+async def get_linkedin_credentials_status():
+    """Check if LinkedIn credentials are configured (returns status only, never decrypts)."""
+    linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
+    if not os.path.isfile(linkedin_path):
+        return {"configured": False}
+    try:
+        with open(linkedin_path, "r") as f:
+            data = _json.load(f)
+        # If email key exists and looks like a Fernet token (long encrypted string), it's configured
+        has_email = bool(data.get("email", ""))
+        has_password = bool(data.get("password", ""))
+        return {"configured": has_email and has_password}
+    except Exception:
+        return {"configured": False}
+
+
+class LinkedInTestRequest(BaseModel):
+    email: str = ""
+    password: str = ""
+
+
+@router.post("/credentials/linkedin/test")
+async def test_linkedin_credentials(body: LinkedInTestRequest = None):
+    """Test LinkedIn credentials stub. Saves if provided, validates on engine start."""
+    from backend.utils.encryption import encrypt
+
+    # If credentials provided in body, save them
+    if body and body.email and body.password:
+        email = body.email.strip()
+        password = body.password.strip()
+        os.makedirs(_SECRETS_DIR, exist_ok=True)
+        linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
+        payload = _json.dumps({"email": encrypt(email), "password": encrypt(password)})
+        fd = os.open(linkedin_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, payload.encode("utf-8"))
+        finally:
+            os.close(fd)
+        logger.info("LinkedIn credentials saved via test endpoint (encrypted)")
+        return {"success": True, "message": "Credentials saved. They will be validated when the engine starts."}
+
+    # No body provided — check if stored credentials exist
+    linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
+    if not os.path.isfile(linkedin_path):
+        return {"success": False, "error": "No credentials provided"}
+    try:
+        with open(linkedin_path, "r") as f:
+            data = _json.load(f)
+        if data.get("email") and data.get("password"):
+            return {"success": True, "message": "Credentials saved. They will be validated when the engine starts."}
+        return {"success": False, "error": "No credentials provided"}
+    except Exception:
+        return {"success": False, "error": "No credentials provided"}
 
 
 # ── Topics ────────────────────────────────────────────────────────
@@ -192,6 +344,44 @@ async def update_topics(topics: list[str]):
     return topics
 
 
+# ── Setup Status ──────────────────────────────────────────────────
+
+@router.get("/setup/status")
+async def get_setup_status():
+    """
+    Returns whether the initial setup is complete.
+    Used by the frontend to skip the First-Run Wizard on second launch
+    even if localStorage has been cleared (e.g. new machine / EXE reinstall).
+    """
+    # Groq key configured?
+    groq_configured = bool(os.environ.get("GROQ_API_KEY", ""))
+    if not groq_configured:
+        groq_path = os.path.join(_SECRETS_DIR, "groq.json")
+        groq_configured = os.path.isfile(groq_path)
+
+    # LinkedIn credentials saved?
+    linkedin_configured = False
+    linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
+    linkedin_configured = os.path.isfile(linkedin_path)
+
+    # Topics configured (non-empty in settings.yaml)?
+    topics_configured = False
+    try:
+        from backend.utils.config_loader import get as cfg_get
+        topics = cfg_get("topics", [])
+        topics_configured = isinstance(topics, list) and len(topics) > 0
+    except Exception:
+        pass
+
+    complete = groq_configured  # Groq key is the minimum requirement
+    return {
+        "complete": complete,
+        "groq_configured": groq_configured,
+        "linkedin_configured": linkedin_configured,
+        "topics_configured": topics_configured,
+    }
+
+
 # ── Settings ──────────────────────────────────────────────────────
 
 @router.get("/settings")
@@ -203,9 +393,28 @@ async def get_settings():
         return {}
 
 
+_SETTINGS_ALLOWLIST = {
+    "schedule", "daily_budget", "rate_limits", "delays", "modules",
+    "feed_engagement", "viral_detection", "workers", "circuit_breaker",
+    "quality", "ai", "openrouter", "email_enrichment", "browser", "storage",
+    "analytics", "content_studio", "research", "topic_rotation", "learning",
+    "topics", "hashtags", "keyword_blacklist", "target_industries",
+    "influencer_watchlist", "competitor_watchlist", "content_intelligence",
+}
+
+_SETTINGS_DENYLIST = {"engine"}  # engine.enabled etc. are internal-only
+
+
 @router.put("/settings")
 async def update_settings(settings: dict):
     from backend.utils.config_loader import save_config
+    rejected = [k for k in settings if k not in _SETTINGS_ALLOWLIST or k in _SETTINGS_DENYLIST]
+    if rejected:
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(
+            status_code=422,
+            detail=f"Rejected settings keys (not configurable via API): {rejected}",
+        )
     updated = save_config(settings)
     return updated
 
@@ -285,19 +494,9 @@ async def test_prompt(body: PromptTestRequest):
         from backend.ai.prompt_loader import PromptLoader
         from backend.utils.config_loader import get as cfg_get
 
-        # Resolve API key: env var → config/.secrets/groq.json
-        api_key = os.environ.get("GROQ_API_KEY", "")
-        if not api_key:
-            groq_secrets = os.path.join(
-                os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json"
-            )
-            if os.path.exists(groq_secrets):
-                try:
-                    with open(groq_secrets, "r") as f:
-                        data = _json.load(f)
-                    api_key = data.get("api_key", "")
-                except Exception as read_err:
-                    logger.warning(f"Could not read groq.json: {read_err}")
+        # Resolve API key via client_factory (handles decryption + env fallback)
+        from backend.ai.client_factory import _load_groq_key
+        api_key = _load_groq_key() or ""
 
         if not api_key:
             return {"output": "[Error: GROQ_API_KEY not configured. Set env var or add config/.secrets/groq.json]"}
