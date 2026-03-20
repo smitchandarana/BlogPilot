@@ -5,6 +5,57 @@ const http = axios.create({
   timeout: 30000,
 })
 
+// Attach API token to every request from localStorage
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('api_token')
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`
+  }
+  return config
+})
+
+// Bootstrap: fetch token from server on first load if not stored
+async function _bootstrapToken() {
+  if (localStorage.getItem('api_token')) return
+  try {
+    const res = await axios.get('http://localhost:8000/auth/token')
+    if (res.data?.token) {
+      localStorage.setItem('api_token', res.data.token)
+    }
+  } catch { /* server may not be up yet */ }
+}
+
+// Track in-flight bootstrap to avoid parallel fetches
+let _bootstrapPromise = null
+function _ensureToken() {
+  if (localStorage.getItem('api_token')) return Promise.resolve()
+  if (!_bootstrapPromise) {
+    _bootstrapPromise = _bootstrapToken().finally(() => { _bootstrapPromise = null })
+  }
+  return _bootstrapPromise
+}
+
+_ensureToken()
+
+// On 401: re-fetch token once and retry the original request
+http.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    const original = err.config
+    if (err.response?.status === 401 && !original._retried) {
+      original._retried = true
+      localStorage.removeItem('api_token')
+      await _bootstrapToken()
+      const token = localStorage.getItem('api_token')
+      if (token) {
+        original.headers['Authorization'] = `Bearer ${token}`
+        return http(original)
+      }
+    }
+    return Promise.reject(err)
+  }
+)
+
 export const engine = {
   start: () => http.post('/engine/start'),
   stop: () => http.post('/engine/stop'),
@@ -16,6 +67,7 @@ export const engine = {
   pendingPreviews: () => http.get('/engine/pending-previews'),
   approveComment: (post_id, comment_text) => http.post('/engine/approve-comment', { post_id, comment_text }),
   rejectComment: (post_id) => http.post('/engine/reject-comment', { post_id }),
+  runCommentMonitor: () => http.post('/engine/run-comment-monitor'),
 }
 
 export const config = {
@@ -35,10 +87,13 @@ export const config = {
   resetPrompt: (name) => http.get(`/prompts/${name}/default`),
   testPrompt: (prompt_name, variables) =>
     http.post('/prompts/test', { prompt_name, variables }, { timeout: 120000 }),
+  setupStatus: () => http.get('/setup/status'),
   getGroqKeyStatus: () => http.get('/api-keys/groq'),
   saveGroqKey: (api_key) => http.post('/api-keys/groq', { api_key }),
   getOpenRouterKeyStatus: () => http.get('/api-keys/openrouter'),
   saveOpenRouterKey: (api_key) => http.post('/api-keys/openrouter', { api_key }),
+  getLinkedInStatus: () => http.get('/credentials/linkedin'),
+  saveLinkedInCredentials: (email, password) => http.post('/credentials/linkedin', { email, password }),
 }
 
 export const analytics = {
@@ -111,6 +166,7 @@ export const server = {
   restart: () => http.post('/server/restart'),
   shutdown: () => http.post('/server/shutdown'),
   info: () => http.get('/server/info'),
+  clearData: () => http.post('/server/clear-data'),
 }
 
 export default http

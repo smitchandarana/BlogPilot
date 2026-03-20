@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu } from 'lucide-react'
+import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu, PlayCircle, Loader2, CheckCircle2, XCircle, RotateCcw, Search, Lightbulb, GitBranch, MessageCircle } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useEngine } from '../hooks/useEngine'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
 import ActivityFeed from '../components/ActivityFeed'
 import PreviewQueue from '../components/PreviewQueue'
-import { analytics, engine as engineApi, intelligence as intelligenceApi } from '../api/client'
+import FirstRunWizard from '../components/FirstRunWizard'
+import { analytics, engine as engineApi, intelligence as intelligenceApi, research as researchApi, config as configApi } from '../api/client'
 
 const STAT_DEFS = [
   { key: 'posts_scanned', label: 'Posts Scanned', icon: ScanLine, color: 'text-violet-400' },
@@ -30,6 +31,24 @@ export default function Dashboard() {
   const { state } = useEngine()
   const { subscribe } = useWebSocket()
 
+  // First-run wizard: skip if localStorage marks it done OR if backend already has keys saved.
+  // The backend check handles second launches on new machines / after EXE reinstall.
+  const [wizardDone, setWizardDone] = useState(
+    () => localStorage.getItem('firstRunComplete') === 'true'
+  )
+
+  useEffect(() => {
+    if (wizardDone) return
+    configApi.setupStatus()
+      .then((res) => {
+        if (res.data?.complete) {
+          localStorage.setItem('firstRunComplete', 'true')
+          setWizardDone(true)
+        }
+      })
+      .catch(() => {}) // server may not be up yet — wizard stays visible
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [stats, setStats] = useState({
     posts_scanned: 0,
     liked: 0,
@@ -42,6 +61,67 @@ export default function Dashboard() {
   const [budgets, setBudgets] = useState([])
   const [alert, setAlert] = useState(null)
   const [intelligenceStatus, setIntelligenceStatus] = useState(null)
+  const [taskStatus, setTaskStatus] = useState({}) // { [taskId]: 'idle'|'running'|'done'|'error' }
+  const [taskResult, setTaskResult] = useState({}) // { [taskId]: string }
+
+  const BG_TASKS = [
+    {
+      id: 'feed_scan',
+      label: 'Feed Scan',
+      description: 'Scan LinkedIn feed for new posts',
+      icon: Search,
+      run: () => engineApi.scanNow(),
+      requiresRunning: true,
+    },
+    {
+      id: 'topic_research',
+      label: 'Topic Research',
+      description: 'Fetch Reddit, RSS & HN snippets',
+      icon: ScanLine,
+      run: () => researchApi.trigger(),
+    },
+    {
+      id: 'content_extraction',
+      label: 'Content Extraction',
+      description: 'Extract insights via OpenRouter AI',
+      icon: Lightbulb,
+      run: async () => {
+        const res = await intelligenceApi.extract()
+        return `${res.data.insights_created} insights created`
+      },
+    },
+    {
+      id: 'topic_rotation',
+      label: 'Topic Rotation',
+      description: 'Rotate low-performing topics',
+      icon: GitBranch,
+      run: () => configApi.runIteration(),
+    },
+    {
+      id: 'comment_monitor',
+      label: 'Comment Monitor',
+      description: 'Check comments for replies',
+      icon: MessageCircle,
+      run: () => engineApi.runCommentMonitor(),
+    },
+  ]
+
+  const runTask = async (task) => {
+    if (taskStatus[task.id] === 'running') return
+    setTaskStatus((p) => ({ ...p, [task.id]: 'running' }))
+    setTaskResult((p) => ({ ...p, [task.id]: '' }))
+    try {
+      const msg = await task.run()
+      setTaskStatus((p) => ({ ...p, [task.id]: 'done' }))
+      setTaskResult((p) => ({ ...p, [task.id]: typeof msg === 'string' ? msg : 'Done' }))
+      setTimeout(() => setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })), 4000)
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e?.message || 'Failed'
+      setTaskStatus((p) => ({ ...p, [task.id]: 'error' }))
+      setTaskResult((p) => ({ ...p, [task.id]: detail }))
+      setTimeout(() => setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })), 6000)
+    }
+  }
 
   // Fetch daily stats + budget on mount, refresh every 30s
   useEffect(() => {
@@ -115,6 +195,15 @@ export default function Dashboard() {
   }
 
   return (
+    <>
+    {!wizardDone && (
+      <FirstRunWizard
+        onComplete={() => {
+          localStorage.setItem('firstRunComplete', 'true')
+          setWizardDone(true)
+        }}
+      />
+    )}
     <div className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-100">Dashboard</h1>
@@ -215,6 +304,61 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Background Tasks */}
+      <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">
+          Background Tasks
+        </h2>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {BG_TASKS.map((task) => {
+            const status = taskStatus[task.id] || 'idle'
+            const result = taskResult[task.id] || ''
+            const Icon = task.icon
+            const disabled = status === 'running' || (task.requiresRunning && state.status !== 'RUNNING')
+            return (
+              <button
+                key={task.id}
+                onClick={() => runTask(task)}
+                disabled={disabled}
+                className={`group relative flex flex-col gap-2 rounded-lg border px-4 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400
+                  ${status === 'done' ? 'border-emerald-500/40 bg-emerald-500/5' :
+                    status === 'error' ? 'border-red-500/40 bg-red-500/5' :
+                    status === 'running' ? 'border-violet-500/40 bg-violet-500/5' :
+                    'border-slate-700/60 bg-slate-800/20 hover:border-slate-600 hover:bg-slate-800/60'}
+                  disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Icon className={`h-4 w-4 shrink-0
+                    ${status === 'done' ? 'text-emerald-400' :
+                      status === 'error' ? 'text-red-400' :
+                      status === 'running' ? 'text-violet-400' :
+                      'text-slate-400 group-hover:text-slate-300'}`}
+                  />
+                  {status === 'running' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" />
+                  ) : status === 'done' ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : status === 'error' ? (
+                    <XCircle className="h-3.5 w-3.5 text-red-400" />
+                  ) : (
+                    <PlayCircle className="h-3.5 w-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-200">{task.label}</p>
+                  <p className="mt-0.5 text-[10px] leading-tight text-slate-500">
+                    {result && status !== 'idle' ? result : task.description}
+                  </p>
+                </div>
+                {task.requiresRunning && state.status !== 'RUNNING' && (
+                  <span className="absolute right-2 top-2 rounded px-1 py-0.5 text-[9px] font-medium bg-slate-700/60 text-slate-500">needs engine</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">
           Daily Budget
@@ -233,5 +377,6 @@ export default function Dashboard() {
         <ActivityFeed />
       </div>
     </div>
+    </>
   )
 }
