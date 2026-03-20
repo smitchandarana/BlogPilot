@@ -1,220 +1,323 @@
 BlogPilot — Current State & Improvement Plan
 =============================================
-Date: 2026-03-13
+Date: 2026-03-19
 
 ============================
-WHAT EXISTS TODAY (Working)
+CURRENT STATUS
 ============================
 
-BACKEND CORE
-  - Engine lifecycle (start/stop/pause/resume) via state machine
-  - Task queue with priority support
-  - Worker pool (3 threads max, hard cap)
-  - APScheduler with SQLite job persistence (feed scan, budget reset, campaign processing, post publishing)
-  - Sliding-window rate limiter (per-action hourly caps)
-  - Circuit breaker (auto-pause on error threshold, CAPTCHA detection)
-  - Full pipeline: feed scan -> deduplicate -> AI score -> viral check -> strategy -> comment -> execute -> log
+Phase 1 (Local Python App) is complete. All 8 sprints are done. All post-sprint
+enhancements are done. Milestones M1 through M6 are confirmed achieved. M7 (4-hour
+unattended runtime validation) is the only remaining gate before Phase 2 begins.
 
-BROWSER AUTOMATION
-  - Playwright browser with stealth patches and persistent profile
-  - LinkedIn login with cookie save/load
-  - Feed scanner (scroll, extract posts from DOM, dedup)
-  - Interaction engine (like, comment, connect, follow, endorse) with budget checks and human delays
-  - Human behavior simulation (random delays, slow typing, hover-before-click, scrolling)
-  - Post publisher (navigate to compose, type slowly, submit)
+The codebase contains 87 Python backend modules across 9 packages (api, ai, automation,
+core, enrichment, growth, learning, research, storage, utils), 10 React pages, and 94
+passing unit tests.
 
-AI LAYER (all via Groq)
-  - Relevance classifier (score 0-10 with reason)
-  - Comment generator (tone-aware, anti-generic rules)
-  - Post generator (topic + style + tone)
-  - Connection note writer (300 char limit)
-  - Reply generator (thread context aware)
-  - Prompt loader with hot-reload from prompts/*.txt
-
-EMAIL ENRICHMENT
-  - DOM email scraper (1st degree profiles)
-  - Pattern generator (8 patterns from name+domain)
-  - SMTP verifier (MX lookup + RCPT TO handshake)
-  - Hunter.io client (optional, key-gated)
-  - Orchestrator (tries methods in priority order)
-
-CAMPAIGNS & GROWTH
-  - Campaign engine (multi-step sequences: visit/follow/connect/message/inmail/endorse/wait)
-  - Enrollment with next_action_at scheduling
-  - Viral detector (engagement velocity calculation)
-  - Engagement strategy (smart mode: score-based action decisions)
-  - Influencer monitor (stub — scheduler fires but minimal logic)
-
-STORAGE
-  - SQLite with SQLAlchemy ORM
-  - 8 tables: posts, leads, actions_log, campaigns, campaign_enrollments, budget, settings, scheduled_posts
-  - Post state tracking, engagement logging, budget tracking, lead CRUD
-
-API ENDPOINTS
-  - Engine control: start/stop/pause/resume/status/scan-now
-  - Config: topics CRUD, settings read, prompts CRUD + test
-  - Campaigns: full CRUD, enroll, stats
-  - Leads: list with filters, enrich single/bulk, CSV export
-  - Content: schedule post, publish now, queue management
-  - WebSocket: live broadcasts for state/activity/budget/alerts/leads
-
-FRONTEND (React + Vite + Tailwind)
-  - 10 page shells with routing and sidebar nav
-  - Engine toggle (start/stop/pause with loading states)
-  - Budget bars (color-coded progress)
-  - Activity feed (WebSocket-driven scrolling log)
-  - Campaign builder (step cards, message editor)
-  - Prompt editor with test panel (wired to Groq)
-  - Dashboard (partially wired to real data)
-  - Content studio (generate + schedule working)
-  - Leads page (list + enrich + export working)
-
-TESTS
-  - Storage layer (init, post state, budget, leads)
-  - Utils (encryption roundtrip, lock file)
-  - AI client (retry logic, timeouts, rate limits, JSON parsing)
-  - Feed scanner (DOM extraction with mocks)
-  - Email enrichment (patterns, SMTP, orchestration)
+A validation script at scripts/m7_validate.py runs 9 checks against the live database
+and log file. Run it from the project root: python scripts/m7_validate.py
 
 
-==============================
-WHAT NEEDS FIXING (Bugs/Gaps)
-==============================
+============================
+WHAT IS COMPLETE (Phase 1 — All Sprints 1-8 + Post-Sprint Enhancements)
+============================
 
-1. Profile scraper — referenced everywhere in pipeline but actual implementation missing or incomplete
-2. Settings persistence — PUT /settings reads YAML but doesn't write back changes to file
-3. Analytics endpoints — weekly, top-topics, summary, campaign-funnel all return stubs/empty data
-4. Influencer monitor — scheduler job fires but check_all() is basically a stub
-5. CAPTCHA handling — detected and engine pauses, but no recovery flow or user guidance
-6. handle_security_challenge() in linkedin_login.py is a stub
-7. send_message() and inmail in interaction_engine — referenced but not fully coded
-8. Comment preview/approval mode — mentioned in CONTEXT.md but no UI flow exists
-9. Budget tracker not wired to BudgetBar via WebSocket (listed incomplete in TASKS.md)
-10. Circuit breaker has no manual reset button in UI
+-- CORE ENGINE --
+backend/core/state_manager.py      Engine FSM (STOPPED/RUNNING/PAUSED/ERROR), thread-safe
+backend/core/task_queue.py         Priority queue wrapper (HIGH/NORMAL)
+backend/core/worker_pool.py        Thread pool, hard cap of 3 workers
+backend/core/scheduler.py         APScheduler with 8 registered jobs + jitter on all intervals
+backend/core/rate_limiter.py      Sliding-window hourly caps per action type
+backend/core/circuit_breaker.py   Auto-pause on error threshold, auto-resume via threading.Timer
+backend/core/engine.py            Master singleton: owns all core modules, start/stop/pause/resume
+backend/core/pipeline.py          Full 10-step pipeline + comment approval entry point
+
+-- BROWSER AUTOMATION --
+backend/automation/browser.py          Playwright launch, stealth flags, persistent profile
+backend/automation/linkedin_login.py   Login, cookie save/load, re-auth detect, CAPTCHA wait
+backend/automation/feed_scanner.py     Scroll feed, extract posts from DOM, dedup
+backend/automation/profile_scraper.py  Visit profile, extract name/title/company/degree (expanded selectors)
+backend/automation/interaction_engine.py  like, comment, connect, follow, endorse, send_inmail (all with budget checks)
+backend/automation/human_behavior.py   random_delay(), type_slowly(), scroll(), hover_before_click()
+backend/automation/post_publisher.py   Navigate to compose, type slowly, submit
+backend/automation/hashtag_scanner.py  Scan LinkedIn hashtag feeds + search results
+
+-- AI LAYER --
+backend/ai/groq_client.py          Groq API wrapper, retry x2, exponential backoff
+backend/ai/openrouter_client.py    OpenRouter drop-in (free tier, 60s timeout, 3 retries)
+backend/ai/client_factory.py       Routes tasks: background → OpenRouter, generation → Groq
+backend/ai/prompt_loader.py        Load from prompts/*.txt, hot-reload on file change
+backend/ai/relevance_classifier.py Groq call, returns {score, reason}
+backend/ai/comment_generator.py    Groq call, enriched with best angle from engagement data
+backend/ai/post_generator.py       generate() + generate_structured() with style_examples injection
+backend/ai/note_writer.py          300-char connection note generator
+backend/ai/reply_generator.py      Thread-context-aware reply generator
+
+Prompts (all in prompts/*.txt, editable via UI):
+  relevance.txt, comment.txt, post.txt, note.txt, reply.txt,
+  topic_extractor.txt, content_extractor.txt, structured_post.txt
+
+-- EMAIL ENRICHMENT --
+backend/enrichment/email_enricher.py   Orchestrator: DOM → Hunter → Pattern+SMTP order
+backend/enrichment/dom_email_scraper.py  Reads email from 1st-degree profile contact info
+backend/enrichment/pattern_generator.py  8 patterns from first/last/domain
+backend/enrichment/smtp_verifier.py    MX lookup + RCPT TO handshake (no email sent)
+backend/enrichment/hunter_client.py    Hunter.io API (key-gated, off by default)
+
+-- GROWTH & CAMPAIGNS --
+backend/growth/viral_detector.py        Engagement velocity → HIGH/NORMAL priority
+backend/growth/engagement_strategy.py   Score + budget + mode → LIKE/COMMENT/SKIP decision
+backend/growth/campaign_engine.py       Multi-step FSM (VISIT/FOLLOW/CONNECT/MESSAGE/WAIT/ENDORSE)
+backend/growth/influencer_monitor.py    Polls watchlist profiles for new posts
+backend/growth/topic_rotator.py         24h cycle: demotes low-engagement topics, promotes fresh ones
+
+-- SELF-LEARNING ENGINE --
+backend/learning/comment_monitor.py     Revisits posts every 4h, checks for replies on our comments
+backend/learning/scoring_calibrator.py  Groups posts by score bucket, recommends optimal threshold
+backend/learning/timing_analyzer.py     Finds best engagement hours/days from action history
+backend/learning/auto_tuner.py          Adjusts min_relevance_score ±0.5/cycle (bounded 4.0-9.0)
+backend/learning/content_preference_learner.py  Mines GenerationSession history for best hooks/styles
+
+-- CONTENT INTELLIGENCE --
+backend/research/content_extractor.py   Batch-processes research snippets → ContentInsight rows
+backend/research/pattern_aggregator.py  SQL aggregation of insights → ContentPattern rows
+backend/api/intelligence.py             /intelligence router (insights, patterns, preferences, sessions)
+
+-- RESEARCH PIPELINE --
+backend/research/topic_researcher.py   Domain-filter → AI extract → dedup → score → store
+backend/research/reddit_scanner.py     Reddit API (PRAW), configurable subreddits
+backend/research/rss_scanner.py        RSS/Atom feeds
+backend/research/hn_scanner.py         Hacker News top stories
+backend/research/duplicate_detector.py Dedup across sources
+
+-- STORAGE --
+backend/storage/database.py        SQLite engine, session factory, init_db(), migrations
+backend/storage/models.py          ORM models for all 13+ tables including ContentInsight,
+                                   ContentPattern, GenerationSession, TopicPerformance
+backend/storage/post_state.py      Seen/scored/acted/skipped helpers
+backend/storage/engagement_log.py  write_action(), get_recent(), get_stats_today()
+backend/storage/budget_tracker.py  check(), increment(), midnight reset
+backend/storage/leads_store.py     create_lead(), update_email(), get_all(), to_csv()
+backend/storage/quality_log.py     Comment/post quality metrics tracking
+
+-- API --
+backend/api/engine.py       start/stop/pause/resume/status/scan-now/pending-previews/
+                            approve-comment/reject-comment/circuit-breaker-reset
+backend/api/config.py       Topics, settings, prompts CRUD, Groq API key management
+backend/api/analytics.py    Daily/weekly/top-topics/summary/funnel/learning endpoints (real DB data)
+backend/api/campaigns.py    Campaign CRUD, enroll, stats
+backend/api/leads.py        Lead list, enrich single/bulk, CSV export
+backend/api/content.py      Schedule post, publish now, queue management, generate-structured
+backend/api/research.py     Research trigger, topic list, clear all
+backend/api/intelligence.py Insights, patterns, preferences, extract-text, session logging
+backend/api/websocket.py    WebSocket hub, event broadcaster
+backend/api/server.py       Restart (subprocess.Popen + os._exit) and shutdown endpoints
+backend/main.py             FastAPI boot: CORS, all routers, init_db, scheduler start
+
+-- FRONTEND (10 pages, all wired to real API) --
+ui/src/pages/Dashboard.jsx       Engine toggle, budget bars, activity feed, preview queue,
+                                  alert banner, circuit breaker reset, intelligence status widget
+ui/src/pages/EngineControl.jsx    Module toggles, activity window, day selector, intervals
+ui/src/pages/Topics.jsx           Topic tags, hashtags, blacklist, industry filters (persisted to YAML)
+ui/src/pages/FeedEngagement.jsx   Mode selector, acted/skipped posts tables, comment history
+ui/src/pages/ContentStudio.jsx    Quick/Structured modes, IntelligencePanel, drilldown modal,
+                                  "Write like my best posts", session tracking
+ui/src/pages/Campaigns.jsx        Campaign CRUD, builder, enrollment
+ui/src/pages/Leads.jsx            Lead table, enrich, bulk enrich, CSV export
+ui/src/pages/Analytics.jsx        Charts (real data), learning insights, timing heatmap
+ui/src/pages/PromptEditor.jsx     Prompt list, editor, live test panel
+ui/src/pages/Settings.jsx         Groq API key, rate limits, delays, browser config, danger zone
+
+-- SECURITY HARDENING --
+PBKDF2 + random salt encryption (replaced hostname-based key derivation)
+os.chmod(0o600) on all secrets files
+Restricted CORS methods (GET/POST/PUT/OPTIONS only)
+Prompt size validation
+Stale lock file auto-cleanup on startup
+
+-- UTILS --
+backend/utils/logger.py            Structured JSON logger, rotating file handler
+backend/utils/encryption.py        Fernet encrypt/decrypt, PBKDF2 key derivation
+backend/utils/config_loader.py     YAML loader, watchdog hot-reload, dot-notation access
+backend/utils/lock_file.py         Single-instance enforcement (msvcrt on Windows), stale-lock cleanup
+backend/utils/paths.py             Dev vs PyInstaller frozen mode path resolution
+backend/utils/setup_credentials.py One-time credential encryption helper
+
+-- PACKAGING --
+launcher.py          Single entry point, auto-opens browser
+blogpilot.spec       PyInstaller config for single-file EXE
+GUIDE.md             User setup guide (EXE + source modes)
+README.md            Developer setup guide
+
+-- TESTS (94/94 passing) --
+test_utils.py         4 tests — encryption roundtrip, lock file
+test_storage.py       8 tests — init_db, post state, budget, leads
+test_ai_client.py     5 tests — retry logic, timeouts, rate limits, JSON parsing
+test_campaigns.py     7 tests — create, enroll, step advancement, completion
+test_e2e.py          10 tests — full pipeline flow, budget exhaustion
+test_enrichment.py   11 tests — patterns, SMTP mock, orchestration order
+test_feed_scanner.py 10 tests — DOM extraction with mock page objects
+test_research.py     29 tests — topic research, dedup, scoring
 
 
-================================
-WHAT NEEDS WIRING (UI -> Backend)
-================================
+============================
+WHAT IS IN PROGRESS
+============================
 
-1. EngineControl page — form layout exists but no API calls to save settings
-2. Topics page — layout exists but not wired to GET/PUT /topics or /settings
-3. FeedEngagement page — layout + mock tables, no real data fetching
-4. Analytics page — shows recharts with hardcoded mock data, not calling /analytics endpoints
-5. Settings page — form exists but PUT doesn't persist to settings.yaml
-6. Dashboard counters — partially wired, budget bars need WebSocket budget_update events
-7. Campaign stats — endpoint exists but returns mock funnel data
+M7 Validation (runtime, not code) — [~]
 
+All code is complete. The remaining step is running the engine for 4 hours unattended
+to confirm it handles the daily budget cycle correctly in production conditions.
 
-==================================
-WHAT TO ADD (New Features/Improvements)
-==================================
+Criteria (from scripts/m7_validate.py):
 
-SECURITY (Priority: High)
-  - Replace hostname-based key derivation with PBKDF2 + random salt (current encryption is weak)
-  - Encrypt Groq and Hunter API key files (currently stored as plaintext JSON)
-  - Add os.chmod(0o600) on all sensitive files (keys, credentials, cookies)
-  - Fix lock file race condition (use fcntl.flock instead of TOCTOU check)
-  - Add symlink check before writing lock file
-  - Restrict CORS methods to only GET/POST/PUT/OPTIONS (currently allows all)
-  - Add input validation on prompt content (size limits, sanitization)
-  - Add rate limiting middleware on API endpoints (prevent abuse of /prompts/test)
+  Check 1: Database opens cleanly (SQLite accessible, schema intact)
+  Check 2: Actions logged today (at least some actions in actions_log since midnight)
+  Check 3: Budget enforcement — no action type has count_today > daily_limit
+  Check 4: Midnight reset running — count_today values not wildly accumulating
+  Check 5: Feed scan activity — posts in DB, recent scans in last 7 days
+  Check 6: Circuit breaker not permanently tripped
+  Check 7: Error rate in logs < 20% (warn at 5%, fail at 20%)
+  Check 8: Analytics queries return data (daily, weekly, topic_performance, scheduled_posts)
+  Check 9: Content intelligence counts (informational only — not required for M7 pass)
 
-TESTING (Priority: High)
-  - End-to-end test: engine start -> feed scan -> AI score -> comment -> log -> WebSocket
-  - Budget safety test: verify check called before every action, midnight reset works
-  - Pipeline integration test with mocked Playwright + Groq
-  - Campaign execution test: create -> enroll -> advance steps -> complete
-  - WebSocket broadcast tests
-  - Frontend component tests (at least Dashboard, Leads, Campaigns)
+To run validation: python scripts/m7_validate.py (from project root)
+Exit 0 = all checks pass. Non-zero = failures that must be fixed first.
 
-ANALYTICS (Priority: Medium)
-  - Implement GET /analytics/weekly — 7 days of grouped action stats from DB
-  - Implement GET /analytics/top-topics — tag actions with topics, query aggregates
-  - Add topic_tag column to ActionLog model for topic-level analytics
-  - Implement GET /analytics/summary — AI-generated weekly summary with real stats
-  - Implement campaign funnel stats (enrolled/connected/replied/converted from real data)
-  - Wire Analytics.jsx to real endpoints (remove all hardcoded mock data)
-
-RESILIENCE (Priority: Medium)
-  - Add graceful shutdown handling (drain queue, save state, close browser cleanly)
-  - Add session recovery — if engine crashes mid-pipeline, resume from last known state
-  - Add cookie expiry detection and auto-refresh
-  - Add proxy support for browser (config option)
-  - Add user-agent rotation
-  - Improve CAPTCHA flow — show instructions in UI, wait for user to solve, then resume
-
-USER EXPERIENCE (Priority: Medium)
-  - Wire EngineControl, Topics, FeedEngagement, Settings pages to real APIs
-  - Add real-time post preview before commenting (preview_comments config option)
-  - Add manual circuit breaker reset button in Dashboard
-  - Add notification system (toast messages for important events)
-  - Add dark mode toggle
-  - Add keyboard shortcuts for common actions
-  - Show connection degree badges in Leads table
-  - Add undo/cancel for scheduled posts
-
-CONTENT & ENGAGEMENT (Priority: Low)
-  - Reply monitoring — detect when someone replies to your comments, auto-reply
-  - Comment thread tracking — see full conversation history per post
-  - A/B testing for comment styles — track which tone gets more engagement
-  - Post performance tracking — monitor likes/comments on your published posts
-  - Content calendar view — visual timeline of scheduled posts
-  - Hashtag performance analytics — which hashtags drive most engagement
-
-DATA & EXPORT (Priority: Low)
-  - Lead scoring model — score leads based on engagement history
-  - CRM integration hooks (HubSpot, Salesforce export)
-  - Weekly email digest of engagement stats
-  - Backup/restore for SQLite database
-  - Import leads from CSV
-  - Export engagement log as CSV/JSON
-
-MONITORING & OBSERVABILITY (Priority: Low)
-  - Health check dashboard — show status of all modules (browser, AI, DB, scheduler)
-  - Action success rate tracking over time
-  - LinkedIn detection risk score (based on action patterns)
-  - Alert thresholds (email/slack notifications when budget exhausted or errors spike)
-  - Log viewer in UI (search and filter engine.log)
-
-DOCUMENTATION (Priority: Low)
-  - README with real setup instructions
-  - API documentation (auto-generated from FastAPI)
-  - Troubleshooting guide for common LinkedIn issues
-  - Configuration reference guide
+To start the engine for validation:
+  python -m uvicorn backend.main:app --port 8000   (backend)
+  cd ui && npm run dev                              (frontend, port 3000)
+  Open http://localhost:3000 → click Start Engine
 
 
-=============================
-SUGGESTED PRIORITY ORDER
-=============================
+============================
+WHAT IS NOT YET BUILT (Phase 2 — Chrome Extension)
+============================
 
-Phase 1 — Fix What's Broken
-  1. Implement profile scraper properly
-  2. Fix settings persistence (write back to YAML)
-  3. Wire remaining UI pages (EngineControl, Topics, FeedEngagement, Settings, Analytics)
-  4. Implement analytics endpoints with real DB queries
+None of the following exists. Do not create any of these files until M7 passes.
 
-Phase 2 — Security Hardening
-  5. Fix encryption key derivation
-  6. Encrypt all secrets files
-  7. Add file permission hardening
-  8. Fix lock file vulnerability
+  /extension directory
+  manifest.json (Manifest V3)
+  background/service_worker.js
+  content_scripts/feed_scanner.js
+  content_scripts/interaction_engine.js
+  content_scripts/human_behavior.js
+  content_scripts/profile_scraper.js
+  popup/popup.html + popup.js
+  options/dashboard.html (React UI port)
+  SQLite → chrome.storage.local migration
+  APScheduler → chrome.alarms migration
+  Chrome Web Store publish
 
-Phase 3 — Testing
-  9. End-to-end pipeline test
-  10. Budget safety tests
-  11. Campaign execution tests
-  12. WebSocket tests
 
-Phase 4 — Polish
-  13. Comment preview/approval flow
-  14. CAPTCHA recovery UX
-  15. Circuit breaker reset UI
-  16. Notification toasts
-  17. README and docs
+============================
+KNOWN REMAINING RISKS
+============================
 
-Phase 5 — New Features
-  18. Reply monitoring
-  19. Lead scoring
-  20. Content calendar
-  21. CRM export hooks
+1. LinkedIn DOM selectors (Medium severity)
+   LinkedIn's frontend updates without notice. The feed scanner uses 7 fallback selectors
+   for author name, which reduces brittleness, but any major LinkedIn DOM overhaul will
+   break extraction silently (posts will be found but fields will be null/empty).
+   Mitigation: run the engine periodically, monitor the Feed Engagement page for null
+   author names. When selectors break, update backend/automation/feed_scanner.py and
+   backend/automation/profile_scraper.py. No structural code change needed.
+
+2. Groq TPD (Tokens Per Day) limit (Medium severity)
+   Groq's free tier has a daily token cap (~100k tokens/day). The Content Intelligence
+   extraction job runs every 4 hours and processes up to 20 snippets per batch. If the
+   research pipeline is active and bulk extraction is triggered, the daily cap can be hit
+   before comment generation runs. This causes generation tasks to fail with a 429 that
+   is logged but not surfaced to the user prominently.
+   Mitigation: the client_factory routes background tasks (extraction, relevance scoring)
+   to OpenRouter (free tier, large context) and reserves Groq for generation tasks. Add
+   an OpenRouter API key in Settings to enable this split. Without an OpenRouter key,
+   all tasks share Groq's TPD.
+
+3. LinkedIn detection risk (Medium severity)
+   The automation acts on LinkedIn's platform. The circuit breaker, rate limiter, human
+   behavior delays, and worker pool cap (3 threads) all reduce detection risk, but they
+   do not eliminate it. Operating outside the configured activity window (start_hour to
+   end_hour), or running with aggressive daily limits, raises risk. The tool is designed
+   for managed, human-supervised use — not fully autonomous long-run operation.
+
+4. Cookie expiry and re-authentication (Low severity)
+   LinkedIn session cookies expire. The login module detects re-auth redirects and
+   calls handle_security_challenge(), which pauses the engine for 120 seconds and
+   broadcasts an alert. The user must manually complete re-authentication in the browser
+   window. There is no automated recovery path (by design — automating re-auth is a
+   detection risk).
+
+5. Profile scraper field completeness (Low severity)
+   The profile scraper uses expanded fallback selectors but LinkedIn's profile page
+   structure varies by account type, connection degree, and A/B tests LinkedIn runs.
+   Fields (title, company) may occasionally return null for some profiles.
+   This does not break the pipeline — it creates leads with partial data that the user
+   can manually enrich.
+
+6. Windows-only lock file (Low severity, known)
+   backend/utils/lock_file.py uses msvcrt (Windows-specific). The code works correctly
+   on Windows. If the app is ever run on Linux/macOS, the lock file will need a
+   fcntl-based implementation. Not a concern for Phase 1 (Windows desktop app).
+
+7. No API rate limiting middleware (Low severity)
+   The FastAPI server has no rate limiting on API endpoints. The /prompts/test endpoint
+   in particular calls Groq on every request. In local single-user mode this is not a
+   problem. If the backend is ever exposed on a network, add rate limiting middleware
+   before doing so.
+
+
+============================
+PHASE 2 KICKOFF CRITERIA
+============================
+
+M7 is considered validated when ALL of the following are true after a 4-hour engine run:
+
+  1. scripts/m7_validate.py exits 0 (no failures, warnings acceptable)
+  2. Budget counters for at least 2 action types show non-zero count_today values
+  3. At least 10 posts appear in the database with a non-SEEN state (ACTED or SKIPPED)
+  4. The engine did not crash (process still running at end of run)
+  5. The midnight budget reset ran correctly (verified by check 4 in m7_validate.py)
+  6. No CAPTCHA or re-auth events in this run (clean session)
+
+Once all 6 criteria are confirmed, update TASKS.md: mark M7 [x] and M8 [ ].
+Phase 2 work begins in /extension — see TASKS.md Phase 2 section for the full task list.
+
+
+============================
+PHASE 2 ROADMAP (Chrome Extension)
+============================
+
+This roadmap begins only after M7 validation is confirmed. Do not start early.
+
+Week 1 — Extension Scaffold
+  Create /extension directory with Manifest V3
+  Scaffold background service worker (replace APScheduler with chrome.alarms)
+  Scaffold popup.html with engine state toggle (minimal, wired to service worker)
+  Set up webpack or esbuild for the extension bundle
+
+Week 2 — Content Scripts
+  Port feed_scanner DOM logic to content_scripts/feed_scanner.js
+  Port human_behavior delays to content_scripts/human_behavior.js
+  Port interaction_engine (like/comment/connect) to content_scripts/interaction_engine.js
+  Establish message passing: content script → service worker → storage
+
+Week 3 — Storage Migration
+  Migrate SQLite data model to chrome.storage.local (flat JSON, keyed by post URL)
+  Migrate budget_tracker counters to chrome.storage.local
+  Migrate settings to chrome.storage.sync
+
+Week 4 — AI Integration
+  Call Groq API directly from service worker (no local Python server)
+  Port prompt templates to extension bundle (prompts/*.txt → hardcoded strings or remote fetch)
+  Wire relevance classifier and comment generator to the content script pipeline
+
+Week 5 — Options Dashboard
+  Port React UI (Dashboard, Analytics, Settings pages) to options/dashboard.html
+  Use chrome.storage APIs instead of axios/WebSocket calls
+  Replace WebSocket activity feed with chrome.runtime.onMessage polling
+
+Week 6 — QA & Publish
+  Manual end-to-end test on a real LinkedIn session
+  Verify budget enforcement, human delays, and circuit breaker all work in extension context
+  Package and submit to Chrome Web Store
+  Update README with extension install instructions

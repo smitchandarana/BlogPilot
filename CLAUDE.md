@@ -102,9 +102,17 @@ Full module list with responsibilities is in @ARCHITECTURE.md.
 
 ## Phase Reminder
 
-We are in **Phase 1 — Local Python App**. Do NOT build:
-- Chrome Extension files (manifest.json, content scripts, service workers)
-- Any cloud infrastructure
-- Any external server dependencies
+**Phase 1 is COMPLETE.** All 8 sprints are done. All post-sprint enhancements are done.
+Milestones M1 through M6 are confirmed achieved.
 
-Phase 2 (Chrome Extension) begins only after Milestone 7 is reached. See TASKS.md.
+**Current gate: M7 runtime validation.** Run `python scripts/m7_validate.py` from the
+project root. The script checks 9 criteria against the live DB and log file. All checks
+must pass (exit 0) after a 4-hour unattended engine run before Phase 2 begins.
+
+**Do NOT build any Phase 2 work until M7 is validated:**
+- No Chrome Extension files (manifest.json, content scripts, service workers)
+- No cloud infrastructure
+- No external server dependencies
+
+Phase 2 (Chrome Extension) begins immediately after M7 validation is confirmed.
+See TASKS.md Phase 2 section and REVIEW_AND_PLAN.txt for the week-by-week roadmap.

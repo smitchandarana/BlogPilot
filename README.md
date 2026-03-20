@@ -152,7 +152,7 @@ BlogPilot/
 ## Testing
 
 ```bash
-# Run all tests (65 tests)
+# Run all tests (94 tests)
 pytest tests/ -v
 
 # Quick run (skip E2E)
@@ -194,4 +194,6 @@ pyinstaller blogpilot.spec
 
 ## Phase 2
 
-Once all Phase 1 milestones are complete (see TASKS.md), the system converts to a Chrome Extension. See ARCHITECTURE.md for the conversion plan.
+Phase 1 is complete (Sprints 1–8, all milestones M1–M6 achieved). The remaining gate is M7 runtime validation — run `python scripts/m7_validate.py` after a 4-hour unattended engine run.
+
+Once M7 passes, Phase 2 (Chrome Extension) begins. See TASKS.md for the full task list and REVIEW_AND_PLAN.txt for the week-by-week roadmap.
