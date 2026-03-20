@@ -39,7 +39,7 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo   BUILD COMPLETE
-echo   Output: dist\BlogPilot\BlogPilot.exe
+echo   Output: dist\BlogPilot.exe  (single self-contained EXE — no Python required)
 echo ============================================
 echo.
 echo IMPORTANT: The EXE contains NO API keys or passwords.

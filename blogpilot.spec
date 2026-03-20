@@ -2,18 +2,20 @@
 """
 PyInstaller spec for BlogPilot.
 
-Build: pyinstaller blogpilot.spec
+Build steps:
+    1. cd ui && npm run build
+    2. pyinstaller blogpilot.spec
+
 Output: dist/BlogPilot/BlogPilot.exe
 
-IMPORTANT: Run `cd ui && npm run build` BEFORE building the EXE.
+To create the installer (requires Inno Setup 6):
+    iscc installer.iss
 """
 
 import os
 
 block_cipher = None
 
-# Project root (where this spec file lives)
-# SPECPATH is the full path to this .spec file
 ROOT = os.path.abspath(SPECPATH if os.path.isdir(SPECPATH) else os.path.dirname(SPECPATH))
 
 a = Analysis(
@@ -21,15 +23,16 @@ a = Analysis(
     pathex=[ROOT],
     binaries=[],
     datas=[
-        # Bundled read-only assets
+        # Config + prompts (read-only defaults bundled with the EXE)
         (os.path.join(ROOT, 'config', 'settings.yaml'), os.path.join('config')),
         (os.path.join(ROOT, 'prompts'), 'prompts'),
+        # Built React frontend (Vite output — run `cd ui && npm run build` first)
         (os.path.join(ROOT, 'ui', 'dist'), os.path.join('ui', 'dist')),
-        # Backend source (needed for uvicorn import-string "backend.main:app")
+        # Backend source (needed so uvicorn can import "backend.main:app")
         (os.path.join(ROOT, 'backend'), 'backend'),
     ],
     hiddenimports=[
-        # Uvicorn internals
+        # ── Uvicorn internals ──────────────────────────────────────
         'uvicorn.logging',
         'uvicorn.loops',
         'uvicorn.loops.auto',
@@ -43,26 +46,27 @@ a = Analysis(
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         'uvicorn.lifespan.off',
-        # SQLAlchemy dialects
+        # ── SQLAlchemy ─────────────────────────────────────────────
         'sqlalchemy.dialects.sqlite',
-        # FastAPI / Starlette
+        'sqlalchemy.dialects.sqlite.pysqlite',
+        # ── FastAPI / Starlette ────────────────────────────────────
         'starlette.responses',
         'starlette.staticfiles',
         'starlette.routing',
         'starlette.middleware',
         'starlette.middleware.cors',
-        # Multipart (required by FastAPI)
+        # ── Multipart / Pydantic ───────────────────────────────────
         'multipart',
-        # Pydantic
         'pydantic',
         'pydantic_settings',
-        # WebSockets
+        # ── WebSockets ─────────────────────────────────────────────
         'websockets',
         'websockets.legacy',
         'websockets.legacy.server',
-        # Backend modules (ensure they're found)
+        # ── Backend: main ──────────────────────────────────────────
         'backend',
         'backend.main',
+        # ── Backend: API layer ─────────────────────────────────────
         'backend.api',
         'backend.api.engine',
         'backend.api.config',
@@ -72,6 +76,9 @@ a = Analysis(
         'backend.api.content',
         'backend.api.websocket',
         'backend.api.server',
+        'backend.api.research',
+        'backend.api.intelligence',
+        # ── Backend: core engine ───────────────────────────────────
         'backend.core',
         'backend.core.engine',
         'backend.core.state_manager',
@@ -81,6 +88,7 @@ a = Analysis(
         'backend.core.rate_limiter',
         'backend.core.circuit_breaker',
         'backend.core.pipeline',
+        # ── Backend: storage ───────────────────────────────────────
         'backend.storage',
         'backend.storage.database',
         'backend.storage.models',
@@ -89,20 +97,27 @@ a = Analysis(
         'backend.storage.budget_tracker',
         'backend.storage.leads_store',
         'backend.storage.quality_log',
+        # ── Backend: utils ─────────────────────────────────────────
         'backend.utils',
         'backend.utils.logger',
         'backend.utils.encryption',
         'backend.utils.config_loader',
         'backend.utils.lock_file',
         'backend.utils.paths',
+        'backend.utils.auth',
+        # ── Backend: AI layer ──────────────────────────────────────
         'backend.ai',
         'backend.ai.groq_client',
+        'backend.ai.openrouter_client',
+        'backend.ai.client_factory',
+        'backend.ai.utils',
         'backend.ai.prompt_loader',
         'backend.ai.relevance_classifier',
         'backend.ai.comment_generator',
         'backend.ai.post_generator',
         'backend.ai.note_writer',
         'backend.ai.reply_generator',
+        # ── Backend: automation ────────────────────────────────────
         'backend.automation',
         'backend.automation.browser',
         'backend.automation.linkedin_login',
@@ -111,49 +126,78 @@ a = Analysis(
         'backend.automation.interaction_engine',
         'backend.automation.human_behavior',
         'backend.automation.post_publisher',
+        'backend.automation.hashtag_scanner',
+        # ── Backend: growth ────────────────────────────────────────
         'backend.growth',
         'backend.growth.viral_detector',
         'backend.growth.influencer_monitor',
         'backend.growth.engagement_strategy',
         'backend.growth.campaign_engine',
         'backend.growth.topic_rotator',
+        # ── Backend: enrichment ────────────────────────────────────
         'backend.enrichment',
         'backend.enrichment.email_enricher',
         'backend.enrichment.dom_email_scraper',
         'backend.enrichment.pattern_generator',
         'backend.enrichment.smtp_verifier',
         'backend.enrichment.hunter_client',
-        # APScheduler
+        # ── Backend: research ──────────────────────────────────────
+        'backend.research',
+        'backend.research.topic_researcher',
+        'backend.research.reddit_scanner',
+        'backend.research.rss_scanner',
+        'backend.research.hn_scanner',
+        'backend.research.linkedin_insights',
+        'backend.research.duplicate_detector',
+        'backend.research.content_extractor',
+        'backend.research.pattern_aggregator',
+        # ── Backend: learning ──────────────────────────────────────
+        'backend.learning',
+        'backend.learning.comment_monitor',
+        'backend.learning.scoring_calibrator',
+        'backend.learning.timing_analyzer',
+        'backend.learning.auto_tuner',
+        'backend.learning.content_preference_learner',
+        # ── APScheduler ───────────────────────────────────────────
+        'apscheduler',
         'apscheduler.schedulers.background',
         'apscheduler.jobstores.sqlalchemy',
         'apscheduler.executors.pool',
-        # Watchdog
+        'apscheduler.triggers.interval',
+        'apscheduler.triggers.cron',
+        # ── Watchdog ───────────────────────────────────────────────
         'watchdog.observers',
         'watchdog.events',
-        # Cryptography
+        'watchdog.observers.polling',
+        # ── Cryptography ───────────────────────────────────────────
         'cryptography',
         'cryptography.fernet',
-        # YAML
+        'cryptography.hazmat',
+        'cryptography.hazmat.primitives',
+        'cryptography.hazmat.backends',
+        # ── YAML ───────────────────────────────────────────────────
         'yaml',
-        # DNS (for SMTP verifier)
+        # ── Networking / DNS ───────────────────────────────────────
         'dns',
         'dns.resolver',
-        # HTTP
         'httpx',
-        # Groq
+        # ── AI providers ───────────────────────────────────────────
         'groq',
-        # Tenacity
+        'openai',           # OpenRouter uses the openai SDK
         'tenacity',
+        # ── Feed parsing ───────────────────────────────────────────
+        'feedparser',
+        # ── Playwright (bundled separately; just ensure hooks load) ─
+        'playwright',
+        'playwright.sync_api',
+        'playwright.async_api',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Exclude dev/test packages
         'pytest',
         'pytest_asyncio',
-        'tkinter',
-        '_tkinter',
         'matplotlib',
         'numpy',
         'pandas',
@@ -166,31 +210,27 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# --onefile: everything bundled into a single EXE that self-extracts to %TEMP% at launch.
+# This means the user only needs one file — no _internal/ folder required.
+# Startup takes ~3–5 seconds on first run while it extracts; faster on subsequent runs
+# if the OS caches the temp files.
 exe = EXE(
     pyz,
     a.scripts,
-    [],
-    exclude_binaries=True,
+    a.binaries,     # bundle binaries directly into the EXE (onefile mode)
+    a.datas,        # bundle data files directly into the EXE (onefile mode)
     name='BlogPilot',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # NO console window
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,          # No console window shown to end users
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one: icon='assets/icon.ico'
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='BlogPilot',
+    icon=None,              # Add: icon='assets/icon.ico'
 )

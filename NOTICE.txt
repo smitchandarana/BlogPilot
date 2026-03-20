@@ -1,0 +1,20 @@
+BlogPilot — Risk Disclosure
+
+BlogPilot automates interactions on LinkedIn (liking posts, generating and posting AI comments, visiting profiles, sending connection requests).
+
+IMPORTANT: This activity may violate LinkedIn's Terms of Service (Section 8.2 — Automated tools). Use BlogPilot at your own risk. Your LinkedIn account may be reviewed, restricted, or terminated by LinkedIn for unusual or automated activity.
+
+By installing and using BlogPilot, you acknowledge:
+
+1. You understand that automated LinkedIn activity may violate LinkedIn's Terms of Service.
+2. You accept full responsibility for any consequences to your LinkedIn account.
+3. BlogPilot's authors are not liable for account restrictions, bans, or any other harm.
+4. It is YOUR responsibility to use BlogPilot responsibly — avoid excessive automation, respect rate limits, and review all AI-generated content before it is published.
+
+Recommended best practices:
+- Keep daily limits conservative (defaults: 30 likes / 12 comments / 15 connections per day).
+- Use the comment preview queue — review every AI-generated comment before approving it.
+- Do not run the engine 24/7. Use the activity window setting to limit hours.
+- If you notice unusual activity on your account, stop the engine immediately.
+
+By clicking "I accept the agreement" you confirm you have read and understood this disclosure.
