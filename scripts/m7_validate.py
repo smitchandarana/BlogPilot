@@ -10,16 +10,21 @@ Exit code 0 = all checks pass. Non-zero = failures detected.
 """
 import sys
 import os
+import io
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# Force UTF-8 output on Windows to handle Unicode symbols
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # Allow imports from project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-PASS = "\033[32m✓\033[0m"
-FAIL = "\033[31m✗\033[0m"
-WARN = "\033[33m⚠\033[0m"
-INFO = "\033[36mℹ\033[0m"
+PASS = "\033[32m[OK]\033[0m"
+FAIL = "\033[31m[FAIL]\033[0m"
+WARN = "\033[33m[WARN]\033[0m"
+INFO = "\033[36m[INFO]\033[0m"
 
 failures = 0
 warnings = 0
@@ -100,15 +105,15 @@ try:
         else:
             any_exceeded = False
             for b in budgets:
-                if b.daily_limit == 0:
+                if b.limit_per_day == 0:
                     continue  # unlimited
-                if b.count_today > b.daily_limit:
-                    fail(f"Budget EXCEEDED: {b.action_type} = {b.count_today}/{b.daily_limit}")
+                if b.count_today > b.limit_per_day:
+                    fail(f"Budget EXCEEDED: {b.action_type} = {b.count_today}/{b.limit_per_day}")
                     any_exceeded = True
                 else:
-                    pct = int(b.count_today / b.daily_limit * 100) if b.daily_limit else 0
-                    status = "at limit" if b.count_today >= b.daily_limit else f"{pct}%"
-                    ok(f"{b.action_type}: {b.count_today}/{b.daily_limit} ({status})")
+                    pct = int(b.count_today / b.limit_per_day * 100) if b.limit_per_day else 0
+                    status = "at limit" if b.count_today >= b.limit_per_day else f"{pct}%"
+                    ok(f"{b.action_type}: {b.count_today}/{b.limit_per_day} ({status})")
             if not any_exceeded:
                 ok("No budget overruns detected")
 except Exception as e:
@@ -123,8 +128,8 @@ try:
         budgets = db.query(Budget).all()
         if budgets:
             # All counts should be <= daily_limit; if any are wildly high it suggests no reset
-            max_count = max((b.count_today for b in budgets if b.daily_limit > 0), default=0)
-            max_limit = max((b.daily_limit for b in budgets if b.daily_limit > 0), default=1)
+            max_count = max((b.count_today for b in budgets if b.limit_per_day > 0), default=0)
+            max_limit = max((b.limit_per_day for b in budgets if b.limit_per_day > 0), default=1)
             if max_count > max_limit * 3:
                 warn(
                     "Some counts are >3× the daily limit — midnight reset may not be running",
@@ -175,7 +180,7 @@ try:
         warn("Engine not running — cannot check circuit breaker live state")
     else:
         cb = engine.circuit_breaker
-        if cb.is_tripped():
+        if cb.is_open():
             warn("Circuit breaker is currently TRIPPED — engine is paused")
         else:
             ok("Circuit breaker is not tripped")
