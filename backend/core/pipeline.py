@@ -513,6 +513,13 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
 
     if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text:
         ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
+        if not ok:
+            # Retry once after a short delay before giving up
+            logger.info(f"Pipeline: comment failed for '{author}' — retrying in 3s")
+            await asyncio.sleep(3)
+            ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
+            if not ok:
+                logger.warning(f"Pipeline: comment retry also failed for '{author}' — downgrading to LIKE")
         if ok:
             acted = True
             # Log comment quality metrics for self-learning
