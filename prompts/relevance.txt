@@ -18,12 +18,11 @@ STEP 1 — DISQUALIFICATION CHECK (Run this first)
 
 Immediately return score 0 if the post is primarily any of the following:
 
-- Staffing/recruiting posts containing direct contact info (phone numbers, email addresses)
-- Contract role solicitations from vendors or staffing agencies
 HIRING & RECRUITMENT
-- Job postings ("We're hiring", "Open role", "Join our team", "Apply now")
-- Candidate shoutouts ("Congrats on the new role", "Welcome to the team")
-- Recruiting agency promotions
+- Job postings ("We're hiring", "Open role", "Join our team", "Apply now", "Now hiring")
+- Candidate availability posts ("seeking a new role", "seeking my next opportunity", "open to opportunities", "open for opportunities", "actively looking", "actively seeking", "exploring new opportunities", "available for work", "available immediately", "looking for my next chapter", "open to new opportunities")
+- Candidate shoutouts ("Congrats on the new role", "Welcome to the team", "thrilled to announce I've joined", "excited to share I've joined", "just accepted an offer", "I'm joining")
+- Recruiting agency promotions or staffing posts with direct contact info (phone numbers, email addresses)
 - Resume tips, interview advice, salary negotiation (unless your topics are HR/recruiting)
 
 SELF-PROMOTION & ADS
@@ -34,7 +33,7 @@ SELF-PROMOTION & ADS
 - Partnership or client win announcements with no insight
 
 VANITY & PERSONAL MILESTONES
-- Work anniversaries ("5 years at X, here's what I learned" — generic reflection)
+- Work anniversaries with generic reflection and no substantive insight
 - Follower milestones ("Just hit 10K followers!")
 - Birthday/holiday wishes
 - Personal travel or lifestyle posts unrelated to work topics
@@ -49,36 +48,43 @@ REPOSTS WITH NO ADDED VALUE
 LOW-SIGNAL ENGAGEMENT BAIT
 - "Like if you agree" posts
 - Listicles with only obvious, surface-level points
-- Threads that promise value but deliver clichés
 - "Hot take:" posts with no actual substance behind the take
 
 COMPANY NEWS WITHOUT INSIGHT
-- Press release reposts
-- Funding announcements with no market commentary
-- Merger/acquisition news without analysis
+- Press release reposts or funding announcements with no market commentary
 - "We're expanding to X market" with no relevant context
 
 ---
 
 STEP 2 — RELEVANCE SCORING (Only if post passes Step 1)
 
-Score from 0 to 10:
+Score from 0 to 10 based on TWO dimensions: topic alignment AND content quality.
 
-| Score | Label            | Meaning |
-|-------|------------------|---------|
-| 0–2   | Irrelevant       | No connection to target topics whatsoever |
-| 3–4   | Tangential       | Mentions a topic keyword but core message is unrelated |
-| 5–6   | Loosely Relevant | Touches the topic area but lacks depth or specificity |
-| 7–8   | Relevant         | Directly discusses a target topic with real substance |
-| 9–10  | High Value       | Deep insight, original thinking, or signals a pain point / active decision |
+TOPIC ALIGNMENT — Base score (0–6):
+| 0–1 | No connection to target topics |
+| 2–3 | Mentions a topic keyword but core message is unrelated |
+| 4–5 | Touches the topic area but lacks depth or specificity |
+| 6   | Directly discusses a target topic with real substance |
+
+QUALITY BONUS — Add 0–4 points on top of base (only if base ≥ 4):
+
++1  Original data, personal numbers, or a specific named case study from the author's own experience
++1  First-person story format: author shares a failure, lesson, challenge, or turning point in their own work
++1  Genuine pain point expressed: author or their audience is actively wrestling with a real decision, problem, or trade-off
++1  Contrarian or non-obvious perspective that challenges a widely-held assumption with specific reasoning
+
+A score of 9–10 requires both strong topic alignment (base = 6) AND at least two quality bonuses.
+A first-person story about a real analytics/BI problem scores HIGHER than a generic industry observation on the same topic.
+A well-written emotional narrative that is on-topic outscores a factually dense post that adds no new perspective.
 
 SCORING RULES:
 1. Score on SEMANTIC meaning — not keyword presence alone.
-2. Prioritize posts signaling a PAIN POINT, CHALLENGE, QUESTION, or BUYING SIGNAL related to your topics.
-3. Reward posts with original data, frameworks, case studies, or contrarian perspectives.
-4. A score of 9–10 requires both strong topic alignment AND genuine intellectual depth.
-5. Author identity or follower count does NOT influence the score.
-6. A post can be well-written and still score low if it doesn't match the target topics.
+2. Prioritize posts where someone is visibly making a decision, sharing a hard-won lesson, or expressing a real challenge related to your topics. These are the highest-value engagement opportunities.
+3. Reward first-person storytelling about real work experiences — these drive the highest LinkedIn reply rates.
+4. Author identity or follower count does NOT influence the score.
+5. A post can be well-written and still score low if it doesn't match the target topics.
+6. A post can be emotionally engaging and still score low if it has zero B2B relevance.
+7. Technical depth alone is not enough for a high score — the post must also have engagement value (original perspective, real experience, or expressed need).
 
 ---
 
