@@ -86,7 +86,7 @@ circuit_breaker:
 quality:
   min_comment_score: 6
   min_post_score: 7
-  comment_candidates: 3
+  comment_candidates: 4
   max_recent_comments_for_diversity: 20
   diversity_threshold: 0.7
   winning_example_min_score: 10
@@ -98,9 +98,9 @@ ai:
   retry_attempts: 2
   retry_delay_seconds: 2
 openrouter:
-  model: openrouter/free
-  max_tokens: 400
-  temperature: 0.3
+  model: google/gemini-2.0-flash-exp:free
+  max_tokens: 600
+  temperature: 0.2
 email_enrichment:
   enabled: true
   use_dom_scraper: true
@@ -263,6 +263,26 @@ keyword_blacklist:
 - forex trading
 - get rich
 - passive income
+- seeking a new role
+- seeking my next opportunity
+- seeking new opportunities
+- open for opportunities
+- open to opportunities
+- actively looking
+- actively seeking
+- exploring new opportunities
+- exploring opportunities
+- available for work
+- available immediately
+- notice period
+- my next chapter
+- excited to announce i've joined
+- thrilled to share i've joined
+- pleased to announce i've joined
+- proud to announce i've joined
+- happy to share that i've joined
+- i'm joining
+- just accepted an offer
 target_industries:
 - Manufacturing
 - Retail & E-Commerce
