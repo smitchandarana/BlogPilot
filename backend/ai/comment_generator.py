@@ -306,7 +306,7 @@ async def generate(
     if isinstance(topics, list):
         topics = ", ".join(str(t) for t in topics)
 
-    candidate_count = int(cfg_get("quality.comment_candidates", 3))
+    candidate_count = int(cfg_get("quality.comment_candidates", 4))
 
     # ── Step 1: Load winning examples + angle insights for few-shot ──
     winning_examples = _load_winning_examples(db)
