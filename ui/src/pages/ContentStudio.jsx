@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Wand2, RotateCcw, Send, CalendarDays, Loader2, Copy, Check, X, Search, ChevronDown, ChevronUp, AlertTriangle, Sparkles, Lightbulb, ExternalLink, Trash2, Zap, Brain, Users, TrendingUp, Target } from 'lucide-react'
 import { config as configApi, content as contentApi, research as researchApi, intelligence as intelligenceApi } from '../api/client'
+import IdeasLab from './IdeasLab'
 
 const DEFAULT_TOPICS = ['Business Intelligence', 'Data Analytics', 'Reporting Solutions', 'Dashboard Design', 'Power BI', 'Tableau']
 const STYLES = ['Thought Leadership', 'Story', 'Tips List', 'Question', 'Data Insight', 'Contrarian Take']
@@ -415,6 +416,8 @@ export default function ContentStudio() {
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState('')
   const [qualityInfo, setQualityInfo] = useState(null)
+  const [criticScores, setCriticScores] = useState(null)
+  const [rewriteAttempted, setRewriteAttempted] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const [showScheduler, setShowScheduler] = useState(false)
@@ -440,6 +443,7 @@ export default function ContentStudio() {
   const [structuredInputs, setStructuredInputs] = useState({
     subtopic: '',
     pain_point: '',
+    real_scenario: '',
     audience: '',
     hook_intent: 'STORY',
     belief_to_challenge: '',
@@ -467,6 +471,10 @@ export default function ContentStudio() {
   // Style matching — holds top posts to inject into next generate() call
   const [pendingStyleExamples, setPendingStyleExamples] = useState(null)
   const [loadingStyleMatch, setLoadingStyleMatch] = useState(false)
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState('generate') // 'generate' | 'ideas-lab'
+  const [briefFromIdeasLab, setBriefFromIdeasLab] = useState(null)
 
   useEffect(() => {
     configApi.getTopics().then((res) => {
@@ -526,15 +534,41 @@ export default function ContentStudio() {
     } catch { /* ignore */ }
   }
 
+  const pollResearchStatus = () => {
+    const interval = setInterval(async () => {
+      try {
+        const s = await researchApi.status()
+        setResearchStatus(s.data)
+        if (!s.data?.is_running) {
+          clearInterval(interval)
+          setResearching(false)
+          await loadResearchTopics()
+          await loadResearchStatus()
+        }
+      } catch {
+        clearInterval(interval)
+        setResearching(false)
+      }
+    }, 5000)
+  }
+
   const triggerResearch = async () => {
     setResearching(true)
     try {
-      await researchApi.trigger()
-      await loadResearchTopics()
-      await loadResearchStatus()
+      const res = await researchApi.trigger()
+      if (res.data?.status === 'started') {
+        // Research is running in background — poll until complete
+        pollResearchStatus()
+      } else if (res.data?.status === 'already_running') {
+        // Already in progress — just poll
+        pollResearchStatus()
+      } else {
+        await loadResearchTopics()
+        await loadResearchStatus()
+        setResearching(false)
+      }
     } catch (e) {
       alert('Research failed: ' + (e.response?.data?.detail || e.message))
-    } finally {
       setResearching(false)
     }
   }
@@ -562,6 +596,8 @@ export default function ContentStudio() {
     setDuplicateWarning(null)
     setPipelineTrace(null)
     setQualityInfo(null)
+    setCriticScores(null)
+    setRewriteAttempted(false)
     try {
       const res = await contentApi.generateV2({
         topic: researchTopic.topic,
@@ -639,6 +675,8 @@ export default function ContentStudio() {
     setEnrichedContext(null)
     setDuplicateWarning(null)
     setQualityInfo(null)
+    setCriticScores(null)
+    setRewriteAttempted(false)
     setPipelineTrace(null)
     try {
       let data
@@ -673,6 +711,8 @@ export default function ContentStudio() {
       if (data.rejection_reason) qi.reason = data.rejection_reason
       if (data.improvement_suggestion) qi.suggestion = data.improvement_suggestion
       if (Object.keys(qi).length) setQualityInfo(qi)
+      if (data.critic_scores) setCriticScores(data.critic_scores)
+      if (data.rewrite_attempted) setRewriteAttempted(data.rewrite_attempted)
     } catch (e) {
       setGenerated(`[Error generating post: ${e.response?.data?.detail || e.message}]`)
     } finally {
@@ -757,6 +797,13 @@ export default function ContentStudio() {
     }
   }
 
+  const onSendToGenerator = (brief) => {
+    setActiveTab('generate')
+    setBriefFromIdeasLab(brief)
+    setGenerationMode('structured')
+    setStructuredInputs(prev => ({ ...prev, core_insight: brief }))
+  }
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -764,7 +811,52 @@ export default function ContentStudio() {
         <p className="mt-0.5 text-sm text-slate-500">Research trending topics, generate context-enriched LinkedIn posts.</p>
       </div>
 
-      {/* ── Research Panel ───────────────────────────────────────────── */}
+      {/* ── Tab Bar ───────────────────────────────────────────────────── */}
+      <div className="flex gap-1 rounded-lg border border-slate-700/60 bg-slate-800/40 p-1 w-fit">
+        <button
+          onClick={() => setActiveTab('generate')}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+            activeTab === 'generate'
+              ? 'bg-slate-700 text-slate-100 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Wand2 className="h-3.5 w-3.5" />
+          Generate
+        </button>
+        <button
+          onClick={() => setActiveTab('ideas-lab')}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+            activeTab === 'ideas-lab'
+              ? 'bg-slate-700 text-slate-100 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Lightbulb className="h-3.5 w-3.5" />
+          Ideas Lab
+        </button>
+      </div>
+
+      {activeTab === 'ideas-lab' ? (
+        <IdeasLab onSendToGenerator={onSendToGenerator} />
+      ) : (
+        <>
+          {briefFromIdeasLab && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-2.5">
+              <div className="flex items-center gap-2 text-xs text-violet-300">
+                <Lightbulb className="h-3.5 w-3.5 shrink-0" />
+                Brief loaded from Ideas Lab
+              </div>
+              <button
+                onClick={() => setBriefFromIdeasLab(null)}
+                className="text-violet-400/60 hover:text-violet-300 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* ── Research Panel ───────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 overflow-hidden">
         <button
           onClick={() => setResearchOpen(!researchOpen)}
@@ -1018,6 +1110,7 @@ export default function ContentStudio() {
                 onUseInsight={(ins) => {
                   if (ins.subtopic) setStructuredField('subtopic', ins.subtopic)
                   if (ins.pain_point) setStructuredField('pain_point', ins.pain_point)
+                  if (ins.scenario) setStructuredField('real_scenario', ins.scenario)
                   if (ins.hook_type) setStructuredField('hook_intent', ins.hook_type)
                   if (ins.audience_segment) setStructuredField('audience', ins.audience_segment)
                   if (ins.key_insight) setStructuredField('core_insight', ins.key_insight)
@@ -1078,6 +1171,19 @@ export default function ContentStudio() {
                   value={structuredInputs.pain_point}
                   onChange={(e) => setStructuredField('pain_point', e.target.value)}
                   placeholder="What frustration or challenge does your audience face? Use their language."
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">
+                  Real Scenario <span className="text-slate-600">(optional — name a role + what happened)</span>
+                </label>
+                <textarea
+                  value={structuredInputs.real_scenario}
+                  onChange={(e) => setStructuredField('real_scenario', e.target.value)}
+                  placeholder={`e.g. "A CFO found month-end numbers were wrong because sales and finance tracked revenue differently"`}
                   rows={2}
                   className="w-full resize-none rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
                 />
@@ -1270,6 +1376,35 @@ export default function ContentStudio() {
             </div>
           )}
 
+          {criticScores && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {rewriteAttempted && (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                  <Sparkles className="h-2.5 w-2.5" /> Auto-improved
+                </span>
+              )}
+              {[
+                { label: 'Specific', val: criticScores.specificity_score, invert: false },
+                { label: 'Sharp', val: criticScores.insight_sharpness, invert: false },
+                { label: 'Hook', val: criticScores.hook_strength, invert: false },
+                { label: 'Generic', val: criticScores.generic_score, invert: true },
+              ].map(({ label, val, invert }) => {
+                const good = invert ? val <= 3 : val >= 7
+                const mid = invert ? val <= 5 : val >= 5
+                const cls = good
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : mid
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+                return (
+                  <span key={label} className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${cls}`}>
+                    {label}: {val}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
           {pipelineTrace && (
             <div className="rounded-lg border border-violet-500/20 bg-violet-950/20 p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -1436,6 +1571,8 @@ export default function ContentStudio() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }
