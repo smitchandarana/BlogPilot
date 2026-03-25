@@ -516,9 +516,10 @@ async def generate_from_brief(body: GenerateFromBriefRequest):
         raise HTTPException(status_code=503, detail=f"AI setup failed: {e}")
 
     from backend.ai import post_generator
+    topic = body.topic or "Business Intelligence"
     structured_inputs = {
-        "topic": body.topic,
-        "subtopic": body.topic,
+        "topic": topic,
+        "subtopic": topic,
         "pain_point": "",
         "audience": "",
         "hook_intent": "STORY",

@@ -53,6 +53,7 @@ export default function IdeaPoolPanel({ pinnedItems, onPin }) {
 
   useEffect(() => {
     fetchPool('', 'all', '')
+    return () => clearTimeout(debounceRef.current)
   }, [fetchPool])
 
   const handleSearchChange = (e) => {
