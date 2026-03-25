@@ -135,7 +135,12 @@ export const content = {
   cancel: (id) => http.delete(`/content/queue/${id}`),
   publishNow: (data) => http.post('/content/publish-now', data),
   generateStructured: (data) => http.post('/content/generate-structured', data, { timeout: 120000 }),
-  generateV2: (data) => http.post('/content/generate-v2', data, { timeout: 120000 }),
+  generateV2: (data) => http.post('/content/generate-v2', data, { timeout: 300000 }),
+  ideaPool: (params) => http.get('/content/idea-pool', { params }),
+  synthesizeBrief: (selections) =>
+    http.post('/content/synthesize-brief', { selections }, { timeout: 60000 }),
+  generateFromBrief: (data) =>
+    http.post('/content/generate-from-brief', data, { timeout: 120000 }),
 }
 
 export const intelligence = {
