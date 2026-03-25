@@ -56,7 +56,7 @@ def test_idea_pool_item_shape():
     assert resp.status_code == 200
     items = resp.json()
     for item in items:
-        for key in ("id", "source_type", "text", "date"):
+        for key in ("id", "source_type", "text", "date", "url", "engagement_score"):
             assert key in item, f"Missing key '{key}' in item"
 
 
