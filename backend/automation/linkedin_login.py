@@ -216,13 +216,34 @@ class LinkedInLogin:
         """Check if currently logged into LinkedIn."""
         try:
             url = page.url
-            if any(x in url for x in ["linkedin.com/login", "linkedin.com/checkpoint", "linkedin.com/uas/"]):
+            # Definitive "not logged in" signals — LinkedIn redirects here when unauthenticated
+            if any(x in url for x in [
+                "linkedin.com/login",
+                "linkedin.com/checkpoint",
+                "linkedin.com/uas/",
+                "linkedin.com/authwall",
+                "linkedin.com/signup",
+            ]):
                 return False
-            # Look for the global nav (present when logged in)
+            # If we're on any authenticated page, we're logged in
+            # LinkedIn always redirects unauthenticated users away from these paths
+            if any(x in url for x in [
+                "linkedin.com/feed",
+                "linkedin.com/mynetwork",
+                "linkedin.com/jobs",
+                "linkedin.com/messaging",
+                "linkedin.com/notifications",
+                "linkedin.com/in/",
+            ]):
+                return True
+            # Fallback: try DOM selectors (LinkedIn may update class names)
             nav = await page.query_selector(
                 "#global-nav, "
                 "div.global-nav__content, "
-                "nav[aria-label='Global navigation']"
+                "nav[aria-label='Global navigation'], "
+                "header.global-nav, "
+                "[data-test-id='nav-logo'], "
+                "img[alt='LinkedIn']"
             )
             return nav is not None
         except Exception:
