@@ -102,31 +102,37 @@ class LinkedInLogin:
             await page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_timeout(2000)
 
+            # Dismiss cookie consent dialog if present (EU/GDPR)
+            await self._dismiss_cookie_consent(page)
+
             # Check for security challenge on the login page itself
             challenged = await self.handle_security_challenge(page)
             if challenged:
                 return False
 
-            # Wait for the login form to actually appear (handles slow page loads
-            # and LinkedIn checkpoints that redirect away from the form)
-            try:
-                await page.wait_for_selector("#username", timeout=15000)
-            except Exception:
-                # Form didn't appear — likely a checkpoint page; wait for user
-                logger.warning("Login form not found — LinkedIn may be showing a challenge page")
+            # Wait for the login form — try multiple selectors for resilience
+            email_selector = await self._find_email_field(page, timeout=15000)
+            if email_selector is None:
+                logger.warning(f"Login form not found (current URL: {page.url}) — LinkedIn may be showing a challenge page")
                 challenged = await self.handle_security_challenge(page)
                 if challenged:
                     return False
-                # Still no form — give up
-                logger.error("Login form still not found after challenge wait — aborting")
-                return False
+                # Try navigating directly to the login URL once more
+                await page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(2000)
+                await self._dismiss_cookie_consent(page)
+                email_selector = await self._find_email_field(page, timeout=10000)
+                if email_selector is None:
+                    logger.error(f"Login form still not found after retry (URL: {page.url}) — aborting")
+                    return False
 
             # Fill email
-            await page.fill("#username", email)
+            await page.fill(email_selector, email)
             await page.wait_for_timeout(600)
 
             # Fill password
-            await page.fill("#password", password)
+            password_selector = await self._find_password_field(page)
+            await page.fill(password_selector, password)
             await page.wait_for_timeout(500)
 
             # Submit
@@ -149,6 +155,62 @@ class LinkedInLogin:
         except Exception as e:
             logger.error(f"Credential login error: {e}")
             return False
+
+    async def _dismiss_cookie_consent(self, page: Page) -> None:
+        """Click the cookie accept button if LinkedIn shows a consent dialog."""
+        consent_selectors = [
+            "button[action-type='ACCEPT']",           # LinkedIn GDPR banner
+            "button[data-tracking-control-name='ga-cookie-banner-accept']",
+            "button.artdeco-button--primary[data-test-modal-close-btn]",
+            "button:has-text('Accept')",
+            "button:has-text('Accept all')",
+            "button:has-text('Allow all cookies')",
+            "button:has-text('Agree')",
+        ]
+        for sel in consent_selectors:
+            try:
+                btn = await page.query_selector(sel)
+                if btn and await btn.is_visible():
+                    await btn.click()
+                    logger.info(f"Cookie consent dismissed (selector: {sel})")
+                    await page.wait_for_timeout(1000)
+                    return
+            except Exception:
+                continue
+
+    async def _find_email_field(self, page: Page, timeout: int = 15000) -> str | None:
+        """Return the CSS selector for the email input, or None if not found."""
+        candidates = [
+            "#username",
+            "input[name='session_key']",
+            "input[autocomplete='username']",
+            "input[type='email']",
+        ]
+        # Wait for any of the candidates to appear
+        try:
+            await page.wait_for_selector(
+                ", ".join(candidates), timeout=timeout
+            )
+        except Exception:
+            return None
+        for sel in candidates:
+            el = await page.query_selector(sel)
+            if el and await el.is_visible():
+                return sel
+        return None
+
+    async def _find_password_field(self, page: Page) -> str:
+        """Return the CSS selector for the password input."""
+        candidates = [
+            "#password",
+            "input[name='session_password']",
+            "input[type='password']",
+        ]
+        for sel in candidates:
+            el = await page.query_selector(sel)
+            if el and await el.is_visible():
+                return sel
+        return "#password"  # fallback
 
     async def is_logged_in(self, page: Page) -> bool:
         """Check if currently logged into LinkedIn."""

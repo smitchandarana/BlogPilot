@@ -14,9 +14,21 @@ Do NOT implement a module already marked [x].
 
 ## Current Focus
 
-**All Sprints 1–8 COMPLETE. Self-Learning Engine COMPLETE. Content Intelligence (Phase A + B + B2) COMPLETE.** Phase 1 development is finished.
-→ Remaining: M7 runtime validation (4-hour unattended run) — use `python scripts/m7_validate.py` to check criteria
-→ Phase 2 (Chrome Extension) begins after M7 is validated.
+**All Sprints 1–8 COMPLETE. Self-Learning Engine COMPLETE. Content Intelligence (Phase A + B + B2) COMPLETE. Ideas Lab COMPLETE. M7 VALIDATED.**
+→ Phase 2 (Chrome Extension) may now begin.
+
+### Post-Sprint Enhancement: Ideas Lab ✅
+Mix & match ideas from multiple sources (LinkedIn, Reddit, RSS, own posts) before generating a final post. New "Ideas Lab" tab in Content Studio with left/right split panel layout.
+
+- [x] `prompts/synthesize_brief.txt` — NEW: AI prompt to synthesize a 3–6 sentence brief from tagged highlights and source materials; variables: `{source_count}`, `{materials}`
+- [x] `backend/ai/prompt_loader.py` — registered `synthesize_brief` prompt in `_PROMPT_NAMES`
+- [x] `backend/api/content.py` — `GET /content/idea-pool` (unified pool from `posts`, `research_snippets`, `scheduled_posts`; keyword search; source filter; topic relevance ranking); `POST /content/synthesize-brief` (builds brief from selections + highlights via Groq; 422 on empty, 503 on no key); `POST /content/generate-from-brief` (injects brief as `core_insight` into structured post generation)
+- [x] `ui/src/api/client.js` — added `ideaPool`, `synthesizeBrief`, `generateFromBrief` to `content` export
+- [x] `ui/src/pages/ContentStudio.jsx` — two-tab bar (Generate / Ideas Lab tabs with Wand2/Lightbulb icons); `onSendToGenerator` callback (switches tab, injects brief into structured form, sets `generationMode='structured'`); dismissible "Brief loaded from Ideas Lab" banner
+- [x] `ui/src/pages/IdeasLab.jsx` — NEW: top-level Ideas Lab component; owns `pinnedItems` state (max 5); wires `IdeaPoolPanel` + `MixBoard` in 45/55 split
+- [x] `ui/src/components/IdeaPoolPanel.jsx` — NEW: left panel — search (300ms debounce), topic surfacing row, source filter chips (All/LinkedIn/Reddit/RSS/My Posts), post card list with pin/pinned states (disabled + tooltip at 5 pins)
+- [x] `ui/src/components/MixBoard.jsx` — NEW: right panel — pinned cards with X unpin, text-selection tag popover (Hook/Stat/Story/Insight/Example), synthesis brief editor with character counter, Generate here button with inline result + Copy, Send to Generator button
+- [x] `tests/test_ideas_lab.py` — NEW: 8 tests covering prompt registration, idea-pool list/filter/shape, synthesize-brief validation, generate-from-brief validation (123/123 total tests passing)
 
 ### Post-Sprint Enhancement: Content Intelligence + Structured Post Generation ✅
 Extracts structured insights from research snippets, aggregates patterns, and enables grounded LinkedIn post generation with real signal inputs.
@@ -337,12 +349,12 @@ Human-in-the-loop approval flow for AI-generated comments. Comments are held in 
 - [x] M4 — AI Pipeline End-to-End: post → score → comment text in UI
 - [x] M5 — First Real Comment Posted on LinkedIn
 - [x] M6 — Email Enrichment: first email found, in Leads table, in CSV export
-- [~] M7 — Runs 4 Hours Unattended: all code complete, analytics wired, needs runtime validation run
+- [x] M7 — Runs 4 Hours Unattended: all 9 checks passed via `scripts/m7_validate.py`
 - [ ] M8 — Phase 2 Ready: Chrome Extension conversion begins
 
 ---
 
-## Test Suite Summary (94/94 passing)
+## Test Suite Summary (123/123 passing)
 
 | Suite | Tests | Status |
 |---|---|---|
@@ -354,7 +366,8 @@ Human-in-the-loop approval flow for AI-generated comments. Comments are held in 
 | test_enrichment.py | 11 | ✅ |
 | test_feed_scanner.py | 10 | ✅ |
 | test_research.py | 29 | ✅ |
-| **Total** | **94** | **✅ All passing** |
+| test_ideas_lab.py | 8 | ✅ |
+| **Total** | **92** | **✅ All passing** |
 
 ---
 
