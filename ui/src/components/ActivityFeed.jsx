@@ -55,7 +55,8 @@ export default function ActivityFeed() {
   }, [subscribe])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = bottomRef.current?.parentElement?.parentElement
+    if (container) container.scrollTop = container.scrollHeight
   }, [activities])
 
   return (
