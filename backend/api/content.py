@@ -55,6 +55,7 @@ class StructuredGenerateRequest(BaseModel):
     tone: str = "Professional"
     word_count: int = 150
     style_examples: Optional[list] = None  # Top published posts for style matching
+    variation_seed: int = 0  # >0 on regeneration to force different output
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
@@ -246,6 +247,7 @@ async def generate_structured_post(body: StructuredGenerateRequest):
         prompt_loader=prompt_loader,
         evidence=evidence,
         style_examples=body.style_examples or None,
+        variation_seed=body.variation_seed,
     )
     return result
 

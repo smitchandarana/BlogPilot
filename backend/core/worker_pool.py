@@ -51,7 +51,8 @@ class WorkerPool:
                     )
                     return None
 
-            future = self._executor.submit(self._wrap(fn, fn.__name__), *args, **kwargs)
+            label = getattr(fn, "__name__", None) or getattr(getattr(fn, "func", None), "__name__", "task")
+            future = self._executor.submit(self._wrap(fn, label), *args, **kwargs)
             return future
 
     def submit_task(self, task) -> Optional[Future]:

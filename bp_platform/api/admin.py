@@ -5,9 +5,9 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from platform.api.auth import require_admin
-from platform.models.database import User, Container, AuditLog, get_db
-from platform.services import container_manager
+from bp_platform.api.auth import require_admin
+from bp_platform.models.database import User, Container, AuditLog, get_db
+from bp_platform.services import container_manager
 
 router = APIRouter(prefix="/platform/admin", tags=["admin"])
 

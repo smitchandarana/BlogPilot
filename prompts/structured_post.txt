@@ -10,14 +10,46 @@ Core insight to land: {core_insight}
 Belief to challenge: {belief_to_challenge}
 Proof type: {proof_type}
 
+Pre-selected opening hook (USE THIS as your first sentence, verbatim or lightly adapted):
+{selected_hook}
+
+Real-world scenario anchor (if provided, THE FIRST 2 PARAGRAPHS must reference this directly):
+{real_scenario}
+
 SELECTED ANGLE (write toward this):
 {selected_angle}
+
+━━━ SCENARIO INJECTION PRIORITY ━━━
+If a real_scenario is provided above:
+  - The hook MUST be derived from or directly reference that scenario
+  - Paragraphs 1-2 MUST reference that scenario — do NOT generalize before introducing it
+  - Do NOT open with abstract advice and "circle back" to the scenario later
+
+If no scenario is provided:
+  - Construct a HIGHLY SPECIFIC realistic scenario for {audience}
+  - It MUST include: a named role (CFO, ops manager, BI analyst) + a concrete action (reviewing a dashboard, exporting to Excel, reconciling numbers) + a clear failure, inefficiency, or tension
+  - FORBIDDEN constructions: "teams struggle with data" / "businesses face challenges" / anything without a named role doing a specific thing
 
 PRE-COMMITMENT (do this before writing):
 In your head, commit to: "Opening sentence: [specific first sentence]. Core claim: [the one argument this post makes]." Then write the post.
 
 HOOK INSTRUCTION — follow this exactly:
 {hook_intent_instruction}
+
+━━━ NARRATIVE SKELETON — follow this structure for {style} ━━━
+Thought Leadership: Hook (concrete moment) → Expand scenario → Reveal hidden problem → Sharp insight → Implication → Soft CTA
+Story: Setup (role + situation) → Tension (what went wrong) → Turning point → Insight → Application
+Tips List: Hook (broken assumption or mistake) → 3-5 numbered tips (each: specific action + concrete outcome) → Closing insight
+Question: Hook (specific scenario) → Develop tension → Sharp observation → Genuine answerable question
+Data Insight: Hook (specific observation) → Context → What the data reveals → Why it's counterintuitive → Implication
+Contrarian Take: State the common belief with attribution → Specific scenario that breaks it → Root cause → Reframed insight
+
+Do NOT skip steps. Do NOT merge steps.
+
+━━━ INSIGHT COMPRESSION ━━━
+Before writing, commit in your head: "The one thing this post argues is: [one sentence]."
+Write ONLY to support that sentence.
+Do NOT introduce a second insight, lesson, or point. Depth over breadth is mandatory.
 
 REAL-WORLD SIGNALS (thematic patterns from actual industry discussions — do NOT copy or quote these. Use them to inform your angle ONLY if they are directly relevant to the subtopic above. Ignore any signal that is about a different subject):
 {evidence_block}
@@ -32,7 +64,7 @@ Style: {style} | Tone: {tone} | Target length: ~{word_count} words
    Never write for "businesses" or "professionals" — that's everyone and no one.
 
 2. ONE ARGUMENT
-   Make ONE sharp claim and back it. No three-point lists. No "here are the top ways to...".
+   Make ONE sharp claim and back it. No three-point lists unless Tips List style.
    A post that says one thing well is better than one that says five things weakly.
 
 3. PROOF TYPE ENFORCEMENT
@@ -76,11 +108,12 @@ Style: {style} | Tone: {tone} | Target length: ~{word_count} words
 
 ━━━ ANTI-SLOP FINAL CHECK ━━━
 Before you finish, verify:
-□ Does the first sentence contain the specific {subtopic} or name the exact {audience}?
-□ Is there ONE concrete claim — not just "X is important" or "X is changing"?
+□ Does the first sentence name a specific role, action, or moment — NOT "companies" or "teams" or "organizations"?
+□ Does the post stay on ONE argument throughout — no new ideas introduced after paragraph 2?
+□ Is the scenario specific enough that a {audience} member would recognize their own situation?
 □ Does the proof type ({proof_type}) actually appear in the post?
+□ Zero invented statistics? (check every number — if any were fabricated: delete them)
 □ Would a {audience} member send this to a colleague — or scroll past it?
-□ Is there a single invented statistic? If yes, delete it.
 
 Write ONLY the post. No title. No intro. No "Here is your post:". No explanation.
 {style_reference}

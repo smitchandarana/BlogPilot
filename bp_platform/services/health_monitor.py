@@ -6,13 +6,13 @@ from datetime import datetime
 
 import httpx
 
-from platform.config import (
+from bp_platform.config import (
     HEALTH_CHECK_INTERVAL_SECONDS,
     HEALTH_CHECK_MAX_FAILURES,
     HEALTH_CHECK_MAX_RESTARTS,
 )
-from platform.models.database import Container, get_db
-from platform.services import container_manager
+from bp_platform.models.database import Container, get_db
+from bp_platform.services import container_manager
 
 logger = logging.getLogger("platform.health_monitor")
 

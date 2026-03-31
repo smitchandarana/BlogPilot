@@ -52,41 +52,116 @@ class InteractionEngine:
             float(cfg_get("delays.before_like_min", 3)),
             float(cfg_get("delays.before_like_max", 12)),
         )
-        ok = await self._attempt_like(page, post_url)
+        ok = await self._attempt_like(page, post_url, author_name)
         if not ok:
             await asyncio.sleep(2)
-            ok = await self._attempt_like(page, post_url)
+            ok = await self._attempt_like(page, post_url, author_name)
         self._record(ok, ACTION_LIKE, post_url, db, target_name=author_name, topic_tag=topic_tag)
         return ok
 
-    async def _attempt_like(self, page: Page, post_url: str) -> bool:
+    async def _attempt_like(self, page: Page, post_url: str, author_name: str = "") -> bool:
         try:
-            await page.goto(post_url, wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(1.5)
+            # If URL is a real HTTP link, navigate to the post page
+            if post_url.startswith("http"):
+                await page.goto(post_url, wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(1.5)
+                return await self._click_like_on_page(page)
 
-            # Not-yet-liked like button
-            btn = await page.query_selector(
-                "button[aria-label*='Like'][aria-pressed='false'], "
-                "button.reactions-react-button[aria-pressed='false']"
-            )
-            if not btn:
-                logger.debug("Like button not found or post already liked")
-                return False
+            # Synthetic URL (urn:li:feedpost:...) — interact on the current feed page
+            logger.info(f"Like: non-navigable URL, trying in-feed like for '{author_name}'")
+            return await self._like_in_feed(page, author_name)
 
-            await btn.hover()
-            await asyncio.sleep(0.4)
-            await btn.click()
-            await asyncio.sleep(1.2)
-
-            # Verify
-            liked = await page.query_selector(
-                "button[aria-label*='Like'][aria-pressed='true'], "
-                "button.reactions-react-button[aria-pressed='true']"
-            )
-            return liked is not None
         except Exception as e:
             logger.warning(f"Like attempt error: {e}")
             return False
+
+    async def _click_like_on_page(self, page: Page) -> bool:
+        """Find and click the like button on the current page (post detail or feed)."""
+        # New LinkedIn DOM: reaction button with aria-label
+        btn = await page.query_selector(
+            "button[aria-label='Reaction button state: no reaction'], "
+            "button[aria-label*='Like'][aria-pressed='false'], "
+            "button.reactions-react-button[aria-pressed='false']"
+        )
+        if not btn:
+            logger.debug("Like button not found or post already liked")
+            return False
+
+        await btn.hover()
+        await asyncio.sleep(0.4)
+        await btn.click()
+        await asyncio.sleep(1.2)
+
+        # Verify — check if the button state changed
+        liked = await page.query_selector(
+            "button[aria-label*='reaction'][aria-pressed='true'], "
+            "button[aria-label*='Like'][aria-pressed='true'], "
+            "button.reactions-react-button[aria-pressed='true']"
+        )
+        return liked is not None
+
+    async def _like_in_feed(self, page: Page, author_name: str) -> bool:
+        """Like a post directly on the feed page by finding the post via author name."""
+        if not author_name:
+            logger.warning("Like in-feed: no author name — cannot locate post")
+            return False
+
+        # Find the post container via the author's control menu button
+        result = await page.evaluate("""(authorName) => {
+            // Find the "control menu for post by <author>" button
+            const buttons = document.querySelectorAll('button[aria-label*="control menu for post by"]');
+            for (const btn of buttons) {
+                const label = btn.getAttribute('aria-label') || '';
+                if (label.includes(authorName)) {
+                    // Walk up to the post container (data-display-contents wrapper)
+                    let container = btn.closest('[data-display-contents="true"]');
+                    if (!container) {
+                        // Fallback: walk up to find a reasonable ancestor
+                        container = btn.parentElement;
+                        for (let i = 0; i < 8 && container; i++) {
+                            if (container.querySelector('button[aria-label*="Reaction button"]')) break;
+                            container = container.parentElement;
+                        }
+                    }
+                    if (!container) return null;
+
+                    // Find the reaction button (not yet reacted)
+                    const reactBtn = container.querySelector(
+                        'button[aria-label="Reaction button state: no reaction"]'
+                    );
+                    if (reactBtn) {
+                        // Return a selector path to click it
+                        // Use the button's position in the DOM
+                        reactBtn.setAttribute('data-bp-click-target', 'true');
+                        return true;
+                    }
+                    return null;  // Already liked or no button found
+                }
+            }
+            return null;
+        }""", author_name)
+
+        if not result:
+            logger.debug(f"Like in-feed: could not locate reaction button for '{author_name}'")
+            return False
+
+        # Click the marked button
+        btn = await page.query_selector('button[data-bp-click-target="true"]')
+        if not btn:
+            return False
+
+        # Clean up the marker attribute
+        await page.evaluate("""() => {
+            const el = document.querySelector('[data-bp-click-target]');
+            if (el) el.removeAttribute('data-bp-click-target');
+        }""")
+
+        await btn.hover()
+        await asyncio.sleep(0.4)
+        await btn.click()
+        await asyncio.sleep(1.2)
+        logger.info(f"Liked in-feed post by '{author_name}'")
+        return True
 
     # ── Comment ────────────────────────────────────────────────────────────
 
@@ -99,19 +174,29 @@ class InteractionEngine:
             float(cfg_get("delays.before_comment_min", 8)),
             float(cfg_get("delays.before_comment_max", 45)),
         )
-        ok = await self._attempt_comment(page, post_url, comment_text)
+        ok = await self._attempt_comment(page, post_url, comment_text, author_name)
         if not ok:
             await asyncio.sleep(3)
-            ok = await self._attempt_comment(page, post_url, comment_text)
+            ok = await self._attempt_comment(page, post_url, comment_text, author_name)
         self._record(ok, ACTION_COMMENT, post_url, db, comment_text=comment_text, target_name=author_name, topic_tag=topic_tag)
         return ok
 
     async def _attempt_comment(
-        self, page: Page, post_url: str, comment_text: str
+        self, page: Page, post_url: str, comment_text: str, author_name: str = ""
     ) -> bool:
         try:
-            await page.goto(post_url, wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(2.0)
+            # Navigate to post if it has a real URL
+            if post_url.startswith("http"):
+                await page.goto(post_url, wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(2.0)
+            else:
+                # Non-navigable URL — scroll to post on feed page
+                logger.info(f"Comment: non-navigable URL, trying in-feed comment for '{author_name}'")
+                if author_name:
+                    scrolled = await self._scroll_to_post_in_feed(page, author_name)
+                    if not scrolled:
+                        logger.warning(f"Could not locate post by '{author_name}' in feed")
+                        return False
 
             # Open comment area
             comment_btn = await page.query_selector(
@@ -126,6 +211,7 @@ class InteractionEngine:
             editor = await page.query_selector(
                 "div.ql-editor[contenteditable='true'], "
                 "div[role='textbox'][aria-label*='comment' i], "
+                "div[role='textbox'][contenteditable='true'], "
                 "div.comments-comment-box__form div[contenteditable='true']"
             )
             if not editor:
@@ -158,6 +244,25 @@ class InteractionEngine:
             return True
         except Exception as e:
             logger.warning(f"Comment attempt error: {e}")
+            return False
+
+    async def _scroll_to_post_in_feed(self, page: Page, author_name: str) -> bool:
+        """Scroll the feed to bring a specific post into view, by author name."""
+        try:
+            found = await page.evaluate("""(authorName) => {
+                const buttons = document.querySelectorAll('button[aria-label*="control menu for post by"]');
+                for (const btn of buttons) {
+                    if ((btn.getAttribute('aria-label') || '').includes(authorName)) {
+                        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return true;
+                    }
+                }
+                return false;
+            }""", author_name)
+            if found:
+                await asyncio.sleep(1.0)
+            return found
+        except Exception:
             return False
 
     # ── Connect ────────────────────────────────────────────────────────────

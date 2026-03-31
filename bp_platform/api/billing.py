@@ -3,9 +3,9 @@
 import stripe
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from platform.config import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-from platform.api.auth import get_current_user
-from platform.models.database import User, BillingEvent, get_db
+from bp_platform.config import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+from bp_platform.api.auth import get_current_user
+from bp_platform.models.database import User, BillingEvent, get_db
 
 router = APIRouter(prefix="/platform/billing", tags=["billing"])
 

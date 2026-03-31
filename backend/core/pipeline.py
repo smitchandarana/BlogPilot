@@ -62,14 +62,15 @@ def _build_ai_deps():
 
 # ── Public sync entry points (called by worker pool) ──────────────────────
 
-def run_feed_scan():
+def run_feed_scan(force: bool = False):
     """
     Sync entry point called by the worker pool.
     Spawns a fresh asyncio event loop and runs the full async pipeline.
+    force=True bypasses the activity-window guard (used by manual scan-now).
     """
-    logger.info("Pipeline: run_feed_scan triggered")
+    logger.info(f"Pipeline: run_feed_scan triggered (force={force})")
     try:
-        asyncio.run(_async_feed_scan())
+        asyncio.run(_async_feed_scan(force=force))
     except Exception as e:
         logger.error(f"Pipeline: run_feed_scan failed: {e}", exc_info=True)
 
@@ -100,7 +101,7 @@ def run_approve_comment(post_id: str, comment_text: str):
 
 # ── Async pipeline implementation ─────────────────────────────────────────
 
-async def _async_feed_scan():
+async def _async_feed_scan(force: bool = False):
     """Full async feed scan: login → scan → process each post."""
     from backend.automation.browser import BrowserManager
     from backend.automation.linkedin_login import LinkedInLogin
@@ -122,31 +123,45 @@ async def _async_feed_scan():
             logger.info("Pipeline: engine not RUNNING — aborting")
             return
 
-    # Guard: activity window check
-    if not _in_activity_window():
+    # Guard: activity window check (skipped for manual scan-now)
+    if not force and not _in_activity_window():
         logger.info("Pipeline: outside activity window — skipping")
         return
 
     cb = engine.circuit_breaker if engine else None
 
+    def _rt(msg: str, level: str = "info"):
+        """Emit a runtime_event WebSocket broadcast."""
+        try:
+            schedule_broadcast("runtime_event", {"message": msg, "level": level})
+        except Exception:
+            pass
+
     # Build AI deps once per scan (shared across all posts)
+    _rt("Building AI clients…")
     background_client, generation_client, prompt_loader = _build_ai_deps()
 
     browser = BrowserManager()
     try:
+        _rt("Launching browser…")
         await browser.launch()
         page = await browser.get_page()
 
         # Ensure logged in
         login = LinkedInLogin()
         if not await login.is_logged_in(page):
-            logger.info("Pipeline: not logged in — attempting login")
+            _rt("Not logged in — attempting LinkedIn login…", "warning")
             ok = await login.login(page)
             if not ok:
+                _rt("Login failed — aborting scan", "error")
                 logger.error("Pipeline: login failed — aborting scan")
                 return
+            _rt("Login successful", "success")
+        else:
+            _rt("Already logged in via persistent session", "success")
 
         # Step 2: Scan feed
+        _rt("Scanning LinkedIn feed…")
         scanner = FeedScanner(post_state=_post_state_mod)
         ie = InteractionEngine(
             circuit_breaker=cb,
@@ -179,9 +194,11 @@ async def _async_feed_scan():
                     logger.warning(f"Pipeline: hashtag scan error — {e}")
 
             if not posts:
+                _rt("No new posts found", "warning")
                 logger.info("Pipeline: no new posts found")
                 return
 
+            _rt(f"Found {len(posts)} new posts — processing…", "success")
             logger.info(f"Pipeline: processing {len(posts)} new posts")
 
             for post in posts:
@@ -401,6 +418,11 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
                 return
 
     # Step 4: Score for relevance (background AI client — OpenRouter free or Groq fallback)
+    try:
+        from backend.api.websocket import schedule_broadcast as _sbc
+        _sbc("runtime_event", {"message": f"Scoring post by {author}…", "level": "info"})
+    except Exception:
+        pass
     score = await _score_post(post, background_client, prompt_loader)
     min_score = float(cfg_get("feed_engagement.min_relevance_score", 6))
 
@@ -410,10 +432,20 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
             relevance_score=score,
             skip_reason=f"score {score:.1f} < threshold {min_score}",
         )
+        try:
+            from backend.api.websocket import schedule_broadcast as _sbc
+            _sbc("runtime_event", {"message": f"Skip '{author}' — score {score:.1f} < {min_score}", "level": "warning"})
+        except Exception:
+            pass
         logger.info(f"Pipeline: SKIP '{author}' score={score:.1f}")
         return
 
     post_state.update_state(url, "SCORED", db, relevance_score=score)
+    try:
+        from backend.api.websocket import schedule_broadcast as _sbc
+        _sbc("runtime_event", {"message": f"✓ '{author}' — score {score:.1f} → queuing action", "level": "success"})
+    except Exception:
+        pass
     logger.info(f"Pipeline: scored '{author}' score={score:.1f}")
 
     # Match post against configured topics for performance tracking
@@ -452,6 +484,11 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
     comment_angle: str = "unknown"
     comment_candidate_count: int = 0
     if action in ("COMMENT", "LIKE_AND_COMMENT"):
+        try:
+            from backend.api.websocket import schedule_broadcast as _sbc
+            _sbc("runtime_event", {"message": f"Generating comment for '{author}'…", "level": "info"})
+        except Exception:
+            pass
         comment_result = await _generate_comment(post, generation_client, prompt_loader)
         if isinstance(comment_result, dict):
             comment_text = comment_result.get("comment", "")
@@ -494,6 +531,11 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
             except Exception:
                 pass
             post_state.update_state(url, "PREVIEW", db, relevance_score=score, comment_text=comment_text)
+            try:
+                from backend.api.websocket import schedule_broadcast as _sbc
+                _sbc("runtime_event", {"message": f"💬 Comment queued for approval — '{author}'", "level": "success"})
+            except Exception:
+                pass
             logger.info(f"Pipeline: PREVIEW sent for '{author}' — awaiting approval")
             return
 
@@ -507,17 +549,17 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
     acted = False
 
     if action in ("LIKE", "LIKE_AND_COMMENT"):
-        ok = await ie.like_post(page, url, db=db, topic_tag=matched_topic)
+        ok = await ie.like_post(page, url, db=db, author_name=author, topic_tag=matched_topic)
         if ok:
             acted = True
 
     if action in ("COMMENT", "LIKE_AND_COMMENT") and comment_text:
-        ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
+        ok = await ie.comment_post(page, url, comment_text, db=db, author_name=author, topic_tag=matched_topic)
         if not ok:
             # Retry once after a short delay before giving up
             logger.info(f"Pipeline: comment failed for '{author}' — retrying in 3s")
             await asyncio.sleep(3)
-            ok = await ie.comment_post(page, url, comment_text, db=db, topic_tag=matched_topic)
+            ok = await ie.comment_post(page, url, comment_text, db=db, author_name=author, topic_tag=matched_topic)
             if not ok:
                 logger.warning(f"Pipeline: comment retry also failed for '{author}' — downgrading to LIKE")
         if ok:
@@ -634,7 +676,7 @@ async def _score_post(post: dict, groq_client=None, prompt_loader=None) -> float
     """
     topics_cfg = cfg_get("topics", [])
 
-    # Groq path
+    # AI scoring path
     if groq_client and prompt_loader:
         try:
             from backend.ai import relevance_classifier
@@ -649,9 +691,13 @@ async def _score_post(post: dict, groq_client=None, prompt_loader=None) -> float
                 groq_client=groq_client,
                 prompt_loader=prompt_loader,
             )
-            return float(result.get("score", 0))
+            # If AI returned parse_error, fall through to keyword fallback
+            if result.get("reason") == "parse_error":
+                logger.warning("Pipeline: AI scoring returned parse_error, falling back to keyword")
+            else:
+                return float(result.get("score", 0))
         except Exception as e:
-            logger.warning(f"Pipeline: Groq scoring failed, falling back to keyword: {e}")
+            logger.warning(f"Pipeline: AI scoring failed, falling back to keyword: {e}")
 
     # Fallback: keyword-overlap
     text = (post.get("text") or "").lower()

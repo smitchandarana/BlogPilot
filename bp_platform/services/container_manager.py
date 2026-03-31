@@ -9,14 +9,14 @@ from datetime import datetime
 import docker
 import httpx
 
-from platform.config import (
+from bp_platform.config import (
     BLOGPILOT_IMAGE, VOLUME_BASE_PATH, DOCKER_NETWORK,
     CONTAINER_MEMORY_LIMIT, CONTAINER_CPU_LIMIT,
     ADMIN_SETTINGS_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE,
 )
-from platform.services.port_allocator import allocate_port
-from platform.services.token_service import generate_container_token
-from platform.models.database import Container, get_db
+from bp_platform.services.port_allocator import allocate_port
+from bp_platform.services.token_service import generate_container_token
+from bp_platform.models.database import Container, get_db
 
 _client = None
 

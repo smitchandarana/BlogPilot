@@ -419,6 +419,7 @@ export default function ContentStudio() {
   const [criticScores, setCriticScores] = useState(null)
   const [rewriteAttempted, setRewriteAttempted] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [generateAttempt, setGenerateAttempt] = useState(0)
 
   const [showScheduler, setShowScheduler] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
@@ -590,6 +591,10 @@ export default function ContentStudio() {
     }
   }
 
+  // Reset attempt counter when the core inputs change — next generate() is a fresh start
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setGenerateAttempt(0) }, [topic, style, tone, generationMode])
+
   const generateFromResearchTopic = async (researchTopic) => {
     setGeneratingFromResearch(true)
     setEnrichedContext({ topicId: researchTopic.id, topicName: researchTopic.topic, angle: researchTopic.suggested_angle })
@@ -671,6 +676,8 @@ export default function ContentStudio() {
   }
 
   const generate = async () => {
+    const currentAttempt = generateAttempt
+    setGenerateAttempt(a => a + 1)
     setGenerating(true)
     setEnrichedContext(null)
     setDuplicateWarning(null)
@@ -685,6 +692,7 @@ export default function ContentStudio() {
           topic, style, tone, word_count: wordCount,
           ...structuredInputs,
           ...(pendingStyleExamples ? { style_examples: pendingStyleExamples } : {}),
+          variation_seed: currentAttempt,
         }
         const res = await contentApi.generateStructured(payload)
         setPendingStyleExamples(null)

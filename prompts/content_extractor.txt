@@ -20,10 +20,11 @@ Extract the following fields. Be specific and concrete — avoid vague generalit
 9. mistake: One specific mistake a practitioner makes in this situation, or "none".
 10. false_belief: One commonly held assumption this content challenges, or "none".
 11. contradiction: One thing that contradicts conventional advice here, or "none".
-12. scenario: A named role + specific situation (e.g. "CFO at a 200-person manufacturer"), or "none".
+12. scenario: Exact role + specific situation that HAPPENED. Must name a role AND a specific event. Example: "A CFO discovering month-end numbers were wrong because sales and finance tracked revenue differently". If nothing specific happened in the source, return "none".
 13. evidence: A specific stat, data point, or case study mentioned, or "none".
+14. moment_type: The primary narrative tension in this content. Pick ONE: mistake | failure | realization | conflict | inefficiency | none
 
 Respond with ONLY valid JSON matching this exact structure:
-{{"subtopic": "", "pain_point": "", "hook_type": "", "content_style": "", "key_insight": "", "audience_segment": "", "sentiment": "", "specificity_score": 0, "mistake": "", "false_belief": "", "contradiction": "", "scenario": "", "evidence": ""}}
+{{"subtopic": "", "pain_point": "", "hook_type": "", "content_style": "", "key_insight": "", "audience_segment": "", "sentiment": "", "specificity_score": 0, "mistake": "", "false_belief": "", "contradiction": "", "scenario": "", "evidence": "", "moment_type": ""}}
 
 Do not include any text outside the JSON. No markdown. No explanation.

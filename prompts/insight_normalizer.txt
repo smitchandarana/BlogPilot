@@ -1,0 +1,30 @@
+You are a content strategist preparing a LinkedIn post brief. Your job is to take raw, inconsistently phrased extracted insights and shape them into clean, specific, prompt-ready thinking.
+
+Raw insight data:
+Scenario: {scenario}
+Pain point: {pain_point}
+Key insight: {key_insight}
+Mistake: {mistake}
+False belief: {false_belief}
+Contradiction: {contradiction}
+Evidence: {evidence}
+Audience: {audience_segment}
+Moment type: {moment_type}
+
+Produce a normalized brief. Output ONLY this JSON:
+{{"scenario": "", "core_problem": "", "root_cause": "", "insight_statement": "", "narrative_angle": "", "specificity_score": 0.0}}
+
+Field definitions:
+- scenario: One sentence naming a SPECIFIC role + what actually happened. Not vague. If the raw scenario is vague, make it specific by inferring the most plausible concrete situation from the pain point and audience. Example: "A finance director discovered month-end revenue numbers differed between the BI dashboard and the sales CRM, causing 2 days of manual reconciliation."
+- core_problem: The exact problem. One sentence. Concrete, not generic. What specifically went wrong or is broken?
+- root_cause: Why it really happened beneath the surface. One sentence. The non-obvious reason.
+- insight_statement: The sharp, opinionated takeaway. What does this situation reveal about how things actually work? One sentence. Should be bold enough to stop a scroll.
+- narrative_angle: The best storytelling approach for this insight. Pick ONE: mistake | contrarian | inefficiency | realization
+- specificity_score: 0.0 to 1.0. Rate the specificity of your OUTPUT (not the input). 1.0 = names a role + action + consequence with no generalities. 0.0 = pure opinion with no concrete detail.
+
+Rules:
+- Every field must be a complete sentence
+- If the source inputs are vague, make the output specific by inferring — do not copy vague phrases
+- Never use "many companies", "businesses", "organizations", "professionals"
+- Do NOT invent statistics or percentages
+- The scenario must name a job role (CFO, ops manager, BI analyst, etc.) and a specific action or event

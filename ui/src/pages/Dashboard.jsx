@@ -4,7 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useEngine } from '../hooks/useEngine'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
-import ActivityFeed from '../components/ActivityFeed'
+import EngineRuntimePanel from '../components/EngineRuntimePanel'
 import PreviewQueue from '../components/PreviewQueue'
 import FirstRunWizard from '../components/FirstRunWizard'
 import { analytics, engine as engineApi, intelligence as intelligenceApi, research as researchApi, config as configApi } from '../api/client'
@@ -374,7 +374,7 @@ export default function Dashboard() {
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">
           Live Activity
         </h2>
-        <ActivityFeed />
+        <EngineRuntimePanel />
       </div>
     </div>
     </>

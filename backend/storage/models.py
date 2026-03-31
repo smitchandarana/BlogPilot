@@ -276,6 +276,8 @@ class ContentInsight(Base):
     contradiction = Column(Text, nullable=True)
     scenario = Column(Text, nullable=True)
     evidence = Column(Text, nullable=True)
+    # Signal quality v3
+    moment_type = Column(String(32), nullable=True)  # mistake | failure | realization | conflict | inefficiency
 
 
 class ContentPattern(Base):

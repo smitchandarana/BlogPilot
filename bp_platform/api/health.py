@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from platform.models.database import User, Container, get_db
+from bp_platform.models.database import User, Container, get_db
 
 router = APIRouter(tags=["health"])
 

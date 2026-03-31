@@ -9,6 +9,7 @@ Endpoints:
   DELETE /research/topics/{id}          → dismiss a researched topic
   GET  /research/status                 → research status info
 """
+import asyncio
 import os
 from datetime import datetime, timezone
 
@@ -33,6 +34,7 @@ router = APIRouter()
 
 # Track last research run
 _last_research_at: datetime | None = None
+_is_researching: bool = False
 
 
 class GenerateRequest(BaseModel):
@@ -41,19 +43,8 @@ class GenerateRequest(BaseModel):
     word_count: Optional[int] = 150
 
 
-@router.post("/trigger")
-async def trigger_research():
-    """Manually trigger topic research for all active topics."""
-    global _last_research_at
-
-    topics = cfg_get("topics", [])
-    if not topics:
-        raise HTTPException(status_code=400, detail="No topics configured in settings.yaml")
-
-    if not cfg_get("research.enabled", True):
-        raise HTTPException(status_code=400, detail="Research is disabled in settings")
-
-    # Get Groq client and prompt loader if available
+def _build_researcher():
+    """Build and return (groq_client, prompt_loader, researcher) tuple."""
     groq_client = None
     prompt_loader = None
     try:
@@ -86,29 +77,54 @@ async def trigger_research():
     except Exception as e:
         logger.warning(f"Research: could not init AI — falling back to heuristics: {e}")
 
-    researcher = TopicResearcher(groq_client=groq_client, prompt_loader=prompt_loader)
+    return TopicResearcher(groq_client=groq_client, prompt_loader=prompt_loader)
 
-    with get_db() as db:
-        results = await researcher.research_topics(topics, db)
 
-    _last_research_at = datetime.now(timezone.utc)
-
-    # Broadcast WebSocket event
+async def _run_research_background(topics: list, researcher: "TopicResearcher"):
+    """Run research pipeline in background — fire-and-forget."""
+    global _is_researching, _last_research_at
+    _is_researching = True
     try:
-        from backend.api.websocket import schedule_broadcast
-        schedule_broadcast("research_complete", {
-            "topics_researched": len(results),
-            "top_topic": results[0]["topic"] if results else None,
-            "top_score": results[0]["composite_score"] if results else 0,
-        })
-    except Exception:
-        pass
+        logger.info(f"Background research started for {len(topics)} topics")
+        with get_db() as db:
+            results = await researcher.research_topics(topics, db)
+        _last_research_at = datetime.now(timezone.utc)
+        logger.info(f"Background research complete — {len(results)} topics stored")
+        try:
+            from backend.api.websocket import schedule_broadcast
+            schedule_broadcast("activity", {
+                "action": "research_complete",
+                "target": f"{len(results)} topics researched",
+                "result": "SUCCESS",
+            })
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Background research failed: {e}")
+    finally:
+        _is_researching = False
 
-    return {
-        "status": "completed",
-        "topics_researched": len(results),
-        "results": results,
-    }
+
+@router.post("/trigger")
+async def trigger_research():
+    """Manually trigger topic research in background (fire-and-forget)."""
+    global _is_researching
+
+    if _is_researching:
+        return {"status": "already_running", "message": "Research is already in progress"}
+
+    topics = cfg_get("topics", [])
+    if not topics:
+        raise HTTPException(status_code=400, detail="No topics configured in settings.yaml")
+
+    if not cfg_get("research.enabled", True):
+        raise HTTPException(status_code=400, detail="Research is disabled in settings")
+
+    researcher = _build_researcher()
+
+    asyncio.create_task(_run_research_background(topics, researcher))
+
+    return {"status": "started", "message": f"Researching {len(topics)} topics in background"}
 
 
 @router.get("/topics")
@@ -235,6 +251,7 @@ async def research_status():
         "last_run": _last_research_at.isoformat() if _last_research_at else None,
         "scan_interval_hours": cfg_get("research.scan_interval_hours", 6),
         "active_topics": total,
+        "is_running": _is_researching,
         "sources": {
             "reddit": cfg_get("research.reddit.enabled", True),
             "rss": cfg_get("research.rss.enabled", True),

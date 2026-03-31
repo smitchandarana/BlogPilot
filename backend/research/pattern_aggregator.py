@@ -260,7 +260,7 @@ class PatternAggregator:
         """
         from backend.storage.models import ContentInsight
 
-        # Get top insights for the topic
+        # Get top insights for the topic, sorted by specificity (best first)
         try:
             recent_insights = (
                 db.query(ContentInsight)
@@ -280,6 +280,8 @@ class PatternAggregator:
                     "hook_type": r.hook_type,
                     "key_insight": r.key_insight,
                     "audience_segment": r.audience_segment,
+                    "scenario": r.scenario,
+                    "moment_type": getattr(r, "moment_type", None),
                     "specificity_score": r.specificity_score,
                     "source_type": r.source_type,
                 }
@@ -288,14 +290,54 @@ class PatternAggregator:
         except Exception:
             insights_list = []
 
+        # Enrich pain_point patterns with their top insight (sorted by specificity)
+        pain_points_raw = self.get_trending_pain_points(db, limit=6)
+        pain_points = self._enrich_patterns_with_top_insight(pain_points_raw, db)
+        # Sort by specificity of top_insight (best signal first)
+        pain_points.sort(
+            key=lambda p: p.get("top_insight", {}).get("specificity_score", 0),
+            reverse=True
+        )
+
         return {
-            "pain_points": self.get_trending_pain_points(db, limit=5),
+            "pain_points": pain_points,
             "hooks": self.get_effective_hooks(db, limit=6),
             "audiences": self.get_audience_segments(db, limit=5),
             "topic_trends": self.get_trending_topics(db, limit=5),
             "recent_insights": insights_list,
             "evidence_block": self.get_evidence_block(topic, db, limit=5),
         }
+
+    def _enrich_patterns_with_top_insight(self, patterns: list, db) -> list:
+        """For each pattern, attach the top ContentInsight by specificity_score."""
+        from backend.storage.models import ContentInsight
+        enriched = []
+        for pattern in patterns:
+            ids = pattern.get("example_insight_ids", [])
+            top_insight = None
+            if ids:
+                try:
+                    insight = (
+                        db.query(ContentInsight)
+                        .filter(ContentInsight.id.in_(ids))
+                        .order_by(ContentInsight.specificity_score.desc())
+                        .first()
+                    )
+                    if insight:
+                        top_insight = {
+                            "id": insight.id,
+                            "scenario": insight.scenario,
+                            "moment_type": getattr(insight, "moment_type", None),
+                            "key_insight": insight.key_insight,
+                            "pain_point": insight.pain_point,
+                            "hook_type": insight.hook_type,
+                            "audience_segment": insight.audience_segment,
+                            "specificity_score": insight.specificity_score,
+                        }
+                except Exception:
+                    pass
+            enriched.append({**pattern, "top_insight": top_insight})
+        return enriched
 
     # ── Aggregation helpers ───────────────────────────────────────────────
 

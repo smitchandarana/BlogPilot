@@ -139,10 +139,11 @@ class Engine:
 
     # ── Task dispatch ──────────────────────────────────────────────────────
 
-    def queue_feed_scan(self):
-        """Submit a feed-scan task to the worker pool (called by scheduler)."""
+    def queue_feed_scan(self, force: bool = False):
+        """Submit a feed-scan task to the worker pool (called by scheduler or manually)."""
         from backend.core.pipeline import run_feed_scan
-        self.worker_pool.submit(run_feed_scan)
+        import functools
+        self.worker_pool.submit(functools.partial(run_feed_scan, force=force))
 
     # ── Status ─────────────────────────────────────────────────────────────
 

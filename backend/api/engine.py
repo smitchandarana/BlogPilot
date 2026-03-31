@@ -77,7 +77,11 @@ async def trigger_scan():
     from backend.core.state_manager import EngineState
     if eng.state_manager.get() != EngineState.RUNNING:
         raise HTTPException(status_code=409, detail="Engine must be RUNNING")
-    eng.queue_feed_scan()
+    try:
+        eng.queue_feed_scan(force=True)
+    except Exception as e:
+        logger.error(f"scan-now failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
     return {"status": "feed_scan_queued"}
 
 
@@ -95,6 +99,38 @@ async def reset_circuit_breaker():
             eng.state_manager.recover()
         return {"status": "circuit_breaker_reset", "state": eng.status()["state"]}
     return {"status": "no_circuit_breaker"}
+
+
+@router.get("/logs")
+async def get_logs(lines: int = 150):
+    """Return last N lines from engine.log as a list of parsed log objects."""
+    import os, json
+    log_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "logs", "engine.log")
+    )
+    if not os.path.exists(log_path):
+        return []
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            raw_lines = f.readlines()
+        result = []
+        for line in raw_lines[-lines:]:
+            line = line.rstrip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                result.append({
+                    "ts": obj.get("timestamp", ""),
+                    "level": obj.get("level", "INFO"),
+                    "module": obj.get("module", ""),
+                    "message": obj.get("message", line),
+                })
+            except Exception:
+                result.append({"ts": "", "level": "INFO", "module": "", "message": line})
+        return result
+    except Exception:
+        return []
 
 
 @router.get("/status")

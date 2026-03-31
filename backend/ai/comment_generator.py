@@ -9,6 +9,7 @@ Usage:
     # result is a dict: {"comment": str, "quality_score": float, "angle": str, ...}
 """
 import json
+import re
 import random
 from typing import Union, Optional
 
@@ -88,9 +89,15 @@ def _randomize_comment_params() -> dict:
     }
 
 
+_EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0000FE00-\U0000FE0F"
+    "\U00002500-\U00002BEF\U0001FA00-\U0001FFFF]+",
+    flags=re.UNICODE,
+)
+
 def _clean(text: str) -> str:
-    """Strip surrounding quotes and whitespace from model output."""
-    text = text.strip()
+    """Strip surrounding quotes, emojis, and whitespace from model output."""
+    text = _EMOJI_RE.sub("", text).strip()
     if len(text) >= 2 and text[0] in ('"', "'") and text[-1] == text[0]:
         text = text[1:-1].strip()
     return text

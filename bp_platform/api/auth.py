@@ -9,8 +9,8 @@ from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
 
-from platform.models.database import User, Container, get_db
-from platform.services.token_service import (
+from bp_platform.models.database import User, Container, get_db
+from bp_platform.services.token_service import (
     hash_password, verify_password, create_jwt, decode_jwt,
 )
 

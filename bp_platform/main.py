@@ -11,10 +11,10 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from platform.config import ADMIN_EMAIL, ADMIN_PASSWORD
-from platform.models.database import init_db, get_db, User
-from platform.services.token_service import hash_password
-from platform.services.health_monitor import health_monitor_loop
+from bp_platform.config import ADMIN_EMAIL, ADMIN_PASSWORD
+from bp_platform.models.database import init_db, get_db, User
+from bp_platform.services.token_service import hash_password
+from bp_platform.services.health_monitor import health_monitor_loop
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -76,11 +76,11 @@ app.add_middleware(
 )
 
 # Register routers
-from platform.api.auth import router as auth_router
-from platform.api.containers import router as containers_router
-from platform.api.admin import router as admin_router
-from platform.api.billing import router as billing_router
-from platform.api.health import router as health_router
+from bp_platform.api.auth import router as auth_router
+from bp_platform.api.containers import router as containers_router
+from bp_platform.api.admin import router as admin_router
+from bp_platform.api.billing import router as billing_router
+from bp_platform.api.health import router as health_router
 
 app.include_router(auth_router)
 app.include_router(containers_router)

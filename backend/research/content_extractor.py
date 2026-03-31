@@ -34,6 +34,7 @@ _SYSTEM = (
 _VALID_HOOK_TYPES = {"CONTRARIAN", "QUESTION", "STAT", "STORY", "TREND", "MISTAKE"}
 _VALID_STYLES = {"TACTICAL", "STRATEGIC", "PERSONAL", "EDUCATIONAL", "PROVOCATIVE"}
 _VALID_SENTIMENTS = {"POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED"}
+_VALID_MOMENT_TYPES = {"mistake", "failure", "realization", "conflict", "inefficiency"}
 
 
 class ContentExtractor:
@@ -62,7 +63,7 @@ class ContentExtractor:
             List of created insight dicts.
         """
         if self._groq is None or self._prompts is None:
-            logger.warning("ContentExtractor: no Groq client — skipping extraction")
+            logger.warning("ContentExtractor: no AI client — skipping extraction")
             return []
 
         from backend.storage.models import ResearchSnippet, ResearchedTopic, ContentInsight
@@ -151,6 +152,7 @@ class ContentExtractor:
                         contradiction=data.get("contradiction"),
                         scenario=data.get("scenario"),
                         evidence=data.get("evidence"),
+                        moment_type=data.get("moment_type"),
                     )
                     db.add(insight)
                     db.commit()
@@ -188,7 +190,7 @@ class ContentExtractor:
         Returns the created ContentInsight dict or None on failure.
         """
         if self._groq is None or self._prompts is None:
-            logger.warning("ContentExtractor: no Groq client")
+            logger.warning("ContentExtractor: no AI client")
             return None
 
         from backend.storage.models import ContentInsight
@@ -228,6 +230,7 @@ class ContentExtractor:
                 contradiction=data.get("contradiction"),
                 scenario=data.get("scenario"),
                 evidence=data.get("evidence"),
+                moment_type=data.get("moment_type"),
             )
             db.add(insight)
             db.commit()
@@ -284,7 +287,7 @@ class ContentExtractor:
             raw = await self._groq.complete(_SYSTEM, prompt)
             raw = raw.strip()
         except Exception as e:
-            logger.warning(f"ContentExtractor: Groq call failed — {e}")
+            logger.warning(f"ContentExtractor: AI call failed — {e}")
             return None
 
         data = parse_json_safe(raw, context="content_extractor")
@@ -308,6 +311,9 @@ class ContentExtractor:
         except (TypeError, ValueError):
             score = 0.0
 
+        raw_moment = str(data.get("moment_type", "")).lower().strip()
+        moment_type = raw_moment if raw_moment in _VALID_MOMENT_TYPES else None
+
         return {
             "subtopic": str(data.get("subtopic", ""))[:256],
             "pain_point": str(data.get("pain_point", ""))[:512],
@@ -322,4 +328,5 @@ class ContentExtractor:
             "contradiction": _none_if_empty(data.get("contradiction")),
             "scenario": _none_if_empty(data.get("scenario")),
             "evidence": _none_if_empty(data.get("evidence")),
+            "moment_type": moment_type,
         }

@@ -194,14 +194,17 @@ async def extract_from_text(body: ExtractTextRequest):
     if not body.text or len(body.text.strip()) < 50:
         raise HTTPException(status_code=422, detail="Text must be at least 50 characters")
 
-    groq_client, prompt_loader = _build_ai_deps()
-    if groq_client is None:
-        raise HTTPException(status_code=503, detail="Groq API key not configured")
+    ai_client, prompt_loader = _build_ai_deps()
+    if ai_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="No AI key configured (OpenRouter or Groq required) — add one in Settings"
+        )
 
     from backend.research.content_extractor import ContentExtractor
     from backend.research.pattern_aggregator import PatternAggregator
 
-    extractor = ContentExtractor(groq_client, prompt_loader)
+    extractor = ContentExtractor(ai_client, prompt_loader)
     with get_db() as db:
         insight = await extractor.extract_from_raw_text(body.text, source=body.source.upper(), db=db)
         if not insight:

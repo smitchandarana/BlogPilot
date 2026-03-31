@@ -1,7 +1,7 @@
 """Allocate and release host ports for user containers."""
 
-from platform.config import PORT_RANGE_START, PORT_RANGE_END
-from platform.models.database import Container, get_db
+from bp_platform.config import PORT_RANGE_START, PORT_RANGE_END
+from bp_platform.models.database import Container, get_db
 
 
 def allocate_port() -> int:

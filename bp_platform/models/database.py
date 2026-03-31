@@ -10,7 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Session
 from contextlib import contextmanager
 
-from platform.config import DATABASE_URL
+from bp_platform.config import DATABASE_URL
 
 Base = declarative_base()
 

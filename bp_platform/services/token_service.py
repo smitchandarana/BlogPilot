@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
-from platform.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
+from bp_platform.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
