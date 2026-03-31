@@ -1,6 +1,12 @@
+# BlogPilot — Admin (Phoenix Solution) Personalized Settings
+# This is the owner's tuned configuration. NOT copied to new users.
+# Loaded into the admin's container on first platform boot.
+# Contains all Phoenix Solution-specific topics, industries, research sources, and tuned parameters.
+
 engine:
   enabled: false
   log_level: INFO
+
 content_intelligence:
   enabled: true
   extraction_interval_hours: 4
@@ -8,6 +14,7 @@ content_intelligence:
   extraction_jitter_seconds: 1200
   min_specificity_score: 6.0
   pattern_refresh_after_extraction: true
+
 schedule:
   active_days:
   - monday
@@ -22,6 +29,7 @@ schedule:
   timezone: Asia/Kolkata
   feed_scan_interval_minutes: 20
   feed_scan_jitter_seconds: 300
+
 daily_budget:
   feed_scans: 0
   likes: 30
@@ -34,11 +42,13 @@ daily_budget:
   endorsements: 10
   structured_generation: 10
   messages: 20
+
 rate_limits:
   likes_per_hour: 8
   comments_per_hour: 4
   connections_per_hour: 5
   profile_visits_per_hour: 15
+
 delays:
   before_like_min: 3
   before_like_max: 12
@@ -50,6 +60,7 @@ delays:
   between_posts_max: 15
   typing_speed_wpm_min: 35
   typing_speed_wpm_max: 65
+
 modules:
   feed_engagement: true
   campaigns: false
@@ -58,6 +69,7 @@ modules:
   viral_detection: true
   influencer_monitor: true
   reply_monitoring: false
+
 feed_engagement:
   mode: smart
   preview_comments: true
@@ -70,19 +82,23 @@ feed_engagement:
   hashtag_scan_count: 3
   search_scan_enabled: false
   search_scan_count: 2
+
 viral_detection:
   likes_per_hour_threshold: 50
   comments_per_hour_threshold: 10
   priority_boost: high
+
 workers:
   max_threads: 3
   queue_max_size: 100
+
 circuit_breaker:
   enabled: true
   error_threshold: 3
   window_minutes: 10
   pause_duration_minutes: 30
   captcha_detected_action: pause
+
 quality:
   min_comment_score: 6
   min_post_score: 7
@@ -90,6 +106,7 @@ quality:
   max_recent_comments_for_diversity: 20
   diversity_threshold: 0.7
   winning_example_min_score: 10
+
 ai:
   provider: groq
   model: llama-3.3-70b-versatile
@@ -97,10 +114,12 @@ ai:
   temperature: 0.7
   retry_attempts: 2
   retry_delay_seconds: 2
+
 openrouter:
   model: openrouter/free
   max_tokens: 600
   temperature: 0.2
+
 email_enrichment:
   enabled: true
   use_dom_scraper: true
@@ -109,10 +128,11 @@ email_enrichment:
   use_hunter_api: false
   smtp_timeout_seconds: 5
   max_pattern_attempts: 5
+
 browser:
   type: chromium
-  headless: false
-  profile_path: ./browser_profile
+  headless: true
+  profile_path: /app/browser_profile
   stealth: true
   viewport_width: 1366
   viewport_height: 768
@@ -120,16 +140,20 @@ browser:
   proxy_server: ''
   proxy_username: ''
   proxy_password: ''
+
 storage:
-  database_path: ./data/engine.db
+  database_path: /app/data/engine.db
   log_retention_days: 90
+
 analytics:
   weekly_summary_enabled: true
   export_format: csv
+
 content_studio:
   default_tone: professional
   default_word_count: 150
   auto_publish: false
+
 research:
   enabled: true
   scan_interval_hours: 6
@@ -190,6 +214,7 @@ research:
   min_subtopic_score: 4.0
   duplicate_detection:
     enabled: true
+
 topic_rotation:
   enabled: true
   cycle_interval_hours: 24
@@ -199,6 +224,7 @@ topic_rotation:
   max_new_topics_per_cycle: 2
   min_active_topics: 5
   retry_paused_after_days: 7
+
 learning:
   enabled: true
   comment_monitor_interval_hours: 4
@@ -209,6 +235,8 @@ learning:
   scoring_threshold_min: 4.0
   scoring_threshold_max: 9.0
   scoring_threshold_max_change: 0.5
+
+# Phoenix Solution — Business Analytics & Reporting
 topics:
 - Data Analytics
 - Reporting Solutions
@@ -230,6 +258,7 @@ topics:
 - Supply Chain Analytics
 - HR Analytics
 - Business Intelligence
+
 hashtags:
 - '#businessintelligence'
 - '#dataanalytics'
@@ -267,6 +296,7 @@ hashtags:
 - '#operationalexcellence'
 - '#datastorytelling'
 - '#businessmetrics'
+
 keyword_blacklist:
 - looking for a job
 - open to work
@@ -313,6 +343,7 @@ keyword_blacklist:
 - happy to share that i've joined
 - i'm joining
 - just accepted an offer
+
 target_industries:
 - Manufacturing
 - Retail & E-Commerce
@@ -327,5 +358,6 @@ target_industries:
 - Automotive
 - FMCG / Consumer Goods
 - Professional Services
+
 influencer_watchlist: []
 competitor_watchlist: []

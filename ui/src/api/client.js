@@ -1,15 +1,29 @@
 import axios from 'axios'
 
+// Dynamic baseURL: in multi-tenant mode, set by AuthContext to /u/{user_id}
+// In local dev mode, defaults to localhost:8000
+const _defaultBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 const http = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: _defaultBase,
   timeout: 30000,
 })
+
+// Allow runtime baseURL override (called by AuthContext after login)
+export function setContainerBaseUrl(url) {
+  if (url) http.defaults.baseURL = url
+}
 
 // Attach API token to every request from localStorage
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem('api_token')
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`
+  }
+  // Also attach platform JWT for Traefik ForwardAuth
+  const platformToken = localStorage.getItem('platform_token')
+  if (platformToken) {
+    config.headers['X-Platform-Token'] = `Bearer ${platformToken}`
   }
   return config
 })
@@ -18,7 +32,7 @@ http.interceptors.request.use((config) => {
 async function _bootstrapToken() {
   if (localStorage.getItem('api_token')) return
   try {
-    const res = await axios.get('http://localhost:8000/auth/token')
+    const res = await axios.get(`${_defaultBase}/auth/token`)
     if (res.data?.token) {
       localStorage.setItem('api_token', res.data.token)
     }
@@ -68,6 +82,7 @@ export const engine = {
   approveComment: (post_id, comment_text) => http.post('/engine/approve-comment', { post_id, comment_text }),
   rejectComment: (post_id) => http.post('/engine/reject-comment', { post_id }),
   runCommentMonitor: () => http.post('/engine/run-comment-monitor'),
+  logs: (lines = 150) => http.get(`/engine/logs?lines=${lines}`),
 }
 
 export const config = {

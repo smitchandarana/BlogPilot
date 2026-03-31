@@ -95,11 +95,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_default_origins = ["http://localhost:3000", "http://127.0.0.1:3000",
+                    "http://localhost:8000", "http://127.0.0.1:8000"]
+_cors_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    # Dev: Vite on :3000. EXE: FastAPI self-serves on :8000 (same origin, but include for clarity)
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000",
-                   "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-API-Token"],
@@ -185,9 +187,12 @@ except ImportError:
 
 @app.get("/auth/token")
 async def get_token(request: Request):
-    """Return the API token ONLY for localhost clients (Settings bootstrap)."""
+    """Return the API token for localhost clients or allowed CORS origins."""
     client_host = request.client.host if request.client else ""
-    if client_host not in ("127.0.0.1", "::1", "localhost"):
+    is_localhost = client_host in ("127.0.0.1", "::1", "localhost")
+    origin = request.headers.get("origin", "")
+    is_allowed_origin = origin in _cors_origins if origin else False
+    if not is_localhost and not is_allowed_origin:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
     try:
@@ -243,4 +248,6 @@ if _UI_DIST.is_dir():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    _host = os.environ.get("BIND_HOST", "127.0.0.1")
+    _port = int(os.environ.get("BIND_PORT", "8000"))
+    uvicorn.run("backend.main:app", host=_host, port=_port, reload=True)

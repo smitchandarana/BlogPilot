@@ -1,0 +1,74 @@
+version: "3.9"
+
+networks:
+  blogpilot-net:
+    name: blogpilot-net
+
+volumes:
+  postgres-data:
+  letsencrypt:
+
+services:
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # Dashboard disabled for security — access via: docker exec -it traefik wget -qO- http://localhost:8080/api/overview
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - blogpilot-net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: blogpilot_platform
+      POSTGRES_USER: blogpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - blogpilot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blogpilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  platform-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.platform
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://blogpilot:${POSTGRES_PASSWORD}@postgres:5432/blogpilot_platform
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      BLOGPILOT_ENV: production
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      BLOGPILOT_IMAGE: blogpilot-backend:latest
+      VOLUME_BASE_PATH: /app/volumes/users
+      PORT_RANGE_START: "10000"
+      PORT_RANGE_END: "10099"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@phoenixsolution.in}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes:/app/volumes
+    networks:
+      - blogpilot-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.platform.rule=Host(`api.phoenixsolution.in`) && PathPrefix(`/platform`)"
+      - "traefik.http.routers.platform.entrypoints=websecure"
+      - "traefik.http.routers.platform.tls.certresolver=letsencrypt"
+      - "traefik.http.services.platform.loadbalancer.server.port=9000"

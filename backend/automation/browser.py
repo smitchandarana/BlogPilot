@@ -53,7 +53,10 @@ class BrowserManager:
 
     async def _do_launch(self) -> None:
         """Internal: perform the actual Playwright launch (called under lock)."""
-        headless = bool(cfg_get("browser.headless", False))
+        # Force headless in container mode
+        is_container = os.environ.get("BLOGPILOT_CONTAINER") == "1"
+        headless = True if is_container else bool(cfg_get("browser.headless", False))
+
         profile_path = cfg_get("browser.profile_path", "./browser_profile")
         viewport_width = int(cfg_get("browser.viewport_width", 1366))
         viewport_height = int(cfg_get("browser.viewport_height", 768))
@@ -73,12 +76,25 @@ class BrowserManager:
             "--start-maximized",
         ]
 
+        # Proxy support (residential proxy for LinkedIn)
+        proxy_config = None
+        proxy_server = cfg_get("browser.proxy_server", "")
+        if proxy_server:
+            proxy_config = {"server": proxy_server}
+            proxy_user = cfg_get("browser.proxy_username", "")
+            proxy_pass = cfg_get("browser.proxy_password", "")
+            if proxy_user:
+                proxy_config["username"] = proxy_user
+                proxy_config["password"] = proxy_pass
+            logger.info(f"Browser using proxy: {proxy_server}")
+
         self._context = await self._playwright.chromium.launch_persistent_context(
             user_data_dir=profile_path,
             headless=headless,
             args=launch_args,
             viewport={"width": viewport_width, "height": viewport_height},
             slow_mo=slow_mo,
+            proxy=proxy_config,
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "

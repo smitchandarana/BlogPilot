@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-const WS_URL = 'ws://localhost:8000/ws'
+const _defaultWsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
+const _defaultApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const MAX_BACKOFF_MS = 30000
+
+// Allow runtime override (called by AuthContext for multi-tenant routing)
+let _wsUrlOverride = null
+export function setWebSocketUrl(url) { _wsUrlOverride = url }
 
 async function _getToken() {
   const stored = localStorage.getItem('api_token')
   if (stored) return stored
   // Token not yet bootstrapped — fetch it now
   try {
-    const res = await fetch('http://localhost:8000/auth/token')
+    const res = await fetch(`${_defaultApiUrl}/auth/token`)
     if (res.ok) {
       const data = await res.json()
       if (data?.token) {
@@ -38,7 +43,8 @@ export function useWebSocket() {
       return
     }
 
-    const url = `${WS_URL}?token=${encodeURIComponent(token)}`
+    const wsBase = _wsUrlOverride || _defaultWsUrl
+    const url = `${wsBase}?token=${encodeURIComponent(token)}`
     const ws = new WebSocket(url)
     wsRef.current = ws
 

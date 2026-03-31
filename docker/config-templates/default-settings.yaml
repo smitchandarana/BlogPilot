@@ -1,0 +1,231 @@
+# BlogPilot — Default Settings Template
+# This config is copied into every new user's container on provisioning.
+# Users can customize everything via the Settings UI after signup.
+# To reset an account, this file replaces their settings.yaml.
+
+engine:
+  enabled: false
+  log_level: INFO
+
+content_intelligence:
+  enabled: true
+  extraction_interval_hours: 4
+  extraction_batch_size: 20
+  extraction_jitter_seconds: 1200
+  min_specificity_score: 6.0
+  pattern_refresh_after_extraction: true
+
+schedule:
+  active_days:
+  - monday
+  - tuesday
+  - wednesday
+  - thursday
+  - friday
+  start_hour: 9
+  end_hour: 18
+  timezone: UTC
+  feed_scan_interval_minutes: 30
+  feed_scan_jitter_seconds: 300
+
+daily_budget:
+  feed_scans: 0
+  likes: 15
+  comments: 8
+  connections: 10
+  profile_visits: 25
+  inmails: 3
+  posts_published: 3
+  follows: 10
+  endorsements: 5
+  structured_generation: 5
+  messages: 10
+
+rate_limits:
+  likes_per_hour: 5
+  comments_per_hour: 3
+  connections_per_hour: 3
+  profile_visits_per_hour: 10
+
+delays:
+  before_like_min: 5
+  before_like_max: 15
+  before_comment_min: 10
+  before_comment_max: 50
+  before_connect_min: 8
+  before_connect_max: 25
+  between_posts_min: 5
+  between_posts_max: 20
+  typing_speed_wpm_min: 30
+  typing_speed_wpm_max: 55
+
+modules:
+  feed_engagement: true
+  campaigns: false
+  content_studio: true
+  email_enrichment: false
+  viral_detection: true
+  influencer_monitor: false
+  reply_monitoring: false
+
+feed_engagement:
+  mode: smart
+  preview_comments: true
+  min_relevance_score: 7
+  score_for_profile_visit: 8
+  score_for_connection: 10
+  max_posts_per_scan: 20
+  scroll_passes: 3
+  hashtag_scan_enabled: false
+  hashtag_scan_count: 2
+  search_scan_enabled: false
+  search_scan_count: 1
+
+viral_detection:
+  likes_per_hour_threshold: 50
+  comments_per_hour_threshold: 10
+  priority_boost: high
+
+workers:
+  max_threads: 2
+  queue_max_size: 50
+
+circuit_breaker:
+  enabled: true
+  error_threshold: 3
+  window_minutes: 10
+  pause_duration_minutes: 30
+  captcha_detected_action: pause
+
+quality:
+  min_comment_score: 6
+  min_post_score: 7
+  comment_candidates: 3
+  max_recent_comments_for_diversity: 20
+  diversity_threshold: 0.7
+  winning_example_min_score: 10
+
+ai:
+  provider: groq
+  model: llama-3.3-70b-versatile
+  max_tokens: 500
+  temperature: 0.7
+  retry_attempts: 2
+  retry_delay_seconds: 2
+
+openrouter:
+  model: openrouter/free
+  max_tokens: 600
+  temperature: 0.2
+
+email_enrichment:
+  enabled: false
+  use_dom_scraper: true
+  use_pattern_generator: true
+  use_smtp_verifier: true
+  use_hunter_api: false
+  smtp_timeout_seconds: 5
+  max_pattern_attempts: 5
+
+browser:
+  type: chromium
+  headless: true
+  profile_path: /app/browser_profile
+  stealth: true
+  viewport_width: 1366
+  viewport_height: 768
+  slow_mo_ms: 80
+  proxy_server: ''
+  proxy_username: ''
+  proxy_password: ''
+
+storage:
+  database_path: /app/data/engine.db
+  log_retention_days: 30
+
+analytics:
+  weekly_summary_enabled: true
+  export_format: csv
+
+content_studio:
+  default_tone: professional
+  default_word_count: 150
+  auto_publish: false
+
+research:
+  enabled: true
+  scan_interval_hours: 8
+  max_age_hours: 48
+  reddit:
+    enabled: true
+    subreddits: []
+    posts_per_subreddit: 15
+  rss:
+    enabled: false
+    feeds: []
+    max_age_hours: 72
+  hackernews:
+    enabled: false
+    top_stories_limit: 20
+  scoring_weights:
+    trending: 0.3
+    engagement: 0.25
+    content_gap: 0.25
+    relevance: 0.2
+  max_subtopics_per_domain: 3
+  max_total_subtopics: 10
+  min_subtopic_score: 5.0
+  duplicate_detection:
+    enabled: true
+
+topic_rotation:
+  enabled: true
+  cycle_interval_hours: 24
+  min_posts_before_scoring: 10
+  low_engagement_threshold: 0.15
+  target_active_count: 5
+  max_new_topics_per_cycle: 2
+  min_active_topics: 3
+  retry_paused_after_days: 7
+
+learning:
+  enabled: true
+  comment_monitor_interval_hours: 4
+  comment_monitor_lookback_hours: 48
+  comment_monitor_max_per_check: 10
+  auto_tune_enabled: false
+  auto_tune_min_posts: 50
+  scoring_threshold_min: 4.0
+  scoring_threshold_max: 9.0
+  scoring_threshold_max_change: 0.5
+
+# Users fill these in via the Topics page after signup
+topics: []
+hashtags: []
+keyword_blacklist:
+- looking for a job
+- open to work
+- hiring
+- we are hiring
+- job opening
+- apply now
+- click the link in bio
+- DM me for details
+- limited seats
+- webinar registration
+- free download
+- buy now
+- discount
+- offer ends
+- promo code
+- affiliate
+- MLM
+- network marketing
+- crypto
+- NFT
+- forex trading
+- get rich
+- passive income
+target_industries: []
+influencer_watchlist: []
+competitor_watchlist: []

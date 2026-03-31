@@ -8,7 +8,13 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_DB_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+_DB_DIR = os.environ.get(
+    "BLOGPILOT_DATA_DIR",
+    os.path.join(os.path.dirname(__file__), "..", "..", "data"),
+)
+# If BLOGPILOT_DATA_DIR is set, DB goes directly there; otherwise use data/ subdir
+if "BLOGPILOT_DATA_DIR" in os.environ:
+    _DB_DIR = os.path.join(_DB_DIR, "data") if not _DB_DIR.endswith("data") else _DB_DIR
 _DB_PATH = os.path.join(_DB_DIR, "engine.db")
 
 Base = declarative_base()
@@ -100,6 +106,18 @@ def init_db():
                 conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN chosen_angle TEXT"))
             except Exception as e:
                 logger.debug(f"Migration: generation_sessions.chosen_angle already exists ({e})")
+    except Exception:
+        pass
+
+    # Signal quality v3: moment_type column on content_insights
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("ALTER TABLE content_insights ADD COLUMN moment_type VARCHAR(32)"))
+                logger.info("Migration: added 'moment_type' column to content_insights")
+            except Exception:
+                pass  # already exists
     except Exception:
         pass
 

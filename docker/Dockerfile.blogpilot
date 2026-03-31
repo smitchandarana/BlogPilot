@@ -1,0 +1,49 @@
+FROM python:3.11-slim
+
+# System deps for Playwright Chromium
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl gnupg ca-certificates \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+    libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libatspi2.0-0 libwayland-client0 \
+    fonts-liberation fonts-dejavu-core xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright Chromium
+RUN playwright install chromium && playwright install-deps chromium
+
+# Copy app code (backend + prompts only — no frontend, no platform)
+COPY backend/ ./backend/
+COPY prompts/ ./prompts/
+
+# Create non-root user
+RUN useradd -m -u 1000 blogpilot && \
+    mkdir -p /app/data /app/browser_profile /app/config /app/logs && \
+    chown -R blogpilot:blogpilot /app
+
+# Volume mount points for persistent user data
+VOLUME ["/app/data", "/app/browser_profile", "/app/config", "/app/logs"]
+
+USER blogpilot
+
+# Container env
+ENV BLOGPILOT_BASE_DIR=/app
+ENV BLOGPILOT_DATA_DIR=/app/data
+ENV BLOGPILOT_CONFIG=/app/config/settings.yaml
+ENV BLOGPILOT_CONTAINER=1
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["xvfb-run", "--auto-servernum", "python", "-m", "uvicorn", \
+     "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

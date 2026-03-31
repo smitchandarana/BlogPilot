@@ -21,7 +21,11 @@ def get_base_dir() -> str:
     """
     Root for read-only bundled assets (prompts/, config/settings.yaml, ui/dist/).
     PyInstaller extracts these into sys._MEIPASS at runtime.
+    Docker containers set BLOGPILOT_BASE_DIR.
     """
+    env = os.environ.get("BLOGPILOT_BASE_DIR")
+    if env:
+        return env
     if is_frozen():
         return sys._MEIPASS
     # Dev mode: project root is two levels up from backend/utils/
@@ -32,7 +36,11 @@ def get_data_dir() -> str:
     """
     Root for writable runtime data (data/, logs/, config/.secrets/, browser_profile/).
     In frozen mode this is the folder containing the EXE so files persist across runs.
+    Docker containers set BLOGPILOT_DATA_DIR.
     """
+    env = os.environ.get("BLOGPILOT_DATA_DIR")
+    if env:
+        return env
     if is_frozen():
         return os.path.dirname(sys.executable)
     return os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))

@@ -38,6 +38,10 @@ logs/
 # Screenshots (dev artifacts)
 temporary screenshots/
 
+# Docker volumes (user data — never commit)
+docker/volumes/
+docker/.env
+
 # OS
 .DS_Store
 Thumbs.db

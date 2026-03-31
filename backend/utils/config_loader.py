@@ -9,7 +9,10 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml")
+_CONFIG_PATH = os.environ.get(
+    "BLOGPILOT_CONFIG",
+    os.path.join(os.path.dirname(__file__), "..", "..", "config", "settings.yaml"),
+)
 
 
 class _ConfigLoader:
