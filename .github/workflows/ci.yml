@@ -1,0 +1,102 @@
+name: CI — Test & Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: python -m pytest tests/ -v --tb=short -x
+        env:
+          BLOGPILOT_BASE_DIR: ${{ github.workspace }}
+          BLOGPILOT_DATA_DIR: ${{ github.workspace }}/data
+
+  build-backend:
+    name: Build BlogPilot Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build BlogPilot backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.blogpilot
+          push: false
+          tags: blogpilot-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-platform:
+    name: Build Platform Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Platform API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.platform
+          push: false
+          tags: blogpilot-platform:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd ui && npm ci
+
+      - name: Build frontend
+        run: cd ui && npm run build
+        env:
+          VITE_API_URL: https://api.phoenixsolution.in
+          VITE_WS_URL: wss://api.phoenixsolution.in/ws
+          VITE_PLATFORM_URL: https://api.phoenixsolution.in
+          VITE_API_BASE_URL: https://api.phoenixsolution.in
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: ui/dist/
+          retention-days: 7

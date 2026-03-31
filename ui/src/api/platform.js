@@ -23,6 +23,15 @@ export const auth = {
     platform.post('/platform/auth/login', { email, password }),
   me: () => platform.get('/platform/auth/me'),
   refresh: () => platform.post('/platform/auth/refresh'),
+  forgotPassword: (email) =>
+    platform.post('/platform/auth/forgot-password', { email }),
+  resetPassword: (token, new_password) =>
+    platform.post('/platform/auth/reset-password', { token, new_password }),
+  changePassword: (current_password, new_password) =>
+    platform.post('/platform/auth/change-password', { current_password, new_password }),
+  changeEmail: (password, new_email) =>
+    platform.post('/platform/auth/change-email', { password, new_email }),
+  deleteAccount: () => platform.delete('/platform/auth/account'),
 }
 
 export const containers = {

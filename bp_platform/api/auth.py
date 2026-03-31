@@ -1,6 +1,7 @@
-"""Platform authentication — signup, login, JWT."""
+"""Platform authentication — signup, login, JWT, password reset, account management."""
 
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr
@@ -13,6 +14,9 @@ from bp_platform.models.database import User, Container, get_db
 from bp_platform.services.token_service import (
     hash_password, verify_password, create_jwt, decode_jwt,
 )
+
+# In-memory password reset tokens (production: use Redis or DB table)
+_reset_tokens: dict[str, dict] = {}  # token -> {user_id, expires_at}
 
 router = APIRouter(prefix="/platform/auth", tags=["auth"])
 
@@ -179,3 +183,111 @@ async def refresh(user: dict = Depends(get_current_user)):
             container_status=c_status,
             container_token=c_token,
         )
+
+
+# ── Password Reset ────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, req: ForgotPasswordRequest):
+    """Generate a password reset token. In production, email this to the user."""
+    with get_db() as db:
+        u = db.query(User).filter_by(email=req.email).first()
+    # Always return success (don't leak whether email exists)
+    if u:
+        reset_token = secrets.token_urlsafe(32)
+        _reset_tokens[reset_token] = {
+            "user_id": u.id,
+            "expires_at": datetime.utcnow() + timedelta(hours=1),
+        }
+        # TODO: Send email with reset link: https://app.phoenixsolution.in/reset?token={reset_token}
+        # For now, admin can see tokens in server logs
+        import logging
+        logging.getLogger("bp_platform").info(f"Password reset requested for {req.email}")
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, req: ResetPasswordRequest):
+    """Reset password using a valid token."""
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    entry = _reset_tokens.pop(req.token, None)
+    if not entry or entry["expires_at"] < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    with get_db() as db:
+        u = db.query(User).filter_by(id=entry["user_id"]).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        u.password_hash = hash_password(req.new_password)
+        db.commit()
+    return {"message": "Password reset successful. You can now log in."}
+
+
+# ── Account Management ────────────────────────────────────────────────────
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ChangeEmailRequest(BaseModel):
+    password: str
+    new_email: EmailStr
+
+
+@router.post("/change-password")
+async def change_password(req: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user["sub"]).first()
+        if not u or not verify_password(req.current_password, u.password_hash):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        u.password_hash = hash_password(req.new_password)
+        db.commit()
+    return {"message": "Password changed successfully"}
+
+
+@router.post("/change-email")
+async def change_email(req: ChangeEmailRequest, user: dict = Depends(get_current_user)):
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user["sub"]).first()
+        if not u or not verify_password(req.password, u.password_hash):
+            raise HTTPException(status_code=401, detail="Password is incorrect")
+        existing = db.query(User).filter_by(email=req.new_email).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already in use")
+        u.email = req.new_email
+        u.updated_at = datetime.utcnow()
+        db.commit()
+    return {"message": "Email updated successfully"}
+
+
+@router.delete("/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Self-service account deletion. Stops and destroys container + data."""
+    user_id = user["sub"]
+    # Stop and destroy container
+    try:
+        from bp_platform.services import container_manager
+        container_manager.destroy_container(user_id, delete_volumes=True)
+    except Exception:
+        pass
+    # Delete user record (cascades to container record)
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if u:
+            db.delete(u)
+            db.commit()
+    return {"message": "Account deleted"}

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu, PlayCircle, Loader2, CheckCircle2, XCircle, RotateCcw, Search, Lightbulb, GitBranch, MessageCircle } from 'lucide-react'
+import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu, PlayCircle, Loader2, CheckCircle2, XCircle, RotateCcw, Search, Lightbulb, GitBranch, MessageCircle, ServerOff, Rocket } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useEngine } from '../hooks/useEngine'
+import { useAuth } from '../contexts/AuthContext'
+import { containers as containersApi } from '../api/platform'
 import EngineToggle from '../components/EngineToggle'
 import BudgetBar from '../components/BudgetBar'
 import EngineRuntimePanel from '../components/EngineRuntimePanel'
@@ -30,6 +32,50 @@ const BUDGET_LABELS = {
 export default function Dashboard() {
   const { state } = useEngine()
   const { subscribe } = useWebSocket()
+  const { containerInfo, refreshContainerStatus } = useAuth()
+
+  const [containerState, setContainerState] = useState('checking') // checking | none | provisioning | offline | ready
+  const [provisionError, setProvisionError] = useState('')
+
+  // Check container status on mount
+  useEffect(() => {
+    if (!containerInfo) {
+      setContainerState('none')
+      return
+    }
+    if (containerInfo.status === 'running') setContainerState('ready')
+    else if (containerInfo.status === 'stopped' || containerInfo.status === 'error') setContainerState('offline')
+    else if (containerInfo.status === 'none' || !containerInfo.status) setContainerState('none')
+    else setContainerState('ready')
+  }, [containerInfo])
+
+  const handleProvision = async () => {
+    setContainerState('provisioning')
+    setProvisionError('')
+    try {
+      const res = await containersApi.provision()
+      if (res.data.api_token) {
+        localStorage.setItem('api_token', res.data.api_token)
+      }
+      await refreshContainerStatus()
+      setContainerState('ready')
+    } catch (e) {
+      setProvisionError(e.response?.data?.detail || 'Failed to set up your engine')
+      setContainerState('none')
+    }
+  }
+
+  const handleStartContainer = async () => {
+    setContainerState('provisioning')
+    try {
+      await containersApi.start()
+      await refreshContainerStatus()
+      setContainerState('ready')
+    } catch (e) {
+      setProvisionError(e.response?.data?.detail || 'Failed to start container')
+      setContainerState('offline')
+    }
+  }
 
   // First-run wizard: skip if localStorage marks it done OR if backend already has keys saved.
   // The backend check handles second launches on new machines / after EXE reinstall.
@@ -201,10 +247,53 @@ export default function Dashboard() {
         onComplete={() => {
           localStorage.setItem('firstRunComplete', 'true')
           setWizardDone(true)
+          // Auto-provision container after wizard completes
+          if (containerState === 'none') {
+            handleProvision()
+          }
         }}
       />
     )}
     <div className="flex flex-col gap-6 p-6">
+      {/* Container not provisioned */}
+      {containerState === 'none' && (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-violet-500/20 bg-violet-950/20 px-8 py-12 text-center">
+          <Rocket className="h-10 w-10 text-violet-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">Set Up Your Engine</h2>
+            <p className="mt-1 text-sm text-slate-400">Your BlogPilot instance hasn't been created yet. Click below to provision it.</p>
+          </div>
+          {provisionError && <p className="text-sm text-red-400">{provisionError}</p>}
+          <button onClick={handleProvision} className="flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition">
+            <Rocket className="h-4 w-4" /> Create My Engine
+          </button>
+        </div>
+      )}
+
+      {/* Container provisioning */}
+      {containerState === 'provisioning' && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-violet-500/20 bg-violet-950/20 px-8 py-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+          <p className="text-sm text-slate-300">Setting up your engine... This takes about 30 seconds.</p>
+        </div>
+      )}
+
+      {/* Container offline */}
+      {containerState === 'offline' && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/20 bg-amber-950/20 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <ServerOff className="h-5 w-5 text-amber-400" />
+            <div>
+              <p className="text-sm font-medium text-amber-300">Engine Offline</p>
+              <p className="text-xs text-slate-400">Your container is stopped. Start it to resume operations.</p>
+            </div>
+          </div>
+          <button onClick={handleStartContainer} className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20 transition">
+            <PlayCircle className="h-3.5 w-3.5" /> Start Engine
+          </button>
+        </div>
+      )}
+
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-slate-100">Dashboard</h1>
         <p className="mt-0.5 text-sm text-slate-500">

@@ -13,6 +13,7 @@ import {
   Zap,
   Shield,
   LogOut,
+  CreditCard,
 } from 'lucide-react'
 import { useEngine } from '../hooks/useEngine'
 import { useAuth } from '../contexts/AuthContext'
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/prompts', label: 'Prompts', icon: FileCode2 },
   { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/billing', label: 'Billing', icon: CreditCard },
 ]
 
 function StatusDot({ status }) {

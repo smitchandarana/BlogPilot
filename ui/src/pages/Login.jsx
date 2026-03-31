@@ -1,15 +1,31 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LogIn, Loader2 } from 'lucide-react'
+import { auth as authApi } from '../api/platform'
+import { LogIn, Loader2, ArrowLeft } from 'lucide-react'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+    if (!email) { setError('Enter your email first'); return }
+    setLoading(true); setError('')
+    try {
+      await authApi.forgotPassword(email)
+      setSuccess('If that email exists, a reset link has been sent.')
+      setShowForgot(false)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to send reset email')
+    } finally { setLoading(false) }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -39,6 +55,11 @@ export default function Login() {
               {error}
             </div>
           )}
+          {success && (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
+              {success}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Email</label>
@@ -64,14 +85,36 @@ export default function Login() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Sign In
-          </button>
+          {showForgot ? (
+            <>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Send Reset Link
+              </button>
+              <button type="button" onClick={() => setShowForgot(false)} className="flex items-center justify-center gap-1 text-sm text-slate-500 hover:text-slate-300">
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to login
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                Sign In
+              </button>
+              <button type="button" onClick={() => { setShowForgot(true); setError('') }} className="text-sm text-slate-500 hover:text-violet-400 transition">
+                Forgot password?
+              </button>
+            </>
+          )}
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">

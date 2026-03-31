@@ -1,0 +1,83 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'bp_platform/**'
+      - 'docker/**'
+      - 'prompts/**'
+      - 'requirements.txt'
+
+jobs:
+  test:
+    name: Pre-deploy Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests/ -v --tb=short -x
+        env:
+          BLOGPILOT_BASE_DIR: ${{ github.workspace }}
+          BLOGPILOT_DATA_DIR: ${{ github.workspace }}/data
+
+  deploy:
+    name: Deploy to Hostinger VPS
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/blogpilot
+
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            echo "=== Building new images ==="
+            docker build -f docker/Dockerfile.blogpilot -t blogpilot-backend:latest .
+            docker build -f docker/Dockerfile.platform -t blogpilot-platform:latest .
+
+            echo "=== Updating platform (zero-downtime) ==="
+            cd docker
+            docker compose up -d --no-deps --build platform-api
+
+            echo "=== Rolling update: user containers ==="
+            # Get list of running user containers
+            CONTAINERS=$(docker ps --filter "name=blogpilot-" --filter "status=running" --format "{{.Names}}" | grep -v "platform\|traefik\|postgres\|docker-proxy" || true)
+
+            for CONTAINER in $CONTAINERS; do
+              echo "Updating $CONTAINER..."
+              # Get container config
+              USER_ID=$(docker inspect --format '{{index .Config.Labels "user_id"}}' "$CONTAINER" 2>/dev/null || echo "")
+
+              # Stop old container
+              docker stop "$CONTAINER" --time 30
+
+              # Remove old container (volumes persist on host)
+              docker rm "$CONTAINER"
+
+              # Platform API will detect missing container via health monitor
+              # and it can be restarted via admin dashboard or auto-restart
+              echo "$CONTAINER stopped. Will be recreated with new image on next start."
+            done
+
+            echo "=== Verifying platform health ==="
+            sleep 5
+            curl -sf http://localhost:9000/health || echo "WARNING: Platform health check failed"
+
+            echo "=== Deploy complete ==="

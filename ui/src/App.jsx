@@ -16,6 +16,7 @@ import Analytics from './pages/Analytics'
 import PromptEditor from './pages/PromptEditor'
 import Settings from './pages/Settings'
 import AdminDashboard from './pages/AdminDashboard'
+import Billing from './pages/Billing'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/prompts" element={<PromptEditor />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/billing" element={<Billing />} />
             </Route>
           </Route>
 
