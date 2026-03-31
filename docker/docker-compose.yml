@@ -78,6 +78,7 @@ services:
       PORT_RANGE_END: "10099"
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@phoenixsolution.in}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.phoenixsolution.in}
       DOCKER_HOST: tcp://docker-proxy:2375
     volumes:
       - ./volumes:/app/volumes

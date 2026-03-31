@@ -169,14 +169,13 @@ async def refresh(user: dict = Depends(get_current_user)):
         c_status = container.status if container else None
         c_token = container.api_token if container else None
 
-        token = create_jwt(u.id, u.email, u.role, port, c_status)
+        token = create_jwt(u.id, u.email, u.role)
         return TokenResponse(
             token=token,
             user_id=u.id,
             email=u.email,
             role=u.role,
             name=u.name,
-            container_port=port,
             container_status=c_status,
             container_token=c_token,
         )

@@ -1,7 +1,6 @@
 """Admin endpoints — user management, system stats, container control."""
 
 import psutil
-import docker
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends

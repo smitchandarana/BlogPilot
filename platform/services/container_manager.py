@@ -114,8 +114,8 @@ def provision_container(user_id: str, is_admin: bool = False) -> Container:
         db.commit()
         db.refresh(record)
 
-    # Wait for health check
-    _wait_healthy(port, timeout=60)
+    # Wait for health check via Docker network DNS
+    _wait_healthy(name, timeout=60)
 
     with get_db() as db:
         rec = db.query(Container).filter_by(user_id=user_id).first()
@@ -140,7 +140,7 @@ def start_container(user_id: str) -> None:
     try:
         c = _docker().containers.get(rec.docker_container_id)
         c.start()
-        _wait_healthy(rec.host_port, timeout=60)
+        _wait_healthy(rec.container_name, timeout=60)
 
         with get_db() as db:
             rec = db.query(Container).filter_by(user_id=user_id).first()
@@ -267,12 +267,12 @@ def get_container_status(user_id: str) -> dict:
     return result
 
 
-def _wait_healthy(port: int, timeout: int = 60) -> bool:
-    """Poll localhost:{port}/health until it responds OK."""
+def _wait_healthy(container_name: str, timeout: int = 60) -> bool:
+    """Poll container via Docker network DNS until it responds OK."""
     start = time.time()
     while time.time() - start < timeout:
         try:
-            r = httpx.get(f"http://localhost:{port}/health", timeout=5)
+            r = httpx.get(f"http://{container_name}:8000/health", timeout=5)
             if r.status_code == 200:
                 return True
         except Exception:

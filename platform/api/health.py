@@ -1,6 +1,7 @@
 """Platform health endpoints."""
 
 from fastapi import APIRouter
+from sqlalchemy import text
 
 from platform.models.database import User, Container, get_db
 
@@ -12,7 +13,7 @@ async def health():
     """Platform health check."""
     try:
         with get_db() as db:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
         db_ok = True
     except Exception:
         db_ok = False

@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { auth as authApi, containers as containersApi } from '../api/platform'
+import { setContainerBaseUrl } from '../api/client'
+import { setWebSocketUrl } from '../hooks/useWebSocket'
 
 const AuthContext = createContext(null)
 
@@ -19,6 +21,12 @@ export function AuthProvider({ children }) {
     ? containerBaseUrl.replace('http', 'ws') + '/ws'
     : null
 
+  const _configureContainerUrls = useCallback((userId) => {
+    const base = `${apiBaseUrl}/u/${userId}`
+    setContainerBaseUrl(base)
+    setWebSocketUrl(base.replace('http', 'ws') + '/ws')
+  }, [apiBaseUrl])
+
   const login = useCallback(async (email, password) => {
     const res = await authApi.login(email, password)
     const data = res.data
@@ -32,8 +40,10 @@ export function AuthProvider({ children }) {
       status: data.container_status,
       token: data.container_token,
     })
+    // Wire frontend API client to user's container
+    _configureContainerUrls(data.user_id)
     return data
-  }, [])
+  }, [_configureContainerUrls])
 
   const signup = useCallback(async (email, password, name) => {
     const res = await authApi.signup(email, password, name)
@@ -71,12 +81,9 @@ export function AuthProvider({ children }) {
     }
     authApi.me()
       .then(res => {
-        setUser({
-          id: res.data.id,
-          email: res.data.email,
-          name: res.data.name,
-          role: res.data.role,
-        })
+        const u = res.data
+        setUser({ id: u.id, email: u.email, name: u.name, role: u.role })
+        _configureContainerUrls(u.id)
         return containersApi.status()
       })
       .then(res => {
