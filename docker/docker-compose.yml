@@ -9,15 +9,30 @@ volumes:
   letsencrypt:
 
 services:
+  # Docker socket proxy — limits API access for security (no raw socket exposure)
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      SERVICES: 0
+      TASKS: 0
+      POST: 1  # Allow container create/start/stop/remove
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - blogpilot-net
+
   traefik:
     image: traefik:v3.0
     restart: unless-stopped
+    depends_on:
+      - docker-proxy
     ports:
       - "80:80"
       - "443:443"
-      # Dashboard disabled for security — access via: docker exec -it traefik wget -qO- http://localhost:8080/api/overview
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - letsencrypt:/letsencrypt
@@ -49,6 +64,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      docker-proxy:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://blogpilot:${POSTGRES_PASSWORD}@postgres:5432/blogpilot_platform
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
@@ -61,8 +78,8 @@ services:
       PORT_RANGE_END: "10099"
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@phoenixsolution.in}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+      DOCKER_HOST: tcp://docker-proxy:2375
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - ./volumes:/app/volumes
     networks:
       - blogpilot-net

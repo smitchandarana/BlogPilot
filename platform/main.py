@@ -4,13 +4,19 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from platform.config import ADMIN_EMAIL, ADMIN_PASSWORD
 from platform.models.database import init_db, get_db, User
 from platform.services.token_service import hash_password
 from platform.services.health_monitor import health_monitor_loop
+
+limiter = Limiter(key_func=get_remote_address)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("platform")
@@ -49,6 +55,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiting
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Too many requests. Try again later."})
 
 app.add_middleware(
     CORSMiddleware,

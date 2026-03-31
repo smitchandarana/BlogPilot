@@ -4,6 +4,10 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 from platform.models.database import User, Container, get_db
 from platform.services.token_service import (
@@ -74,7 +78,8 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
 # ── Endpoints ─────────────────────────────────────────────────────────────
 
 @router.post("/signup", response_model=TokenResponse)
-async def signup(req: SignupRequest):
+@limiter.limit("3/10minutes")
+async def signup(request: Request, req: SignupRequest):
     if len(req.password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
     if len(req.name) > 100:
@@ -106,7 +111,8 @@ async def signup(req: SignupRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, req: LoginRequest):
     with get_db() as db:
         user = db.query(User).filter_by(email=req.email).first()
         if not user or not verify_password(req.password, user.password_hash):

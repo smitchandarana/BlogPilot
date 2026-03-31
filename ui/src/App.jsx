@@ -1,5 +1,10 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import Layout from './components/Layout'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import AdminRoute from './components/AdminRoute'
+import AppShell from './components/AppShell'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import EngineControl from './pages/EngineControl'
 import Topics from './pages/Topics'
@@ -10,24 +15,44 @@ import Leads from './pages/Leads'
 import Analytics from './pages/Analytics'
 import PromptEditor from './pages/PromptEditor'
 import Settings from './pages/Settings'
+import AdminDashboard from './pages/AdminDashboard'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout>
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/control" element={<EngineControl />} />
-          <Route path="/topics" element={<Topics />} />
-          <Route path="/feed" element={<FeedEngagement />} />
-          <Route path="/content" element={<ContentStudio />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/leads" element={<Leads />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/prompts" element={<PromptEditor />} />
-          <Route path="/settings" element={<Settings />} />
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+
+          {/* Protected — wrapped in Layout */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/control" element={<EngineControl />} />
+              <Route path="/topics" element={<Topics />} />
+              <Route path="/feed" element={<FeedEngagement />} />
+              <Route path="/content" element={<ContentStudio />} />
+              <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/leads" element={<Leads />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/prompts" element={<PromptEditor />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+          </Route>
+
+          {/* Admin — also wrapped in Layout */}
+          <Route element={<AdminRoute />}>
+            <Route element={<AppShell />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+            </Route>
+          </Route>
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Layout>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

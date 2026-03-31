@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Settings2,
@@ -11,8 +11,11 @@ import {
   FileCode2,
   Settings,
   Zap,
+  Shield,
+  LogOut,
 } from 'lucide-react'
 import { useEngine } from '../hooks/useEngine'
+import { useAuth } from '../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -43,6 +46,13 @@ function StatusDot({ status }) {
 
 export default function Layout({ children }) {
   const { state } = useEngine()
+  const { user, isAdmin, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
     <div className="flex h-screen bg-[#0f1117] text-slate-200">
@@ -85,7 +95,34 @@ export default function Layout({ children }) {
               {label}
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                  isActive
+                    ? 'bg-violet-700/20 text-violet-300 border-r-2 border-violet-400'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`
+              }
+            >
+              <Shield size={16} />
+              Admin
+            </NavLink>
+          )}
         </nav>
+
+        {/* User + Logout */}
+        <div className="border-t border-slate-800 px-4 py-3">
+          <div className="text-xs text-slate-500 truncate">{user?.email}</div>
+          <button
+            onClick={handleLogout}
+            className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+          >
+            <LogOut size={14} />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}
