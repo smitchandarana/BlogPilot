@@ -84,16 +84,19 @@ export function AuthProvider({ children }) {
         const u = res.data
         setUser({ id: u.id, email: u.email, name: u.name, role: u.role })
         _configureContainerUrls(u.id)
-        return containersApi.status()
+        return containersApi.status().catch(() => null)
       })
       .then(res => {
-        setContainerInfo({
-          port: res.data.host_port,
-          status: res.data.status,
-          token: localStorage.getItem('api_token'),
-        })
+        if (res) {
+          setContainerInfo({
+            port: res.data.host_port,
+            status: res.data.status,
+            token: localStorage.getItem('api_token'),
+          })
+        }
       })
       .catch(() => {
+        // Only log out if the /me call itself fails (invalid token)
         localStorage.removeItem('platform_token')
         localStorage.removeItem('api_token')
       })
