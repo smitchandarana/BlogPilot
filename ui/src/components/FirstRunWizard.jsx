@@ -30,7 +30,7 @@ const DEFAULT_TOPICS = [
 
 // ─── Step 1: Groq API Key ─────────────────────────────────────────────────────
 
-function StepGroq({ onComplete }) {
+function StepGroq({ onComplete, onSkip }) {
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -122,7 +122,13 @@ function StepGroq({ onComplete }) {
         </div>
       )}
 
-      <div className="flex justify-end pt-1">
+      <div className="flex items-center justify-between pt-1">
+        <button
+          onClick={onSkip}
+          className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 hover:border-slate-600 focus-visible:outline-none"
+        >
+          Skip for now
+        </button>
         <button
           onClick={handleContinue}
           disabled={!testResult?.valid}
@@ -571,6 +577,7 @@ export default function FirstRunWizard({ onComplete }) {
           {step === 0 && (
             <StepGroq
               onComplete={(data) => transition(1, { groqConnected: data.groqConnected })}
+              onSkip={() => transition(1, { groqConnected: false })}
             />
           )}
           {step === 1 && (

@@ -77,10 +77,10 @@ export default function Dashboard() {
     }
   }
 
-  // First-run wizard: skip if localStorage marks it done OR if backend already has keys saved.
-  // The backend check handles second launches on new machines / after EXE reinstall.
+  // First-run wizard: skip for admin users, or if already completed.
+  const { isAdmin } = useAuth()
   const [wizardDone, setWizardDone] = useState(
-    () => localStorage.getItem('firstRunComplete') === 'true'
+    () => isAdmin || localStorage.getItem('firstRunComplete') === 'true'
   )
 
   useEffect(() => {
