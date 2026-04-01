@@ -1,0 +1,83 @@
+# BlogPilot — Oracle ARM VM (Cloudflare Tunnel + Tailscale)
+# No public ports. Tunnel is outbound-only. SSH via Tailscale.
+
+networks:
+  blogpilot-net:
+    name: blogpilot-net
+
+volumes:
+  postgres-data:
+
+services:
+  # Docker socket proxy — limits API surface (no raw socket in platform-api)
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      IMAGES: 1
+      SERVICES: 0
+      TASKS: 0
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - blogpilot-net
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: blogpilot_platform
+      POSTGRES_USER: blogpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - blogpilot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blogpilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    # ARM-friendly resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "0.5"
+
+  platform-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.platform
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_started
+    ports:
+      - "127.0.0.1:80:9000"  # Only localhost — Cloudflare Tunnel connects here
+    environment:
+      DATABASE_URL: postgresql://blogpilot:${POSTGRES_PASSWORD}@postgres:5432/blogpilot_platform
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      BLOGPILOT_ENV: production
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      BLOGPILOT_IMAGE: blogpilot-backend:latest
+      VOLUME_BASE_PATH: /app/volumes/users
+      PORT_RANGE_START: "10000"
+      PORT_RANGE_END: "10099"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@phoenixsolution.in}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.phoenixsolution.in,http://localhost:3000}
+      DOCKER_HOST: tcp://docker-proxy:2375
+      # ARM: lower resource limits for user containers (4 cores shared)
+      CONTAINER_MEMORY_LIMIT: ${CONTAINER_MEMORY_LIMIT:-1536m}
+      CONTAINER_CPU_LIMIT: ${CONTAINER_CPU_LIMIT:-0.75}
+    volumes:
+      - ./volumes:/app/volumes
+    networks:
+      - blogpilot-net

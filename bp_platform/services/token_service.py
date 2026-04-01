@@ -11,12 +11,17 @@ from bp_platform.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def _truncate(password: str) -> str:
+    """Truncate to 72 bytes (bcrypt hard limit)."""
+    return password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_truncate(password))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(_truncate(plain), hashed)
 
 
 def create_jwt(user_id: str, email: str, role: str) -> str:

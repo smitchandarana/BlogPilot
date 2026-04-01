@@ -1,0 +1,23 @@
+# BlogPilot Docker Compose — systemd service
+# Install: sudo cp deploy/blogpilot.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable --now blogpilot
+
+[Unit]
+Description=BlogPilot Platform (Docker Compose)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/blogpilot
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.oracle.yml up -d
+ExecStop=/usr/bin/docker compose -f docker/docker-compose.oracle.yml down
+ExecReload=/usr/bin/docker compose -f docker/docker-compose.oracle.yml restart
+User=ubuntu
+Group=docker
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
