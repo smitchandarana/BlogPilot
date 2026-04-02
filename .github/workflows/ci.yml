@@ -90,10 +90,9 @@ jobs:
       - name: Build frontend
         run: cd ui && npm run build
         env:
-          VITE_API_URL: https://api.phoenixsolution.in
-          VITE_WS_URL: wss://api.phoenixsolution.in/ws
-          VITE_PLATFORM_URL: https://api.phoenixsolution.in
-          VITE_API_BASE_URL: https://api.phoenixsolution.in
+          VITE_PLATFORM_URL: https://app.phoenixsolution.in
+          VITE_API_BASE_URL: https://app.phoenixsolution.in
+          VITE_API_URL: https://app.phoenixsolution.in
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4

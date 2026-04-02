@@ -6,12 +6,8 @@ tunnel: <TUNNEL-UUID>
 credentials-file: /root/.cloudflared/<TUNNEL-UUID>.json
 
 ingress:
-  # React frontend
+  # Single public entry point — nginx routes by path prefix
   - hostname: app.phoenixsolution.in
-    service: http://localhost:80
-
-  # Platform API + container proxy
-  - hostname: api.phoenixsolution.in
     service: http://localhost:80
 
   # Catch-all (required by cloudflared)
