@@ -52,6 +52,7 @@ export const billing = {
 }
 
 export const admin = {
+  // Existing
   users: () => platform.get('/platform/admin/users'),
   user: (id) => platform.get(`/platform/admin/users/${id}`),
   suspend: (id) => platform.post(`/platform/admin/users/${id}/suspend`),
@@ -60,6 +61,16 @@ export const admin = {
   containers: () => platform.get('/platform/admin/containers'),
   restartContainer: (id) => platform.post(`/platform/admin/containers/${id}/restart`),
   system: () => platform.get('/platform/admin/system'),
+
+  // New
+  createUser: (data) => platform.post('/platform/admin/users', data),
+  approveUser: (id) => platform.post(`/platform/admin/users/${id}/approve`),
+  rejectUser: (id) => platform.post(`/platform/admin/users/${id}/reject`),
+  pauseUser: (id) => platform.post(`/platform/admin/users/${id}/pause`),
+  resumeUser: (id) => platform.post(`/platform/admin/users/${id}/resume`),
+  provisionUser: (id) => platform.post(`/platform/admin/users/${id}/provision`),
+  changeRole: (id, role) => platform.post(`/platform/admin/users/${id}/change-role`, { role }),
+  auditLog: () => platform.get('/platform/admin/audit-log'),
 }
 
 export default platform

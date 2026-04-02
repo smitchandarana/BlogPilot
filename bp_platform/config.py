@@ -54,3 +54,6 @@ DEFAULT_SETTINGS_TEMPLATE = os.environ.get(
     "DEFAULT_SETTINGS_TEMPLATE",
     os.path.join(os.path.dirname(__file__), "..", "docker", "config-templates", "default-settings.yaml"),
 )
+
+# Signup approval mode — when True, new signups are set to pending and require admin approval
+REQUIRE_SIGNUP_APPROVAL = os.environ.get("REQUIRE_SIGNUP_APPROVAL", "false").lower() == "true"

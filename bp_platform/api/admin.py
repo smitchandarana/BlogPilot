@@ -3,14 +3,72 @@
 import psutil
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel, EmailStr
 
 from bp_platform.api.auth import require_admin
 from bp_platform.models.database import User, Container, AuditLog, get_db
 from bp_platform.services import container_manager
+from bp_platform.services.token_service import hash_password
 
 router = APIRouter(prefix="/platform/admin", tags=["admin"])
 
+
+# ── Schemas ───────────────────────────────────────────────────────────────
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str = ""
+    role: str = "user"
+    subscription_status: str = "active"
+    provision_container: bool = False
+
+
+class ChangeRoleRequest(BaseModel):
+    role: str
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+def _audit(admin_id: str, action: str, details: dict = None, ip_address: str = None):
+    """Write an audit log entry."""
+    try:
+        with get_db() as db:
+            db.add(AuditLog(
+                user_id=admin_id,
+                action=action,
+                details=details,
+                ip_address=ip_address,
+            ))
+            db.commit()
+    except Exception:
+        pass
+
+
+def _user_row(u: User, c: Container | None) -> dict:
+    """Serialize a user + optional container into the standard list shape."""
+    return {
+        "id": u.id,
+        "email": u.email,
+        "name": u.name,
+        "role": u.role,
+        "subscription_status": u.subscription_status,
+        "is_active": u.is_active,
+        "created_at": u.created_at.isoformat(),
+        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+        "container": {
+            "id": c.id,
+            "status": c.status,
+            "health_status": c.health_status,
+            "engine_state": c.engine_state,
+            "host_port": c.host_port,
+            "restart_count": c.restart_count,
+        } if c else None,
+    }
+
+
+# ── Existing endpoints ────────────────────────────────────────────────────
 
 @router.get("/users")
 async def list_users(admin: dict = Depends(require_admin)):
@@ -20,23 +78,7 @@ async def list_users(admin: dict = Depends(require_admin)):
         result = []
         for u in users:
             c = db.query(Container).filter_by(user_id=u.id).first()
-            result.append({
-                "id": u.id,
-                "email": u.email,
-                "name": u.name,
-                "role": u.role,
-                "subscription_status": u.subscription_status,
-                "is_active": u.is_active,
-                "created_at": u.created_at.isoformat(),
-                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
-                "container": {
-                    "status": c.status if c else None,
-                    "health_status": c.health_status if c else None,
-                    "engine_state": c.engine_state if c else None,
-                    "host_port": c.host_port if c else None,
-                    "restart_count": c.restart_count if c else 0,
-                } if c else None,
-            })
+            result.append(_user_row(u, c))
         return result
 
 
@@ -61,7 +103,7 @@ async def get_user(user_id: str, admin: dict = Depends(require_admin)):
 
 
 @router.post("/users/{user_id}/suspend")
-async def suspend_user(user_id: str, admin: dict = Depends(require_admin)):
+async def suspend_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
     """Suspend user and stop their container."""
     with get_db() as db:
         u = db.query(User).filter_by(id=user_id).first()
@@ -76,12 +118,12 @@ async def suspend_user(user_id: str, admin: dict = Depends(require_admin)):
     except Exception:
         pass  # container might not exist
 
-    _audit(admin["sub"], "admin.suspend_user", {"target_user_id": user_id})
+    _audit(admin["sub"], "admin.suspend_user", {"target_user_id": user_id}, _ip(request))
     return {"status": "suspended"}
 
 
 @router.post("/users/{user_id}/unsuspend")
-async def unsuspend_user(user_id: str, admin: dict = Depends(require_admin)):
+async def unsuspend_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
     """Reactivate a suspended user."""
     with get_db() as db:
         u = db.query(User).filter_by(id=user_id).first()
@@ -91,12 +133,12 @@ async def unsuspend_user(user_id: str, admin: dict = Depends(require_admin)):
         u.subscription_status = "active"
         db.commit()
 
-    _audit(admin["sub"], "admin.unsuspend_user", {"target_user_id": user_id})
+    _audit(admin["sub"], "admin.unsuspend_user", {"target_user_id": user_id}, _ip(request))
     return {"status": "active"}
 
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
+async def delete_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
     """Delete user and destroy their container + data."""
     try:
         container_manager.destroy_container(user_id, delete_volumes=True)
@@ -109,7 +151,7 @@ async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
             db.delete(u)
             db.commit()
 
-    _audit(admin["sub"], "admin.delete_user", {"target_user_id": user_id})
+    _audit(admin["sub"], "admin.delete_user", {"target_user_id": user_id}, _ip(request))
     return {"status": "deleted"}
 
 
@@ -137,7 +179,7 @@ async def list_containers(admin: dict = Depends(require_admin)):
 
 
 @router.post("/containers/{container_id}/restart")
-async def admin_restart(container_id: str, admin: dict = Depends(require_admin)):
+async def admin_restart(container_id: str, request: Request, admin: dict = Depends(require_admin)):
     """Force restart any container by ID."""
     with get_db() as db:
         c = db.query(Container).filter_by(id=container_id).first()
@@ -146,7 +188,7 @@ async def admin_restart(container_id: str, admin: dict = Depends(require_admin))
         user_id = c.user_id
 
     container_manager.restart_container(user_id)
-    _audit(admin["sub"], "admin.restart_container", {"container_id": container_id})
+    _audit(admin["sub"], "admin.restart_container", {"container_id": container_id}, _ip(request))
     return {"status": "restarted"}
 
 
@@ -160,6 +202,7 @@ async def system_stats(admin: dict = Depends(require_admin)):
         total_users = db.query(User).count()
         active_containers = db.query(Container).filter(Container.status == "running").count()
         total_containers = db.query(Container).filter(Container.status != "destroyed").count()
+        pending_users = db.query(User).filter_by(subscription_status="pending", is_active=False).count()
 
     return {
         "memory": {
@@ -179,14 +222,271 @@ async def system_stats(admin: dict = Depends(require_admin)):
         "containers_running": active_containers,
         "containers_total": total_containers,
         "max_containers": 6,  # Based on 16 GB RAM / 2 GB per container
+        "pending_users": pending_users,
     }
 
 
-def _audit(admin_id: str, action: str, details: dict = None):
-    """Write an audit log entry."""
+# ── New endpoints ─────────────────────────────────────────────────────────
+
+@router.post("/users")
+async def create_user(req: CreateUserRequest, request: Request, admin: dict = Depends(require_admin)):
+    """Admin creates a user account directly, optionally provisioning a container."""
+    if len(req.password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    if req.role not in ("user", "admin"):
+        raise HTTPException(status_code=422, detail="Role must be 'user' or 'admin'")
+    valid_statuses = ("pending", "active", "suspended", "cancelled", "past_due")
+    if req.subscription_status not in valid_statuses:
+        raise HTTPException(status_code=422, detail=f"subscription_status must be one of: {', '.join(valid_statuses)}")
+
+    with get_db() as db:
+        existing = db.query(User).filter_by(email=req.email).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+
+        is_active = req.subscription_status == "active"
+        user = User(
+            email=req.email,
+            password_hash=hash_password(req.password),
+            name=req.name,
+            role=req.role,
+            subscription_status=req.subscription_status,
+            is_active=is_active,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+        user_email = user.email
+
+    _audit(
+        admin["sub"],
+        "admin.create_user",
+        {"target_user_id": user_id, "email": user_email, "role": req.role, "status": req.subscription_status},
+        _ip(request),
+    )
+
+    # Optionally provision a container for the new user
+    container_result = None
+    if req.provision_container and is_active:
+        try:
+            c = container_manager.provision_container(user_id, is_admin=(req.role == "admin"))
+            container_result = {"status": c.status, "host_port": c.host_port}
+            _audit(
+                admin["sub"],
+                "admin.provision_container",
+                {"target_user_id": user_id, "triggered_by": "create_user"},
+                _ip(request),
+            )
+        except Exception as e:
+            container_result = {"error": str(e)}
+
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        c = db.query(Container).filter_by(user_id=user_id).first()
+        return {**_user_row(u, c), "container_provisioned": container_result}
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    """Approve a pending signup — sets subscription to active and enables account."""
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if u.subscription_status != "pending":
+            raise HTTPException(status_code=409, detail=f"User is not pending (current status: {u.subscription_status})")
+        u.subscription_status = "active"
+        u.is_active = True
+        db.commit()
+
+    _audit(
+        admin["sub"],
+        "admin.approve_user",
+        {"target_user_id": user_id},
+        _ip(request),
+    )
+    return {"status": "active", "message": "User approved and account activated"}
+
+
+@router.post("/users/{user_id}/reject")
+async def reject_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    """Reject a pending signup — marks account cancelled and inactive."""
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if u.subscription_status != "pending":
+            raise HTTPException(status_code=409, detail=f"User is not pending (current status: {u.subscription_status})")
+        u.subscription_status = "cancelled"
+        u.is_active = False
+        db.commit()
+
+    _audit(
+        admin["sub"],
+        "admin.reject_user",
+        {"target_user_id": user_id},
+        _ip(request),
+    )
+    return {"status": "cancelled", "message": "Signup rejected"}
+
+
+@router.post("/users/{user_id}/pause")
+async def pause_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    """Pause a user — stops their container but keeps the account active."""
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not u.is_active:
+            raise HTTPException(status_code=409, detail="User account is not active")
+        c = db.query(Container).filter_by(user_id=user_id).first()
+
+    if not c:
+        raise HTTPException(status_code=404, detail="User has no container to pause")
+
     try:
-        with get_db() as db:
-            db.add(AuditLog(user_id=admin_id, action=action, details=details))
-            db.commit()
-    except Exception:
-        pass
+        container_manager.stop_container(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop container: {e}")
+
+    _audit(
+        admin["sub"],
+        "admin.pause_user",
+        {"target_user_id": user_id},
+        _ip(request),
+    )
+    return {"status": "paused", "message": "Container stopped; account remains active"}
+
+
+@router.post("/users/{user_id}/resume")
+async def resume_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    """Resume a paused user — starts their container again."""
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not u.is_active:
+            raise HTTPException(status_code=409, detail="User account is suspended — unsuspend first")
+        c = db.query(Container).filter_by(user_id=user_id).first()
+
+    if not c:
+        raise HTTPException(status_code=404, detail="User has no container to resume")
+
+    try:
+        container_manager.start_container(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start container: {e}")
+
+    _audit(
+        admin["sub"],
+        "admin.resume_user",
+        {"target_user_id": user_id},
+        _ip(request),
+    )
+    return {"status": "resumed", "message": "Container started"}
+
+
+@router.post("/users/{user_id}/provision")
+async def provision_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    """Provision a container for a user who doesn't have one yet."""
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        existing = db.query(Container).filter_by(user_id=user_id).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="User already has a container")
+        is_admin = u.role == "admin"
+
+    try:
+        c = container_manager.provision_container(user_id, is_admin=is_admin)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Provisioning failed: {e}")
+
+    _audit(
+        admin["sub"],
+        "admin.provision_container",
+        {"target_user_id": user_id},
+        _ip(request),
+    )
+    return {
+        "status": "provisioned",
+        "container": {
+            "id": c.id,
+            "status": c.status,
+            "host_port": c.host_port,
+            "container_name": c.container_name,
+        },
+    }
+
+
+@router.post("/users/{user_id}/change-role")
+async def change_role(
+    user_id: str,
+    req: ChangeRoleRequest,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """Change a user's role. Admins cannot change their own role."""
+    if req.role not in ("user", "admin"):
+        raise HTTPException(status_code=422, detail="Role must be 'user' or 'admin'")
+    if admin["sub"] == user_id:
+        raise HTTPException(status_code=403, detail="You cannot change your own role")
+
+    with get_db() as db:
+        u = db.query(User).filter_by(id=user_id).first()
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        old_role = u.role
+        u.role = req.role
+        db.commit()
+
+    _audit(
+        admin["sub"],
+        "admin.change_role",
+        {"target_user_id": user_id, "old_role": old_role, "new_role": req.role},
+        _ip(request),
+    )
+    return {"status": "updated", "role": req.role}
+
+
+@router.get("/audit-log")
+async def audit_log(admin: dict = Depends(require_admin)):
+    """Return last 100 audit log entries ordered by most recent first."""
+    with get_db() as db:
+        entries = (
+            db.query(AuditLog)
+            .order_by(AuditLog.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        # Build a lookup of admin emails for user_ids that appear in the log
+        admin_ids = {e.user_id for e in entries if e.user_id}
+        email_map: dict[str, str] = {}
+        if admin_ids:
+            admins = db.query(User).filter(User.id.in_(admin_ids)).all()
+            email_map = {a.id: a.email for a in admins}
+
+        return [
+            {
+                "id": e.id,
+                "user_id": e.user_id,
+                "admin_email": email_map.get(e.user_id),
+                "action": e.action,
+                "details": e.details,
+                "ip_address": e.ip_address,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in entries
+        ]
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────
+
+def _ip(request: Request) -> str | None:
+    """Extract client IP from request, respecting X-Forwarded-For."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else None

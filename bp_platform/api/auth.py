@@ -14,6 +14,7 @@ from bp_platform.models.database import User, Container, get_db
 from bp_platform.services.token_service import (
     hash_password, verify_password, create_jwt, decode_jwt,
 )
+from bp_platform.config import REQUIRE_SIGNUP_APPROVAL
 
 # In-memory password reset tokens (production: use Redis or DB table)
 _reset_tokens: dict[str, dict] = {}  # token -> {user_id, expires_at}
@@ -43,6 +44,8 @@ class TokenResponse(BaseModel):
     container_port: int | None = None
     container_status: str | None = None
     container_token: str | None = None
+    pending_approval: bool = False
+    message: str | None = None
 
 
 class UserProfile(BaseModel):
@@ -93,25 +96,52 @@ async def signup(request: Request, req: SignupRequest):
         if existing:
             raise HTTPException(status_code=409, detail="Email already registered")
 
-        user = User(
-            email=req.email,
-            password_hash=hash_password(req.password),
-            name=req.name,
-            role="user",
-            subscription_status="pending",
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        if REQUIRE_SIGNUP_APPROVAL:
+            # Pending approval mode — account is inactive until admin approves
+            user = User(
+                email=req.email,
+                password_hash=hash_password(req.password),
+                name=req.name,
+                role="user",
+                subscription_status="pending",
+                is_active=False,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
-        token = create_jwt(user.id, user.email, user.role)
-        return TokenResponse(
-            token=token,
-            user_id=user.id,
-            email=user.email,
-            role=user.role,
-            name=user.name,
-        )
+            # Issue a token so the client can show a proper pending screen,
+            # but the account is blocked at get_current_user until approved.
+            token = create_jwt(user.id, user.email, user.role)
+            return TokenResponse(
+                token=token,
+                user_id=user.id,
+                email=user.email,
+                role=user.role,
+                name=user.name,
+                pending_approval=True,
+                message="Account pending admin approval. You will be notified once your account is activated.",
+            )
+        else:
+            user = User(
+                email=req.email,
+                password_hash=hash_password(req.password),
+                name=req.name,
+                role="user",
+                subscription_status="pending",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            token = create_jwt(user.id, user.email, user.role)
+            return TokenResponse(
+                token=token,
+                user_id=user.id,
+                email=user.email,
+                role=user.role,
+                name=user.name,
+            )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -123,6 +153,12 @@ async def login(request: Request, req: LoginRequest):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not user.is_active:
+            # Distinguish pending from suspended for better UX
+            if user.subscription_status == "pending":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Account pending admin approval. Please wait for activation."
+                )
             raise HTTPException(status_code=403, detail="Account suspended")
 
         # Get container info if exists

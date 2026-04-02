@@ -80,7 +80,9 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
+          {NAV_ITEMS.filter(({ path }) =>
+            isAdmin || (path !== '/campaigns' && path !== '/leads')
+          ).map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
