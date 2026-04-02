@@ -22,10 +22,11 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: python -m pytest tests/ -v --tb=short -x
+      - run: python -m pytest tests/ -v --tb=short -x --ignore=tests/test_live.py
         env:
           BLOGPILOT_BASE_DIR: ${{ github.workspace }}
           BLOGPILOT_DATA_DIR: ${{ github.workspace }}/data
+          CI: "true"
 
   deploy:
     name: Deploy to Hostinger VPS
@@ -75,6 +76,15 @@ jobs:
               # and it can be restarted via admin dashboard or auto-restart
               echo "$CONTAINER stopped. Will be recreated with new image on next start."
             done
+
+            echo "=== Building frontend ==="
+            cd /opt/blogpilot/ui && npm ci --prefer-offline && npm run build && cd ..
+
+            echo "=== Reloading nginx ==="
+            cp /opt/blogpilot/deploy/nginx.conf /etc/nginx/sites-available/blogpilot
+            ln -sf /etc/nginx/sites-available/blogpilot /etc/nginx/sites-enabled/blogpilot
+            rm -f /etc/nginx/sites-enabled/default
+            nginx -t && systemctl reload nginx
 
             echo "=== Verifying platform health ==="
             sleep 5

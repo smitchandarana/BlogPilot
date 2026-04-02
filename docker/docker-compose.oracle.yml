@@ -59,7 +59,7 @@ services:
       docker-proxy:
         condition: service_started
     ports:
-      - "127.0.0.1:80:9000"  # Only localhost — Cloudflare Tunnel connects here
+      - "127.0.0.1:9000:9000"  # nginx proxies from port 80; direct health checks use 9000
     environment:
       DATABASE_URL: postgresql://blogpilot:${POSTGRES_PASSWORD}@postgres:5432/blogpilot_platform
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}

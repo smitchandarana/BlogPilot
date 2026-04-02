@@ -8,6 +8,8 @@ Prerequisites:
 
 Run:
   pytest tests/test_live.py -v --tb=short
+
+These tests are SKIPPED automatically in CI (no live backend available).
 """
 import os
 import sys
@@ -15,6 +17,12 @@ import json
 import asyncio
 import pytest
 import httpx
+
+# Skip entire module when running in CI or when backend is unreachable
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true" or os.environ.get("SKIP_LIVE_TESTS") == "true",
+    reason="Live tests require a running backend (set SKIP_LIVE_TESTS=true to skip locally)",
+)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 

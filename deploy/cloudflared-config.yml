@@ -1,10 +1,18 @@
-# Copy to /etc/cloudflared/config.yml after creating tunnel
-# Replace <TUNNEL-UUID> with your actual tunnel UUID
+# Cloudflare Tunnel config
+# Copy to /etc/cloudflared/config.yml after creating the tunnel.
+# Replace <TUNNEL-UUID> with your actual tunnel UUID.
 
 tunnel: <TUNNEL-UUID>
 credentials-file: /root/.cloudflared/<TUNNEL-UUID>.json
 
 ingress:
+  # React frontend
+  - hostname: app.phoenixsolution.in
+    service: http://localhost:80
+
+  # Platform API + container proxy
   - hostname: api.phoenixsolution.in
     service: http://localhost:80
+
+  # Catch-all (required by cloudflared)
   - service: http_status:404

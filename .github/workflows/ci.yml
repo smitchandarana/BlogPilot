@@ -23,10 +23,11 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run pytest
-        run: python -m pytest tests/ -v --tb=short -x
+        run: python -m pytest tests/ -v --tb=short -x --ignore=tests/test_live.py
         env:
           BLOGPILOT_BASE_DIR: ${{ github.workspace }}
           BLOGPILOT_DATA_DIR: ${{ github.workspace }}/data
+          CI: "true"
 
   build-backend:
     name: Build BlogPilot Image

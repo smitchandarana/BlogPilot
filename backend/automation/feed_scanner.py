@@ -400,6 +400,23 @@ class FeedScanner:
             return posts
         return [p for p in posts if not self._post_state.is_seen(p["url"], db)]
 
+    async def _extract_url(self, el) -> Optional[str]:
+        """Extract a post URL from a Playwright element handle.
+
+        Priority:
+        1. data-urn attribute  → https://www.linkedin.com/feed/update/{urn}/
+        2. <a href> link       → normalised absolute URL
+        3. None                → could not determine URL
+        """
+        urn = await el.get_attribute("data-urn")
+        if urn:
+            return f"https://www.linkedin.com/feed/update/{urn}/"
+        link = await el.query_selector('a[href*="/feed/update/"], a[href*="/posts/"]')
+        if link:
+            href = await link.get_attribute("href")
+            return _normalise_url(href) if href else None
+        return None
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -81,12 +81,14 @@ from bp_platform.api.containers import router as containers_router
 from bp_platform.api.admin import router as admin_router
 from bp_platform.api.billing import router as billing_router
 from bp_platform.api.health import router as health_router
+from bp_platform.api.proxy import router as proxy_router
 
 app.include_router(auth_router)
 app.include_router(containers_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(health_router)
+app.include_router(proxy_router)
 
 
 def _bootstrap_admin():

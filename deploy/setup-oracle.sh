@@ -5,12 +5,12 @@ set -euo pipefail
 echo "=== BlogPilot — Oracle ARM VM Setup ==="
 
 # 1. System update
-echo "[1/5] System update..."
+echo "[1/6] System update..."
 apt-get update && apt-get upgrade -y
-apt-get install -y ca-certificates curl gnupg lsb-release git unzip jq htop
+apt-get install -y ca-certificates curl gnupg lsb-release git unzip jq htop nginx nodejs npm
 
 # 2. Swap (4GB)
-echo "[2/5] Creating 4GB swap..."
+echo "[2/6] Creating 4GB swap..."
 if [ ! -f /swapfile ]; then
     fallocate -l 4G /swapfile
     chmod 600 /swapfile
@@ -22,7 +22,7 @@ if [ ! -f /swapfile ]; then
 fi
 
 # 3. Docker
-echo "[3/5] Installing Docker..."
+echo "[3/6] Installing Docker..."
 if ! command -v docker &> /dev/null; then
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -38,7 +38,7 @@ fi
 usermod -aG docker ubuntu 2>/dev/null || true
 
 # 4. Cloudflare Tunnel
-echo "[4/5] Installing cloudflared..."
+echo "[4/6] Installing cloudflared..."
 if ! command -v cloudflared &> /dev/null; then
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb \
         -o /tmp/cloudflared.deb
@@ -47,7 +47,7 @@ if ! command -v cloudflared &> /dev/null; then
 fi
 
 # 5. Docker log rotation
-echo "[5/5] Configuring Docker..."
+echo "[5/6] Configuring Docker..."
 cat > /etc/docker/daemon.json << 'EOF'
 {
     "log-driver": "json-file",
@@ -56,9 +56,22 @@ cat > /etc/docker/daemon.json << 'EOF'
 EOF
 systemctl restart docker
 
+# 6. nginx — install config, enable site
+echo "[6/6] Configuring nginx..."
+mkdir -p /opt/blogpilot/ui/dist  # placeholder so nginx starts cleanly
+cp /opt/blogpilot/deploy/nginx.conf /etc/nginx/sites-available/blogpilot
+ln -sf /etc/nginx/sites-available/blogpilot /etc/nginx/sites-enabled/blogpilot
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl enable nginx && systemctl start nginx
+
 # Project dir
 mkdir -p /opt/blogpilot
 chown ubuntu:ubuntu /opt/blogpilot
 
 echo ""
 echo "=== Setup complete ==="
+echo "Next steps:"
+echo "  1. Clone repo into /opt/blogpilot"
+echo "  2. Copy deploy/cloudflared-config.yml (with real tunnel UUID) to /etc/cloudflared/config.yml"
+echo "  3. Create docker/.env with POSTGRES_PASSWORD, JWT_SECRET, ADMIN_PASSWORD"
+echo "  4. Run: cd /opt/blogpilot && bash deploy/deploy.sh deploy"
