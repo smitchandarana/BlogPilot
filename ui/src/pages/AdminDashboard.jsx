@@ -989,7 +989,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Warnings */}
-      {system && system.memory.percent > 80 && (
+      {system?.memory?.percent > 80 && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           RAM usage at {system.memory.percent}% — consider stopping idle containers

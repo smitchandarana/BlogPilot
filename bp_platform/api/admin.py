@@ -211,9 +211,12 @@ async def admin_restart(container_id: str, request: Request, admin: dict = Depen
 @router.get("/system")
 async def system_stats(admin: dict = Depends(require_admin)):
     """System resource stats."""
+    import sys as _sys
+    _disk_path = "C:\\" if _sys.platform == "win32" else "/"
+
     mem, disk, cpu = await asyncio.gather(
         asyncio.to_thread(psutil.virtual_memory),
-        asyncio.to_thread(psutil.disk_usage, "/"),
+        asyncio.to_thread(psutil.disk_usage, _disk_path),
         asyncio.to_thread(psutil.cpu_percent, interval=1),
     )
 
