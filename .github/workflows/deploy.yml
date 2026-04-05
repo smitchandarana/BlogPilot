@@ -9,6 +9,7 @@ on:
       - 'bp_platform/**'
       - 'docker/**'
       - 'prompts/**'
+      - 'ui/**'
       - 'requirements.txt'
 
 jobs:
