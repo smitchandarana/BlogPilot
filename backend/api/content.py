@@ -39,6 +39,7 @@ class PublishNowRequest(BaseModel):
     text: str
     topic: Optional[str] = None
     style: Optional[str] = None
+    tone: Optional[str] = None
 
 
 class StructuredGenerateRequest(BaseModel):
@@ -77,16 +78,19 @@ async def schedule_post(body: ScheduleRequest, force: bool = Query(False)):
     """Add a post to the publishing queue at the given scheduled_at time."""
     try:
         scheduled_at = datetime.fromisoformat(body.scheduled_at)
-        if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at.tzinfo is not None:
+            # Normalize to naive UTC for consistent SQLite storage
+            scheduled_at = scheduled_at.astimezone(timezone.utc).replace(tzinfo=None)
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid scheduled_at format — use ISO 8601")
 
-    # Duplicate detection
-    if not force:
-        try:
-            from backend.research.duplicate_detector import check_duplicate
-            with get_db() as db:
+    # Duplicate detection and insert in a single session to close the race window
+    # between check and insert (a second request can't slip a duplicate between the
+    # two separate sessions that existed before this was combined).
+    with get_db() as db:
+        if not force:
+            try:
+                from backend.research.duplicate_detector import check_duplicate
                 dup = check_duplicate(body.text, db)
                 if dup["is_duplicate"]:
                     raise HTTPException(
@@ -97,12 +101,11 @@ async def schedule_post(body: ScheduleRequest, force: bool = Query(False)):
                             "matching_preview": dup["matching_preview"],
                         },
                     )
-        except HTTPException:
-            raise
-        except Exception:
-            pass  # Don't block on duplicate check failure
+            except HTTPException:
+                raise
+            except Exception:
+                pass  # Don't block on duplicate check failure
 
-    with get_db() as db:
         post = ScheduledPost(
             id=str(uuid.uuid4()),
             text=body.text,
@@ -180,8 +183,9 @@ async def publish_now(body: PublishNowRequest, force: bool = Query(False)):
             text=body.text,
             topic=body.topic,
             style=body.style,
+            tone=body.tone,
             status="SCHEDULED",
-            scheduled_at=datetime.now(timezone.utc),
+            scheduled_at=datetime.utcnow(),  # naive — must match SQLite stored values
         )
         db.add(post)
         db.commit()
@@ -300,10 +304,9 @@ async def generate_pipeline_post(req: PipelineGenerateRequest):
     3-call pipeline: ContentInsight → angle → post → score.
     Falls back to generate_structured() if no insight found for topic.
     """
-    from backend.storage.budget_tracker import BudgetTracker
+    from backend.storage import budget_tracker as _bt
     with get_db() as db:
-        budget = BudgetTracker()
-        if not budget.check("structured_generation", db):
+        if not _bt.check("structured_generation", db):
             raise HTTPException(
                 status_code=429,
                 detail="Daily generation limit reached (10/day). Try again tomorrow."
@@ -328,7 +331,7 @@ async def generate_pipeline_post(req: PipelineGenerateRequest):
             insight_id=req.insight_id,
         )
 
-        budget.increment("structured_generation", db)
+        _bt.increment("structured_generation", db)
     return result
 
 
@@ -575,6 +578,9 @@ def _publish_single(post_id: str, text: str) -> None:
         asyncio.run(_async_publish(post_id, text))
     except Exception as e:
         logger.error(f"Content: publish_single failed — {e}", exc_info=True)
+        # Ensure post doesn't stay stuck in "PUBLISHING" if _async_publish raised
+        # before updating the status (e.g. Playwright crash, login failure exception).
+        _mark_failed(post_id, f"Unhandled error: {e}")
 
 
 async def _async_publish(post_id: str, text: str) -> None:
@@ -599,12 +605,17 @@ async def _async_publish(post_id: str, text: str) -> None:
         publisher = PostPublisher()
         success = await publisher.publish(page, text)
 
+        post_topic = ""
+        post_style = ""
         with _get_db() as db:
             post = db.query(ScheduledPost).filter_by(id=post_id).first()
             if post:
+                # Capture needed values before session closes to avoid DetachedInstanceError
+                post_topic = post.topic or ""
+                post_style = post.style or ""
                 if success:
                     post.status = "PUBLISHED"
-                    post.published_at = datetime.now(timezone.utc)
+                    post.published_at = datetime.utcnow()  # naive — SQLite
                     logger.info(f"Content: post {post_id} published successfully")
                 else:
                     post.status = "FAILED"
@@ -628,8 +639,8 @@ async def _async_publish(post_id: str, text: str) -> None:
                 with _get_db() as db_ql:
                     quality_log.log_post(
                         db=db_ql,
-                        topic=post.topic if post else "",
-                        style=post.style if post else "",
+                        topic=post_topic,
+                        style=post_style,
                         post_text=text,
                         quality_score=0.0,  # score not available at publish time
                         was_published=True,

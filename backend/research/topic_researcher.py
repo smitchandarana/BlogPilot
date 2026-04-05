@@ -12,7 +12,7 @@ import json
 import re
 import uuid
 from collections import Counter
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 from backend.research.reddit_scanner import scan_subreddits
 from backend.research.rss_scanner import scan_feeds
@@ -259,7 +259,14 @@ class TopicResearcher:
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-        data = json.loads(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"TopicResearcher: JSON parse failed in _ai_extract_subtopics for '{domain}' — {e}"
+            )
+            return self._heuristic_extract_subtopics(domain, snippets)
+
         extracted_topics = data.get("specific_topics", [])
 
         # Filter out any that exactly match the domain name
@@ -487,7 +494,14 @@ class TopicResearcher:
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-        data = json.loads(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"TopicResearcher: JSON parse failed in _ai_score for '{topic}' — {e}"
+            )
+            return self._heuristic_score(topic, snippets, engagement_history)
+
         return {
             "trending_velocity": float(data.get("trending_velocity", 0)),
             "content_gap": float(data.get("content_gap", 5)),
@@ -597,8 +611,8 @@ class TopicResearcher:
             suggested_angle=scores.get("suggested_angle", ""),
             snippet_count=len(snippets),
             status="RESEARCHED",
-            researched_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=max_age),
+            researched_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(hours=max_age),
         )
         db.add(record)
 
@@ -635,7 +649,7 @@ class TopicResearcher:
 
     def _cleanup_expired(self, db) -> int:
         """Delete expired research topics and their snippets."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
         expired = (
             db.query(ResearchedTopic)
@@ -661,7 +675,7 @@ class TopicResearcher:
 
 def get_latest_research(db, limit: int = 20) -> list[dict]:
     """Get most recent non-expired researched topics."""
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     topics = (
         db.query(ResearchedTopic)

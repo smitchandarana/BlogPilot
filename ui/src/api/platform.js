@@ -16,6 +16,18 @@ platform.interceptors.request.use((config) => {
   return config
 })
 
+// On 401: clear stored token and dispatch event so AuthContext can log out
+platform.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('platform_token')
+      window.dispatchEvent(new CustomEvent('platform:unauthorized'))
+    }
+    return Promise.reject(err)
+  }
+)
+
 export const auth = {
   signup: (email, password, name) =>
     platform.post('/platform/auth/signup', { email, password, name }),
@@ -71,6 +83,15 @@ export const admin = {
   provisionUser: (id) => platform.post(`/platform/admin/users/${id}/provision`),
   changeRole: (id, role) => platform.post(`/platform/admin/users/${id}/change-role`, { role }),
   auditLog: () => platform.get('/platform/admin/audit-log'),
+  setLinkedInCredentials: (id, linkedin_email, linkedin_password) =>
+    platform.post(`/platform/admin/users/${id}/linkedin-credentials`, { linkedin_email, linkedin_password }),
+  clearLinkedInCredentials: (id) =>
+    platform.delete(`/platform/admin/users/${id}/linkedin-credentials`),
+}
+
+export const platformHealth = {
+  tailscale: () => platform.get('/platform/health/tailscale'),
+  containers: () => platform.get('/platform/health/containers'),
 }
 
 export default platform

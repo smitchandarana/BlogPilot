@@ -62,7 +62,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     name = Column(String(255), default="")
-    role = Column(String(20), default="user")  # user | admin
+    role = Column(String(20), default="user")  # user | superuser | admin
     subscription_status = Column(String(20), default="pending")  # pending | active | cancelled | suspended | past_due
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
@@ -94,6 +94,8 @@ class Container(Base):
     stopped_at = Column(DateTime, nullable=True)
     restart_count = Column(Integer, default=0)
     last_api_call = Column(DateTime, nullable=True)
+    linkedin_email = Column(String(255), nullable=True)
+    linkedin_password = Column(Text, nullable=True)  # stored as plaintext, never returned via API
 
     user = relationship("User", back_populates="container")
 
@@ -111,6 +113,16 @@ class BillingEvent(Base):
     __table_args__ = (
         Index("idx_billing_events_user_id", "user_id"),
     )
+
+
+class PasswordResetToken(Base):
+    """DB-persisted password reset tokens — survives server restarts."""
+    __tablename__ = "password_reset_tokens"
+
+    token = Column(String(64), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
 
 
 class AuditLog(Base):

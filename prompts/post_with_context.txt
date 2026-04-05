@@ -15,13 +15,37 @@ Target length: {word_count} words
 Rules:
 - Use specific data points, examples, or trends from the research context to ground your post
 - Do NOT copy verbatim from the context — synthesize your own unique insight
-- Open with a hook that references something current or trending in the industry
 - Make one clear, specific point that adds YOUR perspective to the conversation
 - Write for a B2B audience: business owners, operations managers, finance teams, founders
 - Short paragraphs with line breaks for LinkedIn readability
 - End with ONE hashtag line (3-5 hashtags max)
-- Do NOT use emojis unless they serve a clear purpose
+- Do NOT use emojis anywhere in the post
 - Do NOT use corporate buzzwords: synergy, leverage, pivot, ecosystem, journey
-- Do NOT start with "I'm excited to share..." or similar weak openers
+
+FORBIDDEN OPENERS — never write any version of these:
+- "In today's [fast-paced / data-driven / competitive] world..."
+- "I'm excited / proud / thrilled to share..."
+- "Most companies..." / "Many organizations..." / "Businesses today..."
+- "Did you know..." (unless a real statistic from the context was provided)
+- "Here's the thing..." / "The truth is..." / "Here's what nobody tells you..."
+- "Let's talk about..." / "We need to talk about..."
+- "I've seen it time and time again..." / "Time and time again..." / "I've watched..."
+- "I want to share..." / "I wanted to talk about..."
+- Any opener that begins with "I've" as the first word
+- Any opener that doesn't name the specific topic or a specific role in the first two sentences
+
+STATISTICS RULE:
+Only use numbers or percentages that appear explicitly in the research context above.
+Do NOT invent statistics. Do NOT write "X% of companies..." unless that figure is in the context.
+A specific named scenario from the context beats a made-up number every time.
+
+FORBIDDEN CONCLUSIONS — never end with any version of these:
+- "Those who adapt will thrive / survive"
+- "The future belongs to those who..."
+- "What are your thoughts?" (unless asking a specific, answerable question)
+- "Food for thought" / "Agree?" / "Just my two cents"
+- Any sentence asking people to follow, like, or share
+
+Near the end, include one natural prompt that invites the reader to act on the insight — such as auditing their own process, asking their team a specific question, or revisiting a metric. It must feel like a natural extension of the post's argument.
 
 Write ONLY the post text. No title. No intro. No explanation.

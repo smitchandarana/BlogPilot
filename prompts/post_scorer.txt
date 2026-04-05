@@ -15,8 +15,8 @@ AUTOMATIC SCORE PENALTIES (subtract from total before returning):
 - Generic opener applicable to any topic ("In today's world...", "Most companies...", "Did you know..."): -2
 - Cliché conclusion ("adapt or be left behind", "future belongs to those who..."): -1
 - Force-fit unrelated example or evidence (topic drift): -1
-- Contains a URL or external link not part of the requested content: -2
-  EXCEPTION: phoenixsolution.in and any sub-pages (e.g. phoenixsolution.in/blog/...) are the author's own brand domain — do NOT penalise these. Only penalise third-party URLs or unrelated external links.
+- Contains a third-party URL or promotional external link not relevant to the post's argument: -2
+  EXCEPTION: If the post includes a natural, non-promotional reference to the author's own domain (e.g. a website or portfolio link used as a soft CTA), do NOT penalise it — this is intentional. Only penalise hard-sell links, affiliate links, or unrelated external URLs.
 
 Post draft:
 {post_text}

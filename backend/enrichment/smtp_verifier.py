@@ -77,8 +77,8 @@ def _smtp_check(mx_host: str, email: str, timeout: int) -> bool:
     Synchronous SMTP handshake. Runs in a thread executor.
     Returns True if the server accepts RCPT TO with a 250 response.
     """
+    smtp = smtplib.SMTP(timeout=timeout)
     try:
-        smtp = smtplib.SMTP(timeout=timeout)
         smtp.connect(mx_host, 25)
         smtp.ehlo("linkedin-ai-engine.local")
         smtp.mail("verify@linkedin-ai-engine.local")
@@ -101,3 +101,8 @@ def _smtp_check(mx_host: str, email: str, timeout: int) -> bool:
     except Exception as e:
         logger.debug(f"SMTP verify: error for {email} — {e}")
         return False
+    finally:
+        try:
+            smtp.close()
+        except Exception:
+            pass

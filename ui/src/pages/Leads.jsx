@@ -47,15 +47,14 @@ export default function Leads() {
 
   const handleEnrich = async (id) => {
     setEnriching((prev) => new Set([...prev, id]))
+    const clearSpinner = () =>
+      setEnriching((prev) => { const s = new Set(prev); s.delete(id); return s })
     try {
       await leadsApi.enrich(id)
-      // Refresh after a short delay to get updated status
-      setTimeout(async () => {
-        await fetchLeads()
-        setEnriching((prev) => { const s = new Set(prev); s.delete(id); return s })
-      }, 2000)
+      // Refresh after a short delay; always clear spinner regardless of refresh outcome
+      setTimeout(() => fetchLeads().finally(clearSpinner), 2000)
     } catch {
-      setEnriching((prev) => { const s = new Set(prev); s.delete(id); return s })
+      clearSpinner()
     }
   }
 

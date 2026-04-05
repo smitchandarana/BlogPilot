@@ -22,11 +22,13 @@ RUN playwright install chromium && playwright install-deps chromium
 # Copy app code (backend + prompts only — no frontend, no platform)
 COPY backend/ ./backend/
 COPY prompts/ ./prompts/
+COPY docker/entrypoint.sh /entrypoint.sh
 
 # Create non-root user
 RUN useradd -m -u 1000 blogpilot && \
     mkdir -p /app/data /app/browser_profile /app/config /app/logs && \
-    chown -R blogpilot:blogpilot /app
+    chown -R blogpilot:blogpilot /app && \
+    chmod +x /entrypoint.sh
 
 # Volume mount points for persistent user data
 VOLUME ["/app/data", "/app/browser_profile", "/app/config", "/app/logs"]
@@ -45,5 +47,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["xvfb-run", "--auto-servernum", "python", "-m", "uvicorn", \
-     "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/entrypoint.sh"]

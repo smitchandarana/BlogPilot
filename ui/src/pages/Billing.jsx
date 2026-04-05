@@ -1,128 +1,74 @@
-import { useState, useEffect } from 'react'
-import { billing } from '../api/platform'
+import { CheckCircle2, Zap, Shield, Infinity } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { CreditCard, ExternalLink, Loader2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 
-const STATUS_DISPLAY = {
-  active: { label: 'Active', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/20', icon: CheckCircle2 },
-  pending: { label: 'Pending', color: 'text-amber-400 bg-amber-500/15 border-amber-500/20', icon: AlertTriangle },
-  cancelled: { label: 'Cancelled', color: 'text-red-400 bg-red-500/15 border-red-500/20', icon: XCircle },
-  past_due: { label: 'Past Due', color: 'text-red-400 bg-red-500/15 border-red-500/20', icon: AlertTriangle },
-  suspended: { label: 'Suspended', color: 'text-red-400 bg-red-500/15 border-red-500/20', icon: XCircle },
-}
+const FEATURES = [
+  'Unlimited LinkedIn post scanning',
+  'AI-powered comment generation',
+  'Lead capture & email enrichment',
+  'Campaign automation engine',
+  'Analytics & learning insights',
+  'Content Studio with structured generation',
+  'Full API access',
+]
 
 export default function Billing() {
   const { user } = useAuth()
-  const [sub, setSub] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState(false)
-  const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    billing.subscription()
-      .then(res => setSub(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  const handleCheckout = async () => {
-    setActionLoading(true)
-    try {
-      const res = await billing.createCheckout()
-      window.location.href = res.data.checkout_url
-    } catch (e) {
-      setMessage(e.response?.data?.detail || 'Checkout failed')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleCancel = async () => {
-    if (!confirm('Cancel your subscription? You will retain access until the end of the current billing period.')) return
-    setActionLoading(true)
-    try {
-      await billing.cancel()
-      setMessage('Subscription will cancel at end of billing period.')
-      const res = await billing.subscription()
-      setSub(res.data)
-    } catch (e) {
-      setMessage(e.response?.data?.detail || 'Cancellation failed')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
-      </div>
-    )
-  }
-
-  const status = sub?.status || 'pending'
-  const display = STATUS_DISPLAY[status] || STATUS_DISPLAY.pending
-  const StatusIcon = display.icon
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-100">Billing & Subscription</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Manage your plan and payment</p>
+        <h1 className="text-xl font-semibold text-slate-100">Billing & Plan</h1>
+        <p className="mt-0.5 text-sm text-slate-500">Your current access and plan details.</p>
       </div>
 
-      {message && (
-        <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm text-violet-300">
-          {message}
-        </div>
-      )}
-
-      {/* Current plan */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-6">
-        <div className="flex items-start justify-between">
+      {/* Beta banner */}
+      <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/20">
+            <Zap className="h-5 w-5 text-violet-400" />
+          </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-300">Current Plan</h2>
-            <div className="mt-3 flex items-center gap-2">
-              <StatusIcon className={`h-4 w-4 ${display.color.split(' ')[0]}`} />
-              <span className={`rounded-md border px-2.5 py-1 text-xs font-medium ${display.color}`}>
-                {display.label}
+            <h2 className="text-base font-semibold text-violet-200">Free Beta Access</h2>
+            <p className="mt-1 text-sm text-violet-300/80">
+              BlogPilot is currently in free beta. You have full access to all features at no cost.
+              No credit card required, no limits, no expiry during this phase.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Plan card */}
+      <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Current Plan</p>
+            <div className="mt-2 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span className="rounded-md border border-emerald-500/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400">
+                Beta — Free
               </span>
             </div>
-            {sub?.current_period_end && (
-              <p className="mt-2 text-xs text-slate-500">
-                {sub.cancel_at_period_end ? 'Access until' : 'Renews'}: {new Date(sub.current_period_end * 1000).toLocaleDateString()}
-              </p>
-            )}
           </div>
-          <CreditCard className="h-8 w-8 text-slate-700" />
+          <div className="text-right">
+            <p className="text-3xl font-bold text-slate-100">$0</p>
+            <p className="text-xs text-slate-500">/ month</p>
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-slate-700/50 pt-5">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">Included</p>
+          <ul className="space-y-2">
+            {FEATURES.map((f) => (
+              <li key={f} className="flex items-center gap-2 text-sm text-slate-400">
+                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+                {f}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-3">
-        {(status === 'pending' || status === 'cancelled') && (
-          <button
-            onClick={handleCheckout}
-            disabled={actionLoading}
-            className="flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition disabled:opacity-50"
-          >
-            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-            {status === 'pending' ? 'Subscribe Now' : 'Resubscribe'}
-          </button>
-        )}
-
-        {status === 'active' && !sub?.cancel_at_period_end && (
-          <button
-            onClick={handleCancel}
-            disabled={actionLoading}
-            className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-5 py-2.5 text-sm font-medium text-red-300 hover:bg-red-500/20 transition disabled:opacity-50"
-          >
-            Cancel Subscription
-          </button>
-        )}
-      </div>
-
-      {/* Account info */}
+      {/* Account details */}
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-6">
         <h2 className="mb-3 text-sm font-semibold text-slate-300">Account</h2>
         <div className="space-y-2 text-sm">
@@ -131,10 +77,26 @@ export default function Billing() {
             <span className="text-slate-300">{user?.email}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Plan</span>
-            <span className="text-slate-300">BlogPilot Pro</span>
+            <span className="text-slate-500">Role</span>
+            <span className="capitalize text-slate-300">{user?.role || 'user'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Status</span>
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <Infinity className="h-3.5 w-3.5" />
+              Unlimited access
+            </span>
           </div>
         </div>
+      </div>
+
+      {/* Info note */}
+      <div className="flex items-start gap-3 rounded-lg border border-slate-700/40 bg-slate-800/30 px-4 py-3">
+        <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-500" />
+        <p className="text-xs text-slate-500">
+          Paid plans will be introduced after the beta period. Existing beta users will receive advance notice
+          and a preferential rate before any charges are applied.
+        </p>
       </div>
     </div>
   )

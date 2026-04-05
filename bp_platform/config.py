@@ -8,14 +8,19 @@ DATABASE_URL = os.environ.get(
     "postgresql://blogpilot:changeme@localhost:5432/blogpilot_platform",
 )
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60 * 4  # 4 hours (short-lived; use refresh endpoint)
 
-# Fail fast if secrets not configured in production
 _IS_PRODUCTION = os.environ.get("BLOGPILOT_ENV") == "production"
-if _IS_PRODUCTION and not JWT_SECRET:
+
+_jwt_secret_raw = os.environ.get("JWT_SECRET", "")
+if _jwt_secret_raw:
+    JWT_SECRET = _jwt_secret_raw
+elif _IS_PRODUCTION:
     raise RuntimeError("FATAL: JWT_SECRET must be set in production")
+else:
+    import secrets as _sec
+    JWT_SECRET = _sec.token_hex(32)  # random per process — fine for dev (tokens invalid on restart)
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -57,3 +62,12 @@ DEFAULT_SETTINGS_TEMPLATE = os.environ.get(
 
 # Signup approval mode — when True, new signups are set to pending and require admin approval
 REQUIRE_SIGNUP_APPROVAL = os.environ.get("REQUIRE_SIGNUP_APPROVAL", "false").lower() == "true"
+
+# Public-facing base URL (used in Stripe redirect URLs, password reset links, etc.)
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:3000")
+
+# Tailscale exit node IP (set to your residential machine's Tailscale IP).
+# When set, user containers are launched with network_mode pointing to the
+# tailscale container so all outbound traffic exits through your home IP.
+# Leave empty to use direct Oracle Cloud IP (not recommended for LinkedIn).
+TAILSCALE_EXIT_NODE = os.environ.get("TAILSCALE_EXIT_NODE", "")

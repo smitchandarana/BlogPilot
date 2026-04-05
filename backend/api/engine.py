@@ -1,3 +1,4 @@
+import asyncio
 import time
 import threading
 from fastapi import APIRouter, HTTPException
@@ -25,10 +26,13 @@ async def start_engine():
         try:
             global _start_time
             _start_time = time.time()
-            eng.start()
+            await asyncio.to_thread(eng.start)
             return {"state": eng.status()["state"]}
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
+        except Exception as e:
+            logger.error(f"start_engine failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Engine start failed")
     return {"state": "RUNNING"}
 
 
@@ -37,10 +41,16 @@ async def stop_engine():
     eng = _get_engine()
     if eng:
         try:
-            eng.stop()
+            # eng.stop() calls worker_pool.drain() → shutdown(wait=True) which can
+            # block for 30–60 s while browser automation workers finish. Must be
+            # off-loaded to a thread to avoid stalling the FastAPI event loop.
+            await asyncio.to_thread(eng.stop)
             return {"state": eng.status()["state"]}
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
+        except Exception as e:
+            logger.error(f"stop_engine failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Engine stop failed")
     return {"state": "STOPPED"}
 
 
@@ -53,6 +63,9 @@ async def pause_engine():
             return {"state": eng.status()["state"]}
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
+        except Exception as e:
+            logger.error(f"pause_engine failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Engine pause failed")
     return {"state": "PAUSED"}
 
 
@@ -65,6 +78,9 @@ async def resume_engine():
             return {"state": eng.status()["state"]}
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
+        except Exception as e:
+            logger.error(f"resume_engine failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Engine resume failed")
     return {"state": "RUNNING"}
 
 
@@ -105,32 +121,36 @@ async def reset_circuit_breaker():
 async def get_logs(lines: int = 150):
     """Return last N lines from engine.log as a list of parsed log objects."""
     import os, json
-    log_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "logs", "engine.log")
-    )
-    if not os.path.exists(log_path):
-        return []
-    try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            raw_lines = f.readlines()
-        result = []
-        for line in raw_lines[-lines:]:
-            line = line.rstrip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                result.append({
-                    "ts": obj.get("timestamp", ""),
-                    "level": obj.get("level", "INFO"),
-                    "module": obj.get("module", ""),
-                    "message": obj.get("message", line),
-                })
-            except Exception:
-                result.append({"ts": "", "level": "INFO", "module": "", "message": line})
-        return result
-    except Exception:
-        return []
+
+    def _read_logs():
+        log_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "logs", "engine.log")
+        )
+        if not os.path.exists(log_path):
+            return []
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                raw_lines = f.readlines()
+            result = []
+            for line in raw_lines[-lines:]:
+                line = line.rstrip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    result.append({
+                        "ts": obj.get("timestamp", ""),
+                        "level": obj.get("level", "INFO"),
+                        "module": obj.get("module", ""),
+                        "message": obj.get("message", line),
+                    })
+                except Exception:
+                    result.append({"ts": "", "level": "INFO", "module": "", "message": line})
+            return result
+        except Exception:
+            return []
+
+    return await asyncio.to_thread(_read_logs)
 
 
 @router.get("/status")

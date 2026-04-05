@@ -1,5 +1,6 @@
 """Container lifecycle endpoints — provision, start, stop, restart, destroy, reset."""
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 
 from bp_platform.api.auth import get_current_user
@@ -29,7 +30,9 @@ async def provision(user: dict = Depends(get_current_user)):
 
     try:
         is_admin = user.get("role") == "admin"
-        record = container_manager.provision_container(user_id, is_admin=is_admin)
+        record = await asyncio.to_thread(
+            container_manager.provision_container, user_id, is_admin=is_admin
+        )
         return {
             "status": "running",
             "container_name": record.container_name,
@@ -43,7 +46,7 @@ async def provision(user: dict = Depends(get_current_user)):
 async def start(user: dict = Depends(get_current_user)):
     """Start a stopped container."""
     try:
-        container_manager.start_container(user["sub"])
+        await asyncio.to_thread(container_manager.start_container, user["sub"])
         return {"status": "running"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -55,27 +58,31 @@ async def start(user: dict = Depends(get_current_user)):
 async def stop(user: dict = Depends(get_current_user)):
     """Stop a running container."""
     try:
-        container_manager.stop_container(user["sub"])
+        await asyncio.to_thread(container_manager.stop_container, user["sub"])
         return {"status": "stopped"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Container stop failed")
 
 
 @router.post("/restart")
 async def restart(user: dict = Depends(get_current_user)):
     """Restart the container."""
     try:
-        container_manager.restart_container(user["sub"])
+        await asyncio.to_thread(container_manager.restart_container, user["sub"])
         return {"status": "running"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Container restart failed")
 
 
 @router.delete("")
 async def destroy(user: dict = Depends(get_current_user), delete_data: bool = False):
     """Destroy the container. Optionally delete all user data."""
     try:
-        container_manager.destroy_container(user["sub"], delete_volumes=delete_data)
+        await asyncio.to_thread(container_manager.destroy_container, user["sub"], delete_volumes=delete_data)
         return {"status": "destroyed"}
     except Exception:
         raise HTTPException(status_code=500, detail="Container destroy failed")
@@ -85,13 +92,20 @@ async def destroy(user: dict = Depends(get_current_user), delete_data: bool = Fa
 async def reset(user: dict = Depends(get_current_user)):
     """Reset container to default settings. Keeps browser profile (LinkedIn session)."""
     try:
-        container_manager.reset_container(user["sub"])
+        await asyncio.to_thread(container_manager.reset_container, user["sub"])
         return {"status": "reset_complete"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Container reset failed")
 
 
 @router.get("/status")
 async def status(user: dict = Depends(get_current_user)):
     """Get container status."""
-    return container_manager.get_container_status(user["sub"])
+    try:
+        return await asyncio.to_thread(container_manager.get_container_status, user["sub"])
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get container status")

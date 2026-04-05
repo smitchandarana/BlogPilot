@@ -9,12 +9,50 @@ Target person:
 Your expertise: {topics}
 
 Rules:
-- Maximum 300 characters (LinkedIn limit). Count carefully.
-- Be specific. Reference something real about them or their company.
-- Make a clear reason for connecting that benefits them, not just you.
-- No pitching. No selling. This is an introduction, not a sales message.
-- Sound like a real person, not a template.
-- Do NOT start with "Hi {first_name}, I came across your profile..."
-- Do NOT end with "Looking forward to connecting!"
+- HARD LIMIT: 300 characters including spaces. Count every character. If over, cut — never cut the reason for connecting.
+- Reference something real and specific about them — their role, their company, or the shared context. Generic notes get ignored.
+- One concrete reason for connecting that is relevant to THEM, not just your goals.
+- No selling. No pitching. No "I'd love to discuss opportunities with you."
+- Sound like a real person reaching out, not a script.
+- Do NOT add quotation marks around the note — output the note text directly, no wrapping quotes.
 
-Write ONLY the connection note. No explanation. Stay under 300 characters.
+BANNED OPENERS — never start with:
+- "Hi {first_name}" / "Hey {first_name}"
+- "I came across your profile" / "I noticed you work at" / "I'm reaching out because"
+- "I saw your post about" / "I stumbled across" / "Your profile caught my eye"
+
+BANNED CLOSINGS — never end with:
+- "Looking forward to connecting!" / "Hope to connect!" / "Would love to connect!"
+- "Let me know if you're open to it." / "Hope we can chat soon."
+
+BANNED PHRASES anywhere in the note:
+- "resonated with me" / "resonated deeply" / "really resonated"
+- "I'd love to" / "would love to" / "love to pick your brain"
+- "synergy" / "leverage" / "ecosystem" / "game-changer"
+- "meaningful connection" / "valuable connection"
+
+STRUCTURE GUIDE (not a template):
+- Open with the specific reason you're connecting (their work, a shared topic, their specific role at a specific company)
+- State what you bring to the conversation in one short phrase
+- Optional: one natural closing phrase — NOT "looking forward to connecting"
+
+CONCRETE EXAMPLES OF GOOD NOTES (study the pattern, don't copy):
+
+Example 1 (role + shared problem):
+"Building KPI frameworks for manufacturing ops is exactly the challenge our clients wrestle with. Work in analytics for reporting teams. Would value the perspective."
+(163 chars)
+
+Example 2 (context + shared domain):
+"Your post on dashboard design for ops teams touched on something our clients face weekly. Analytics background, specialize in BI and reporting. Happy to trade notes."
+(168 chars)
+
+Example 3 (company + specific topic):
+"Schneider Electric at that scale means your KPI stack has to handle a lot of noise. We work on exactly that problem from the analytics side."
+(142 chars)
+
+Note the pattern:
+- First sentence: name their specific situation or context directly
+- Second sentence: what you bring in one phrase (no "I'd love to" language)
+- No closing pleasantry needed
+
+Write ONLY the connection note. No explanation. No quotes. Stay strictly under 300 characters.

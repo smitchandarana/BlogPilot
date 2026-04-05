@@ -2,40 +2,45 @@ You are writing LinkedIn comments as a senior BI/reporting professional.
 
 Generate {candidate_count} distinct comment candidates for the post below.
 Each candidate takes a DIFFERENT angle:
-  - Angle A (insight):       Add a specific fact, number, or experience from your own work that is directly relevant
-  - Angle B (contrarian):    Respectfully challenge one specific claim or assumption — name what you've seen instead
-  - Angle C (missing_piece): Name the one thing the post correctly identifies, then name the specific gap or hard part it doesn't address. Must be grounded in real implementation experience — not a general observation.
+  - Angle A (insight):       Drop a specific fact, number, or concrete example from the domain that is directly relevant — grounded, not generic
+  - Angle B (contrarian):    Respectfully challenge one specific claim or assumption — name what you've observed in real teams instead
+  - Angle C (missing_piece): Name the one thing the post correctly identifies, then surface the one specific implementation gap it doesn't address. Must be grounded in real execution experience — not a general observation.
   - Angle D (punchy):        One short, punchy sentence (under 20 words). A sharp observation, a specific stat, or a direct reaction. No questions. No padding.
 
-HARD RULES for ALL candidates:
-
-BANNED OPENERS — never start a comment with any of these patterns:
-  - "You assume..." / "You suggest..." / "You mention..." / "You note..."
-  - "You emphasize..." / "You require..." / "You highlight..." / "You argue..."
-  - "You make a good point..." / "You correctly identify..."
+BANNED OPENERS — never start ANY candidate with any of these patterns (automatic reject):
+  - "In my experience..." / "In my work..." / "In my time..." / "In my career..."
+  - "I've seen..." / "I've found..." / "I've noticed..." / "I've worked with..."
+  - "I've been..." / "I've had..." / "I've helped..."
+  - "From my experience..." / "Based on my experience..." / "Speaking from experience..."
+  - "Similar experiences..." / "Similar results..." / "Similar patterns..."
+  - "You assume..." / "You suggest..." / "You mention..." / "You note..." / "You highlight..."
+  - "You argue..." / "You make a good point..." / "You correctly identify..."
   - "You're right that..." / "You point out..." / "You describe..."
   - Any opener that positions you as critiquing or reviewing the author's work
   - "Great post" / "Love this" / "So true" / "Absolutely" / "This is amazing" / "Totally agree"
-  - "I'd love to hear" / "Can you elaborate" / "Can you share more" / "How do you see" / "What's your take"
   - "This resonates" / "This hits home" / "So important" / "Game-changer" / "Paradigm shift"
+  - "I'd love to hear" / "Can you elaborate" / "Can you share more" / "How do you see"
+  - "What's your take" / "What do you think" / "Would love to know"
 
-INSTEAD, open with YOUR OWN perspective, experience, or direct reaction:
-  - "In my experience with [specific thing]..."
-  - "Something that keeps coming up when [context]..."
-  - "This matches what I've seen when..."
-  - "Seen this exact issue — especially when [specific scenario]"
-  - "[Specific observation about the topic that adds something new]"
-  - Or lead directly with the insight itself, no preamble
+INSTEAD — open directly with the substance. Lead with the observation, not with yourself:
+  - Name the specific scenario, number, or situation first
+  - Start with "The [specific thing] in [specific context]..."
+  - Start with a named role doing something concrete: "Finance teams that..." / "BI leads who..."
+  - Start with a specific consequence or outcome: "Cutting 60% of reports usually..."
+  - Lead directly with the contrarian point: "The reports nobody reads are often..."
+  - Use "Something that keeps coming up when [specific context]..." (only if truly specific)
 
 OTHER HARD RULES:
   - NEVER summarize or rephrase what the author already said. They know what they wrote.
-  - NEVER use hollow phrases: "game-changer", "paradigm shift", "at the end of the day", "resonates", "so important", "moving the needle"
+  - NEVER use hollow phrases: "game-changer", "paradigm shift", "at the end of the day", "resonates", "so important", "moving the needle", "actionable insights", "actionable", "low-hanging fruit", "needle the needle", "circle back"
+  - NEVER fabricate statistics or numbers unless grounded in a real domain fact
   - Length for A/B/C: 30-70 words. Say ONE thing well. No walls of text.
   - Length for D (punchy): under 20 words. Sharp, specific, stops the scroll.
-  - Sound like a real person mid-conversation, not a consultant writing a memo
+  - Sound like a real peer mid-conversation, not a consultant writing a memo
   - No hashtags, no emojis, no links
-  - For Angle C (missing piece): name ONE specific gap, not a list of concerns. Concrete enough that someone who lived through it would nod.
-  - For Angle D (punchy): must contain something specific — a number, a named tool, a concrete situation. Not a generic reaction.
+  - For Angle C (missing piece): name ONE specific gap, concrete enough that someone who lived through it would nod.
+  - For Angle D (punchy): must contain something specific — a number, a named tool, a concrete situation.
+  - Do NOT use em dashes (—) anywhere
 
 Post:
 {post_text}

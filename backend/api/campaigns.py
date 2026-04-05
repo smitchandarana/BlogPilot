@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -112,7 +112,7 @@ async def enroll_leads(campaign_id: str, body: EnrollRequest):
                     lead_id=lead_id,
                     status="IN_PROGRESS",
                     current_step=0,
-                    next_action_at=datetime.now(timezone.utc),
+                    next_action_at=datetime.utcnow(),
                 )
                 db.add(enrollment)
                 enrolled.append(lead_id)

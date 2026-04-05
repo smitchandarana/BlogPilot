@@ -1,5 +1,6 @@
 import os
 import json as _json
+import tempfile
 from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -10,8 +11,33 @@ router = APIRouter()
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
 _SECRETS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets")
-_PROMPT_NAMES = ["relevance", "comment", "post", "note", "reply",
-                 "content_extractor", "structured_post", "topic_extractor", "topic_scorer"]
+_PROMPT_NAMES = [
+    "relevance", "comment", "post", "note", "reply",
+    "comment_candidate", "comment_scorer", "post_scorer", "post_with_context",
+    "topic_scorer", "topic_extractor", "content_extractor", "structured_post",
+    "angle_generator", "insight_normalizer", "hook_generator", "post_critic",
+    "synthesize_brief",
+]
+
+
+def _write_secret(path: str, data: bytes) -> None:
+    """Write *data* to *path* atomically (temp-file + rename) with mode 0o600."""
+    dir_ = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=dir_)
+    try:
+        os.write(fd, data)
+        os.close(fd)
+        fd = -1
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)  # atomic on POSIX; near-atomic on Windows
+    except Exception:
+        if fd != -1:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # ── API Keys ─────────────────────────────────────────────────────
@@ -109,11 +135,8 @@ async def save_groq_key(body: ApiKeyUpdate):
 
     os.makedirs(_SECRETS_DIR, exist_ok=True)
     groq_path = os.path.join(_SECRETS_DIR, "groq.json")
-    fd = os.open(groq_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, _json.dumps({"api_key": encrypt(key)}).encode("utf-8"))
-    finally:
-        os.close(fd)
+    payload = _json.dumps({"api_key": encrypt(key)}).encode("utf-8")
+    _write_secret(groq_path, payload)
 
     logger.info("Groq API key saved (encrypted) to config/.secrets/groq.json")
     masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
@@ -156,11 +179,8 @@ async def save_openrouter_key(body: ApiKeyUpdate):
 
     os.makedirs(_SECRETS_DIR, exist_ok=True)
     or_path = os.path.join(_SECRETS_DIR, "openrouter.json")
-    fd = os.open(or_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, _json.dumps({"api_key": encrypt(key)}).encode("utf-8"))
-    finally:
-        os.close(fd)
+    payload = _json.dumps({"api_key": encrypt(key)}).encode("utf-8")
+    _write_secret(or_path, payload)
 
     logger.info("OpenRouter API key saved (encrypted) to config/.secrets/openrouter.json")
     masked = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
@@ -186,12 +206,8 @@ async def save_linkedin_credentials(body: LinkedInCredentials):
 
     os.makedirs(_SECRETS_DIR, exist_ok=True)
     linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
-    payload = _json.dumps({"email": encrypt(email), "password": encrypt(password)})
-    fd = os.open(linkedin_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, payload.encode("utf-8"))
-    finally:
-        os.close(fd)
+    payload = _json.dumps({"email": encrypt(email), "password": encrypt(password)}).encode("utf-8")
+    _write_secret(linkedin_path, payload)
 
     logger.info("LinkedIn credentials saved (encrypted)")
     return {"saved": True, "email_hint": email[:3] + "***" + email[email.find("@"):] if "@" in email else "***"}
@@ -231,11 +247,7 @@ async def test_linkedin_credentials(body: LinkedInTestRequest = None):
         os.makedirs(_SECRETS_DIR, exist_ok=True)
         linkedin_path = os.path.join(_SECRETS_DIR, "linkedin.json")
         payload = _json.dumps({"email": encrypt(email), "password": encrypt(password)})
-        fd = os.open(linkedin_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            os.write(fd, payload.encode("utf-8"))
-        finally:
-            os.close(fd)
+        _write_secret(linkedin_path, payload.encode("utf-8"))
         logger.info("LinkedIn credentials saved via test endpoint (encrypted)")
         return {"success": True, "message": "Credentials saved. They will be validated when the engine starts."}
 
@@ -503,7 +515,7 @@ async def test_prompt(body: PromptTestRequest):
 
         client = GroqClient(
             api_key=api_key,
-            model=cfg_get("ai.model", "llama3-70b-8192"),
+            model=cfg_get("ai.model", "llama-3.3-70b-versatile"),
             max_tokens=cfg_get("ai.max_tokens", 500),
             temperature=cfg_get("ai.temperature", 0.7),
         )

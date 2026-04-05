@@ -17,6 +17,7 @@ Pipeline steps (10):
   10. Log + WebSocket push
 """
 import asyncio
+import re
 from typing import Optional
 
 from backend.utils.config_loader import get as cfg_get
@@ -318,6 +319,9 @@ async def _async_approve_comment(post_id: str, comment_text: str):
             ok = await login.login(page)
             if not ok:
                 logger.error("Pipeline: approve_comment — LinkedIn login failed")
+                # Reset state back to PREVIEW so the user can retry
+                with get_db() as db:
+                    post_state.update_state(url, "PREVIEW", db)
                 return
 
         from backend.storage import engagement_log as _engagement_log_mod
@@ -377,6 +381,15 @@ async def _async_approve_comment(post_id: str, comment_text: str):
 
         logger.info(f"Pipeline: approve_comment — {final_state} for '{author}'")
 
+    except Exception as e:
+        # Unexpected error (browser launch failure, etc.) — reset to PREVIEW so user can retry
+        logger.error(f"Pipeline: approve_comment — unexpected error: {e}", exc_info=True)
+        try:
+            with get_db() as db:
+                post_state.update_state(url, "PREVIEW", db)
+        except Exception:
+            pass
+        raise
     finally:
         await browser.close()
 
@@ -409,7 +422,10 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
     if blacklist:
         text_lower = (post.get("text") or "").lower()
         for phrase in blacklist:
-            if phrase.lower() in text_lower:
+            # Use word-boundary matching to avoid false positives
+            # (e.g. "free" should not match "freelancer")
+            pattern = r'\b' + re.escape(phrase.lower()) + r'\b'
+            if re.search(pattern, text_lower):
                 post_state.update_state(
                     url, "SKIPPED", db,
                     skip_reason=f"blacklist: '{phrase}'",
@@ -515,7 +531,13 @@ async def _process_post(post: dict, page, ie, db, engine, background_client=None
                 elif action == "LIKE_AND_COMMENT":
                     action = "LIKE"
         else:
-            comment_text = str(comment_result) if comment_result else None
+            # _generate_comment returned a plain string (fallback path — no Groq key or API error).
+            # Never post fallback stub comments; downgrade to LIKE instead.
+            comment_text = None
+            if action == "COMMENT":
+                action = "LIKE"
+            elif action == "LIKE_AND_COMMENT":
+                action = "LIKE"
 
         # Preview mode: push to UI and wait for human approval before posting
         if bool(cfg_get("feed_engagement.preview_comments", True)):

@@ -82,7 +82,7 @@ class CampaignEngine:
             lead_id=lead_id,
             status="IN_PROGRESS",
             current_step=0,
-            next_action_at=datetime.now(timezone.utc),
+            next_action_at=datetime.utcnow(),
         )
         db.add(enrollment)
         db.commit()
@@ -100,7 +100,7 @@ class CampaignEngine:
         from backend.storage.database import get_db
         from backend.storage.models import CampaignEnrollment, Campaign
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()  # naive — matches SQLite storage
         processed = 0
 
         with get_db() as db:
@@ -151,7 +151,7 @@ class CampaignEngine:
         if enrollment.current_step >= len(steps):
             # No more steps — mark complete
             enrollment.status = "COMPLETED"
-            enrollment.completed_at = datetime.now(timezone.utc)
+            enrollment.completed_at = datetime.utcnow()
             db.commit()
             logger.info(
                 f"CampaignEngine: enrollment {enrollment.id} completed (all steps done)"
@@ -186,11 +186,11 @@ class CampaignEngine:
         if next_index >= len(steps):
             # Last step completed
             enrollment.status = "COMPLETED"
-            enrollment.completed_at = datetime.now(timezone.utc)
+            enrollment.completed_at = datetime.utcnow()
             logger.info(f"CampaignEngine: enrollment {enrollment.id} completed")
         else:
             enrollment.current_step = next_index
-            enrollment.next_action_at = datetime.now(timezone.utc) + timedelta(days=delay_days)
+            enrollment.next_action_at = datetime.utcnow() + timedelta(days=delay_days)
             if not success:
                 logger.warning(
                     f"CampaignEngine: step {enrollment.current_step - 1} failed for "

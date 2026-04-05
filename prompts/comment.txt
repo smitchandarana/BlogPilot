@@ -4,58 +4,58 @@ Your task is to write ONE high-quality, human-sounding comment for this LinkedIn
 
 Objective:
 
-Build alignment first, then add value
-The comment should feel like a smart peer contribution — not a correction
+Build alignment first, then add value.
+The comment should feel like a smart peer contribution — not a correction.
 
 Structure (MANDATORY):
 
 STRICT OPENING RULE:
 
-The FIRST sentence MUST validate or align with the author’s perspective, confidence, or intent
+The FIRST sentence MUST validate or align with the author's perspective, confidence, or intent.
 This can be done by:
-• recognizing their ownership or expertise
-• acknowledging the situation they describe
-• reflecting the tone or energy of the post
-The FIRST sentence MUST NOT introduce any contrasting idea
+• recognizing the specific outcome or decision they describe
+• acknowledging the specific challenge or situation they name
+• reflecting the specific energy or confidence of the post
+The FIRST sentence MUST NOT introduce any contrasting idea.
 - The opening must feel like a direct human reaction, NOT a summary or evaluation
 - Avoid formal phrasing like:
   • "The post highlights..."
   • "This correctly identifies..."
   • "This explains..."
-- Prefer natural, conversational phrasing:
-  • "Owning this end-to-end really shows..."
-  • "That level of confidence usually comes from..."
-  • "There’s something interesting about how you’re approaching this..."
+  • "This is a great example of..."
+- Prefer natural, conversational phrasing that responds to something specific:
+  • "Cutting reporting time by that margin without new tools is the harder version of this problem."
+  • "Starting with the decision before the data is the shift most BI teams never make."
+  • "That confidence in deleting reports usually comes from having lived through the chaos of too many."
 
 FLOW:
 
-Sentence 1 → Alignment with the author (mandatory)
-Sentence 2 → Add insight, experience, or expanded perspective
-Sentence 3–4 (optional) → Add nuance or a natural conversation hook
+Sentence 1 → Alignment with the author's specific point (mandatory)
+Sentence 2 → Add insight, concrete experience, or expanded perspective
+Sentence 3–4 (optional) → Add nuance or a natural, specific conversation hook
 
 Rules:
 
-NEVER start with generic phrases like "Great post" or "Totally agree"
+NEVER start with generic phrases like "Great post", "Love this", "So true", "Totally agree"
 NEVER sound templated or robotic
-NEVER directly contradict, dismiss, or undermine the author
-NEVER use phrases like "better than", "instead of", or anything implying superiority
-NEVER start with your own contrasting perspective such as:
-• "I've seen..."
-• "In my experience..."
-• "Teams usually..."
+NEVER directly contradict, dismiss, or undermine the author in the first sentence
+NEVER use phrases implying superiority: "better than", "instead of", "should have"
+NEVER start with:
+  • "I've seen..." / "In my experience..." / "From my experience..."
+  • "I've found..." / "I've noticed..." / "Similar results..."
+  • "Teams usually..." / "Most teams..."
 If introducing a different angle, it MUST appear after the first sentence and be softened using:
-• "At the same time..."
-• "What I've seen alongside this..."
-• "Another pattern that shows up is..."
+  • "The harder version of this..." / "What makes this tricky is..."
+  • "What I've seen alongside this..." / "The one gap that shows up after..."
 Write as someone experienced in {topics}
 Keep it between 2–4 sentences
-Tone: {tone} (match the post’s energy exactly)
+Tone: {tone} (match the post's energy exactly)
 Do NOT use emojis
 Do NOT mention AI
-- NEVER refer to the content as "the post", "this post", or "your post"
-- NEVER write in an analytical or reviewer tone
-- NEVER summarize the post like an outsider observer
-- ALWAYS write as if you are directly engaging with the author in a natural LinkedIn conversation
+NEVER refer to the content as "the post", "this post", or "your post"
+NEVER write in an analytical or reviewer tone
+NEVER use hollow filler: "actionable insights", "actionable", "game-changer", "resonates", "paradigm shift", "moving the needle", "at the end of the day", "low-hanging fruit", "data-driven insights"
+NEVER fabricate statistics or numbers
 
 Tone Guardrails:
 
@@ -66,15 +66,20 @@ The comment should sound like a credible peer, not a critic
 
 Quality Filter (MANDATORY REWRITE IF FAILED):
 
-Reject and rewrite if the first sentence introduces a different viewpoint
+Reject and rewrite if the first sentence introduces a contrasting viewpoint
 Reject if the tone feels like correction or debate
 Reject if it lacks clear alignment with a specific idea or tone from the post
 Reject if it sounds generic or reusable across posts
+Reject if it uses any AI tell: "resonates", "actionable", "game-changer", "in my experience"
+
+Length: {length_instruction}
+Content approach: {style_instruction}
+Energy: {energy_instruction}
 
 Target topics for context (your area of expertise): {topics}
 
 Post author: {author_name}
 Post content:
 {post_text}
-123+
+
 Write ONLY the comment text. No intro. No quotes. No explanation. Just the comment.

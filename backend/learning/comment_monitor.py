@@ -8,7 +8,7 @@ This closes the feedback loop: generate comment → post it → check for replie
 → learn which angles/styles get responses.
 """
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from backend.utils.config_loader import get as cfg_get
 from backend.utils.logger import get_logger
@@ -30,7 +30,7 @@ async def check_comment_replies() -> int:
 
     lookback_hours = int(cfg_get("learning.comment_monitor_lookback_hours", 48))
     max_per_check = int(cfg_get("learning.comment_monitor_max_per_check", 10))
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    cutoff = datetime.utcnow() - timedelta(hours=lookback_hours)  # naive — matches SQLite storage
 
     with get_db() as db:
         # Find comments that haven't been checked for replies yet

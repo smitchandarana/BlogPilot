@@ -261,7 +261,8 @@ def _job_post_publishing():
         from backend.storage.database import get_db
         from backend.storage.models import ScheduledPost
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()  # naive — must match SQLite stored values
+        post_ids_and_texts = []
         with get_db() as db:
             due_posts = (
                 db.query(ScheduledPost)
@@ -271,15 +272,20 @@ def _job_post_publishing():
                 )
                 .all()
             )
+            if not due_posts:
+                return
+            # Mark PUBLISHING before closing session to prevent double-submission
+            # if the scheduler fires again before the worker task updates status.
+            for post in due_posts:
+                post.status = "PUBLISHING"
+                post_ids_and_texts.append((post.id, post.text))
+            db.commit()
 
-        if not due_posts:
-            return
-
-        logger.info(f"Scheduler: {len(due_posts)} post(s) due for publishing")
+        logger.info(f"Scheduler: {len(post_ids_and_texts)} post(s) due for publishing")
 
         from backend.api.content import _publish_single
-        for post in due_posts:
-            eng.worker_pool.submit(_publish_single, post.id, post.text)
+        for post_id, text in post_ids_and_texts:
+            eng.worker_pool.submit(_publish_single, post_id, text)
 
     except Exception as exc:
         logger.warning(f"Scheduler: post_publishing error: {exc}")

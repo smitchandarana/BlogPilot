@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { admin } from '../api/platform'
+import { admin, platformHealth } from '../api/platform'
 import {
   Users, Server, Cpu, HardDrive, Activity,
   RefreshCw, Pause, Play, Trash2, Loader2,
   CheckCircle2, XCircle, AlertTriangle, Plus,
   Shield, Ban, Eye, EyeOff, Clock, FileText,
-  RotateCcw,
+  RotateCcw, Key, UserCog, Wifi, WifiOff,
 } from 'lucide-react'
 
 // ── Style maps ────────────────────────────────────────────────────────────
@@ -28,9 +28,12 @@ const SUB_STATUS_STYLE = {
 }
 
 const ROLE_STYLE = {
-  admin: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
-  user:  'bg-slate-700/60 text-slate-400 border-slate-600/30',
+  admin:     'bg-violet-500/15 text-violet-400 border-violet-500/20',
+  superuser: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
+  user:      'bg-slate-700/60 text-slate-400 border-slate-600/30',
 }
+
+const ROLE_CYCLE = { user: 'superuser', superuser: 'admin', admin: 'user' }
 
 const HEALTH_ICON = {
   healthy:   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />,
@@ -197,6 +200,7 @@ function CreateUserModal({ onClose, onCreated }) {
                 className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20 transition"
               >
                 <option value="user">User</option>
+                <option value="superuser">Super User</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -253,10 +257,155 @@ function CreateUserModal({ onClose, onCreated }) {
   )
 }
 
+// ── LinkedIn Credential Modal ─────────────────────────────────────────────
+
+function LinkedInCredentialModal({ user, onClose, onSaved }) {
+  const [email, setEmail] = useState(user?.container?.linkedin_email || '')
+  const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [error, setError] = useState('')
+  const hasExisting = !!user?.container?.has_linkedin_password
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    if (!email.trim()) {
+      setError('Email is required')
+      return
+    }
+    if (!password.trim() && !hasExisting) {
+      setError('Password is required for new credentials')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      await admin.setLinkedInCredentials(user.id, email.trim(), password)
+      onSaved()
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save credentials')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleClear = async () => {
+    if (!window.confirm(`Clear LinkedIn credentials for ${user.email}?`)) return
+    setClearing(true)
+    try {
+      await admin.clearLinkedInCredentials(user.id)
+      onSaved()
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to clear credentials')
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-[#161b27] p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-100">LinkedIn Credentials</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{user.email}</p>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-700 hover:text-slate-300 transition">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Password is stored in plaintext in the database. It is never returned via the API and is only used by the automation engine.</span>
+        </div>
+
+        {hasExisting && (
+          <div className="mb-4 flex items-center gap-2 text-xs text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            Credentials already saved — enter new values to replace
+          </div>
+        )}
+
+        <form onSubmit={handleSave} className="flex flex-col gap-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">LinkedIn Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="user@gmail.com"
+              className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20 transition"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">LinkedIn Password</label>
+            <div className="relative">
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={hasExisting ? '••••••••  (leave blank to keep existing)' : '••••••••'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 pr-9 text-sm text-slate-100 placeholder-slate-600 outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20 transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(s => !s)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+              >
+                {showPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
+          )}
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            {hasExisting && (
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={clearing}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition"
+              >
+                {clearing && <Loader2 className="h-3 w-3 animate-spin" />}
+                Clear Credentials
+              </button>
+            )}
+            <div className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !email.trim() || (!password.trim() && !hasExisting)}
+                className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition"
+              >
+                {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Users Tab ─────────────────────────────────────────────────────────────
 
 function UsersTab({ users, onAction, isLoading, currentAdminId, onRefresh }) {
   const [showCreate, setShowCreate] = useState(false)
+  const [linkedInUser, setLinkedInUser] = useState(null)
 
   const doAction = (userId, actionKey, fn, confirm_msg) => {
     if (confirm_msg && !window.confirm(confirm_msg)) return
@@ -324,6 +473,15 @@ function UsersTab({ users, onAction, isLoading, currentAdminId, onRefresh }) {
                             {HEALTH_ICON[c.health_status] || HEALTH_ICON.unknown}
                             <span>{c.health_status}</span>
                           </div>
+                          {c.linkedin_email && (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                              <Key className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate max-w-[120px]" title={c.linkedin_email}>{c.linkedin_email}</span>
+                            </div>
+                          )}
+                          {!c.linkedin_email && (
+                            <div className="text-[10px] text-slate-700 italic">no linkedin creds</div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-xs text-slate-600">none</span>
@@ -373,17 +531,26 @@ function UsersTab({ users, onAction, isLoading, currentAdminId, onRefresh }) {
                             onClick={() => doAction(u.id, 'provision', () => admin.provisionUser(u.id))}
                           />
                         )}
-                        {/* Change role */}
+                        {/* Change role (cycles: user → superuser → admin → user) */}
                         {!isSelf && (
                           <ActionBtn
-                            icon={Shield}
-                            tip={`Switch to ${u.role === 'admin' ? 'user' : 'admin'}`}
+                            icon={UserCog}
+                            tip={`Change role (currently ${u.role}) → next: ${ROLE_CYCLE[u.role] || 'user'}`}
                             loading={isLoading(u.id, 'role')}
                             onClick={() => {
-                              const newRole = u.role === 'admin' ? 'user' : 'admin'
-                              if (!window.confirm(`Change ${u.email} role to ${newRole}?`)) return
+                              const newRole = ROLE_CYCLE[u.role] || 'user'
+                              if (!window.confirm(`Change ${u.email} role to "${newRole}"?`)) return
                               onAction(u.id, 'role', () => admin.changeRole(u.id, newRole))
                             }}
+                          />
+                        )}
+                        {/* LinkedIn credentials */}
+                        {hasCont && (
+                          <ActionBtn
+                            icon={Key}
+                            tip={u.container?.has_linkedin_password ? `LinkedIn creds saved (${u.container?.linkedin_email || 'no email'}) — click to update` : 'Set LinkedIn credentials'}
+                            loading={isLoading(u.id, 'linkedin')}
+                            onClick={() => setLinkedInUser(u)}
                           />
                         )}
                         {/* Suspend / Unsuspend */}
@@ -443,6 +610,13 @@ function UsersTab({ users, onAction, isLoading, currentAdminId, onRefresh }) {
         <CreateUserModal
           onClose={() => setShowCreate(false)}
           onCreated={onRefresh}
+        />
+      )}
+      {linkedInUser && (
+        <LinkedInCredentialModal
+          user={linkedInUser}
+          onClose={() => setLinkedInUser(null)}
+          onSaved={onRefresh}
         />
       )}
     </div>
@@ -639,6 +813,7 @@ function AuditLogTab() {
 export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [system, setSystem] = useState(null)
+  const [tailscale, setTailscale] = useState(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState({})
   const [activeTab, setActiveTab] = useState('users')
@@ -657,12 +832,14 @@ export default function AdminDashboard() {
 
   const load = async () => {
     try {
-      const [usersRes, systemRes] = await Promise.all([
+      const [usersRes, systemRes, tsRes] = await Promise.allSettled([
         admin.users(),
         admin.system(),
+        platformHealth.tailscale(),
       ])
-      setUsers(usersRes.data)
-      setSystem(systemRes.data)
+      if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data)
+      if (systemRes.status === 'fulfilled') setSystem(systemRes.value.data)
+      if (tsRes.status === 'fulfilled') setTailscale(tsRes.value.data)
     } catch (e) {
       console.error('Admin load failed:', e)
     } finally {
@@ -765,6 +942,49 @@ export default function AdminDashboard() {
             color="text-slate-400"
             badge={pendingCount}
           />
+        </div>
+      )}
+
+      {/* Tailscale Status */}
+      {tailscale && tailscale.enabled && (
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+          tailscale.connected
+            ? 'border-emerald-500/20 bg-emerald-500/8'
+            : 'border-red-500/30 bg-red-500/10'
+        }`}>
+          <div className="flex items-center gap-3">
+            {tailscale.connected
+              ? <Wifi className="h-4 w-4 shrink-0 text-emerald-400" />
+              : <WifiOff className="h-4 w-4 shrink-0 text-red-400" />
+            }
+            <div>
+              <p className={`text-sm font-medium ${tailscale.connected ? 'text-emerald-300' : 'text-red-300'}`}>
+                {tailscale.connected ? 'Exit node online' : 'Exit node OFFLINE'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {tailscale.connected
+                  ? `LinkedIn traffic exits via home IP (${tailscale.exit_node})`
+                  : `All LinkedIn engines paused — traffic via Oracle IP blocked (${tailscale.exit_node})`
+                }
+              </p>
+            </div>
+          </div>
+          {!tailscale.connected && tailscale.engines_paused_by_ts?.length > 0 && (
+            <span className="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400">
+              {tailscale.engines_paused_by_ts.length} engine{tailscale.engines_paused_by_ts.length !== 1 ? 's' : ''} paused
+            </span>
+          )}
+          {tailscale.connected && tailscale.engines_paused_by_ts?.length === 0 && (
+            <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
+              All engines active
+            </span>
+          )}
+        </div>
+      )}
+      {tailscale && !tailscale.enabled && (
+        <div className="flex items-center gap-3 rounded-xl border border-slate-700/40 bg-slate-800/30 px-4 py-3 text-xs text-slate-500">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          Tailscale exit node not configured — containers use Oracle Cloud IP
         </div>
       )}
 

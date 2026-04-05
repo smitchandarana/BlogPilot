@@ -363,9 +363,11 @@ def check_post_for_flaws(post_text: str) -> list:
         if re.search(p, lower):
             issues.append(f"POSSIBLE FABRICATED STAT: matches '{p}'")
 
-    # URL injection check
-    if "phoenixsolution.in" in lower:
-        issues.append("POST PROMPT INJECTS BRAND URL (post.txt line 77 — CTA rule is a conflict)")
+    # URL injection check — flag any hardcoded third-party domain in generated text
+    import re as _re
+    url_pattern = _re.compile(r'https?://|www\.|\.in/|\.com/|\.io/', _re.IGNORECASE)
+    if url_pattern.search(lower):
+        issues.append("GENERATED TEXT CONTAINS URL — verify it is intentional and from prompt input, not hallucinated")
 
     # Check word count within range
     wc = len(post_text.split())
@@ -621,9 +623,9 @@ async def run_audit():
                 "Post generation",
                 f"avg score {post_avg:.1f}/10 is below publish threshold",
                 [
-                    "post.txt line 77: CTA rule forcing 'phoenixsolution.in' URL -> triggers '-2 URL penalty' in post_scorer.txt",
                     "Data Insight style says 'include a statistic' but no stats provided -> triggers '-2 fabricated stat' penalty",
                     "Consider: structured_post.txt scores ~1.5 pts higher than post.txt (evidence injection helps)",
+                    "Check if generic topic input is producing vague posts — more specific topics score higher",
                 ]
             ))
         elif post_avg < 7.0:
@@ -663,14 +665,13 @@ async def run_audit():
     url_flaw_posts = [r for r in results if any("URL" in f for f in r.get("flaws", []))]
     if url_flaw_posts:
         choke_points.append((
-            "CRITICAL",
-            "post.txt CTA rule",
-            f"Affects {len(url_flaw_posts)}/{len(results)} quick-mode posts — auto -2 penalty from post_scorer",
+            "WARNING",
+            "URL in generated post",
+            f"Affects {len(url_flaw_posts)}/{len(results)} posts — may trigger -2 penalty in post_scorer",
             [
-                "Line 77-79 of post.txt instructs model to include 'phoenixsolution.in'",
-                "post_scorer.txt penalises -2 for 'URL or external link not part of requested content'",
-                "Fix: remove CTA instruction from post.txt (scheduler already handles distribution)",
-                "Or: add URL to post_scorer whitelist — but this couples scorer to brand",
+                "Verify the URL was provided in the topic/brief input, not hallucinated by the model",
+                "If URL is intentional (author's domain, soft CTA), confirm post_scorer treats it as allowed",
+                "If hallucinated: review post.txt CTA instructions for any directive that implies a URL",
             ]
         ))
 

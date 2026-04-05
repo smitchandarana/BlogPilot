@@ -20,4 +20,5 @@ Rules:
 - Each hook must contain a specific role (CFO, BI analyst, ops manager) OR a specific action OR a specific number
 - FORBIDDEN words/phrases: "In today's world", "Many companies", "Most leaders", "Organizations", "Businesses", "Did you know", "Here's the thing", "Have you ever", "What if", "The future of"
 - Do not use rhetorical questions that don't name a specific scenario
+- Do NOT use em dashes (—) anywhere — they signal AI-generated content immediately
 - Output ONLY the 5 hooks, one per line. Nothing else. No blank lines between them.

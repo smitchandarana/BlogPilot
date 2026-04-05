@@ -270,6 +270,17 @@ async def _score_multidim(
 
 _ALL_HOOKS = list(_HOOK_INSTRUCTIONS.keys())  # CONTRARIAN, QUESTION, STAT, STORY, TREND, MISTAKE
 
+# Map angle_generator.txt output types → _HOOK_INSTRUCTIONS keys.
+# angle_generator can return: contrarian, mistake, hidden_cost, trend_shift, system_failure.
+# Only contrarian/mistake have direct matches; the others need mapping.
+_ANGLE_TO_HOOK: dict[str, str] = {
+    "CONTRARIAN": "CONTRARIAN",
+    "MISTAKE": "MISTAKE",
+    "HIDDEN_COST": "STORY",      # reveal of overlooked consequence — story-style works best
+    "TREND_SHIFT": "TREND",      # before/after frame matches TREND instruction
+    "SYSTEM_FAILURE": "MISTAKE", # process failure is closest to MISTAKE frame
+}
+
 
 async def generate_structured(
     structured_inputs: dict,
@@ -356,6 +367,8 @@ async def generate_structured(
     if style_examples:
         lines = ["STYLE REFERENCE — Posts this author has published that performed well:"]
         for i, ex in enumerate(style_examples, 1):
+            if not isinstance(ex, dict):
+                continue
             lines.append(
                 f"\nExample {i} ({ex.get('style', '')} / {ex.get('hook_intent', '')} / {ex.get('tone', '')}):"
             )
@@ -561,7 +574,7 @@ async def generate_pipeline(
                 best = angles[best_idx]
                 angle_used = best.get("type", "")
                 selected_angle = f"[{angle_used.upper()}] {best.get('stance', '')}"
-                hook_used = angle_used.upper() if angle_used.upper() in _HOOK_INSTRUCTIONS else hook_used
+                hook_used = _ANGLE_TO_HOOK.get(angle_used.upper(), hook_used)
                 logger.info(f"generate_pipeline: angle={angle_used} hook={hook_used}")
     except Exception as e:
         logger.warning(f"generate_pipeline: angle generation failed ({e}) — continuing without angle")

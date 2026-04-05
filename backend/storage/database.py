@@ -1,6 +1,6 @@
 import os
 from contextlib import contextmanager
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.orm import declarative_base
 
@@ -30,9 +30,17 @@ def _get_engine():
         db_url = f"sqlite:///{os.path.abspath(_DB_PATH)}"
         _engine = create_engine(
             db_url,
-            connect_args={"check_same_thread": False},
+            connect_args={"check_same_thread": False, "timeout": 30},
+            pool_pre_ping=True,
             echo=False,
         )
+
+        @event.listens_for(_engine, "connect")
+        def _set_wal(dbapi_conn, _):
+            dbapi_conn.execute("PRAGMA journal_mode=WAL")
+            dbapi_conn.execute("PRAGMA synchronous=NORMAL")
+            dbapi_conn.execute("PRAGMA busy_timeout=30000")
+
     return _engine
 
 

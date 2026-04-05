@@ -9,7 +9,7 @@ Usage:
     agg.aggregate_patterns(db)  # rebuilds content_patterns table
     pain_points = agg.get_trending_pain_points(db)
 """
-from datetime import datetime, timezone
+from datetime import datetime
 
 from backend.utils.logger import get_logger
 
@@ -370,7 +370,7 @@ class PatternAggregator:
             logger.warning(f"PatternAggregator._aggregate_pain_points: {e}")
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         count = 0
         for row in rows:
             try:
@@ -422,7 +422,7 @@ class PatternAggregator:
             logger.warning(f"PatternAggregator._aggregate_hooks: {e}")
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         count = 0
         for row in rows:
             try:
@@ -474,7 +474,7 @@ class PatternAggregator:
             logger.warning(f"PatternAggregator._aggregate_audiences: {e}")
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         count = 0
         for row in rows:
             try:
@@ -529,7 +529,7 @@ class PatternAggregator:
             logger.warning(f"PatternAggregator._aggregate_topic_trends: {e}")
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         count = 0
         for row in rows:
             try:

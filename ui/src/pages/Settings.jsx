@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Eye, EyeOff, Save, Loader2, CheckCircle2, AlertTriangle, X, RotateCcw, Power } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Eye, EyeOff, Save, Loader2, CheckCircle2, AlertTriangle, X, RotateCcw, Power, KeyRound, Mail, Trash2 } from 'lucide-react'
 import { config as configApi, server as serverApi } from '../api/client'
+import { auth as platformAuth } from '../api/platform'
+import { useAuth } from '../contexts/AuthContext'
 
 function SectionCard({ title, description, children }) {
   return (
@@ -34,7 +36,7 @@ const DELAY_KEYS = [
 ]
 
 const DEFAULT_SETTINGS = {
-  ai: { model: 'llama3-70b-8192', temperature: 0.7, max_tokens: 500 },
+  ai: { model: 'llama-3.3-70b-versatile', temperature: 0.7, max_tokens: 500 },
   daily_budget: { likes: 30, comments: 12, connections: 15, profile_visits: 50, inmails: 5, posts_published: 5 },
   delays: { before_like_min: 3, before_like_max: 12, before_comment_min: 8, before_comment_max: 45, before_connect_min: 5, before_connect_max: 20, between_posts_min: 4, between_posts_max: 15 },
   browser: { headless: false, stealth: true, profile_path: './browser_profile' },
@@ -42,6 +44,7 @@ const DEFAULT_SETTINGS = {
 }
 
 export default function Settings() {
+  const { user, logout } = useAuth()
   const [form, setForm] = useState(DEFAULT_SETTINGS)
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -64,11 +67,13 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showConfirmClear, setShowConfirmClear] = useState(false)
+  const _keyTimeouts = useRef({})
   const [showConfirmRestart, setShowConfirmRestart] = useState(false)
   const [showConfirmShutdown, setShowConfirmShutdown] = useState(false)
   const [serverAction, setServerAction] = useState(null) // 'restarting' | 'shutdown' | null
 
   useEffect(() => {
+    const ts = _keyTimeouts.current
     configApi.getSettings().then((res) => {
       const d = res.data
       setForm({
@@ -82,6 +87,9 @@ export default function Settings() {
     configApi.getGroqKeyStatus().then((res) => setGroqStatus(res.data)).catch(() => {})
     configApi.getOpenRouterKeyStatus().then((res) => setOrStatus(res.data)).catch(() => {})
     configApi.getLinkedInStatus().then((res) => setLiStatus(res.data)).catch(() => {})
+    return () => {
+      Object.values(ts).forEach(clearTimeout)
+    }
   }, [])
 
   const handleSaveGroqKey = async () => {
@@ -93,7 +101,8 @@ export default function Settings() {
       setGroqStatus(res.data)
       setApiKey('')
       setKeySaved(true)
-      setTimeout(() => setKeySaved(false), 3000)
+      clearTimeout(_keyTimeouts.current.groq)
+      _keyTimeouts.current.groq = setTimeout(() => setKeySaved(false), 3000)
     } catch (e) {
       setGroqKeyError(e?.response?.data?.detail || 'Failed to save key')
     } finally { setSavingKey(false) }
@@ -108,7 +117,8 @@ export default function Settings() {
       setOrStatus(res.data)
       setOrKey('')
       setOrKeySaved(true)
-      setTimeout(() => setOrKeySaved(false), 3000)
+      clearTimeout(_keyTimeouts.current.or)
+      _keyTimeouts.current.or = setTimeout(() => setOrKeySaved(false), 3000)
     } catch (e) {
       setOrKeyError(e?.response?.data?.detail || 'Failed to save key')
     } finally { setSavingOrKey(false) }
@@ -118,9 +128,10 @@ export default function Settings() {
     setForm((f) => ({ ...f, [section]: { ...f[section], [key]: val } }))
 
   const pollUntilReady = useCallback(() => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('http://localhost:8000/health')
+        const res = await fetch(`${apiBase}/health`)
         if (res.ok) {
           clearInterval(interval)
           setServerAction(null)
@@ -150,11 +161,71 @@ export default function Settings() {
 
   const [saveError, setSaveError] = useState('')
 
+  // Account management
+  const [pwCurrent, setPwCurrent] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState(null) // { type: 'ok'|'err', text }
+  const [emailPw, setEmailPw] = useState('')
+  const [emailNew, setEmailNew] = useState('')
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [emailMsg, setEmailMsg] = useState(null)
+  const [showConfirmDeleteAccount, setShowConfirmDeleteAccount] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  const handleChangePassword = async () => {
+    if (pwNew.length < 8) { setPwMsg({ type: 'err', text: 'New password must be at least 8 characters' }); return }
+    if (pwNew !== pwConfirm) { setPwMsg({ type: 'err', text: 'Passwords do not match' }); return }
+    setPwSaving(true); setPwMsg(null)
+    try {
+      await platformAuth.changePassword(pwCurrent, pwNew)
+      setPwCurrent(''); setPwNew(''); setPwConfirm('')
+      setPwMsg({ type: 'ok', text: 'Password updated successfully' })
+    } catch (e) {
+      setPwMsg({ type: 'err', text: e?.response?.data?.detail || 'Failed to change password' })
+    } finally { setPwSaving(false) }
+  }
+
+  const handleChangeEmail = async () => {
+    if (!emailNew.trim()) { setEmailMsg({ type: 'err', text: 'Enter a new email' }); return }
+    setEmailSaving(true); setEmailMsg(null)
+    try {
+      await platformAuth.changeEmail(emailPw, emailNew.trim())
+      setEmailPw(''); setEmailNew('')
+      setEmailMsg({ type: 'ok', text: 'Email updated. Re-login to see the change.' })
+    } catch (e) {
+      setEmailMsg({ type: 'err', text: e?.response?.data?.detail || 'Failed to change email' })
+    } finally { setEmailSaving(false) }
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true)
+    try {
+      await platformAuth.deleteAccount()
+      logout()
+    } catch (e) {
+      setDeletingAccount(false)
+      setShowConfirmDeleteAccount(false)
+      setSaveError(e?.response?.data?.detail || 'Failed to delete account. Please try again.')
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setSaveError('')
     try {
       await configApi.updateSettings(form)
+      // Refetch to ensure form reflects what the server actually stored
+      const res = await configApi.getSettings()
+      const d = res.data
+      setForm({
+        ai: d.ai || DEFAULT_SETTINGS.ai,
+        daily_budget: d.daily_budget || DEFAULT_SETTINGS.daily_budget,
+        delays: d.delays || DEFAULT_SETTINGS.delays,
+        browser: d.browser || DEFAULT_SETTINGS.browser,
+        storage: d.storage || DEFAULT_SETTINGS.storage,
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e) {
@@ -183,6 +254,66 @@ export default function Settings() {
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}
         </div>
       </div>
+
+      <SectionCard title="Account" description={`Signed in as ${user?.email || ''}. Manage your password and email address.`}>
+        <div className="flex flex-col gap-6">
+          {/* Change password */}
+          <div className="flex flex-col gap-3">
+            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400"><KeyRound className="h-3.5 w-3.5" /> Change Password</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Current Password</label>
+                <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} className={inputCls} placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">New Password</label>
+                <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} className={inputCls} placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Confirm New</label>
+                <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} className={inputCls} placeholder="••••••••" />
+              </div>
+            </div>
+            {pwMsg && (
+              <p className={`text-xs ${pwMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{pwMsg.text}</p>
+            )}
+            <div className="flex">
+              <button onClick={handleChangePassword} disabled={pwSaving || !pwCurrent || !pwNew || !pwConfirm}
+                className="flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                {pwSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Update Password
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-700/50" />
+
+          {/* Change email */}
+          <div className="flex flex-col gap-3">
+            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400"><Mail className="h-3.5 w-3.5" /> Change Email</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Current Password (required)</label>
+                <input type="password" value={emailPw} onChange={(e) => setEmailPw(e.target.value)} className={inputCls} placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">New Email</label>
+                <input type="email" value={emailNew} onChange={(e) => setEmailNew(e.target.value)} className={inputCls} placeholder="new@example.com" />
+              </div>
+            </div>
+            {emailMsg && (
+              <p className={`text-xs ${emailMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{emailMsg.text}</p>
+            )}
+            <div className="flex">
+              <button onClick={handleChangeEmail} disabled={emailSaving || !emailPw || !emailNew}
+                className="flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                {emailSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Update Email
+              </button>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
 
       <SectionCard title="AI Configuration" description="Groq API settings for comment generation and scoring.">
         <div className="flex flex-col gap-4">
@@ -221,7 +352,7 @@ export default function Settings() {
                 <button
                   onClick={handleSaveGroqKey}
                   disabled={!apiKey.trim() || savingKey}
-                  className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40"
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-40"
                 >
                   {savingKey ? <Loader2 className="h-4 w-4 animate-spin" /> : keySaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                   {keySaved ? 'Saved' : 'Save Key'}
@@ -285,8 +416,8 @@ export default function Settings() {
           <InputRow label="Model">
             <select value={form.ai.model} onChange={(e) => set('ai', 'model', e.target.value)} className={inputCls}>
               <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (recommended)</option>
-              <option value="llama3-70b-8192">llama3-70b-8192</option>
-              <option value="llama3-8b-8192">llama3-8b-8192</option>
+              <option value="llama-3.1-70b-versatile">llama-3.1-70b-versatile</option>
+              <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (fast / free tier)</option>
               <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
             </select>
           </InputRow>
@@ -341,7 +472,8 @@ export default function Settings() {
                   setLiEmail('')
                   setLiPassword('')
                   setLiSaved(true)
-                  setTimeout(() => setLiSaved(false), 3000)
+                  clearTimeout(_keyTimeouts.current.li)
+                  _keyTimeouts.current.li = setTimeout(() => setLiSaved(false), 3000)
                 } catch (e) {
                   setLiError(e?.response?.data?.detail || 'Failed to save credentials')
                 } finally {
@@ -349,10 +481,10 @@ export default function Settings() {
                 }
               }}
               disabled={savingLi || !liEmail.trim() || !liPassword.trim()}
-              className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40"
+              className="flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-40"
             >
               {savingLi ? <Loader2 className="h-4 w-4 animate-spin" /> : liSaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-              {liSaved ? 'Saved & Encrypted' : 'Save Credentials'}
+              {liSaved ? 'Saved' : 'Save Credentials'}
             </button>
           </div>
         </div>
@@ -461,12 +593,21 @@ export default function Settings() {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowConfirmClear(true)}
-          className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-        >
-          Clear All Data
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setShowConfirmClear(true)}
+            className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            Clear All Data
+          </button>
+          <button
+            onClick={() => setShowConfirmDeleteAccount(true)}
+            className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete My Account
+          </button>
+        </div>
       </div>
 
       {/* Server action overlay */}
@@ -540,6 +681,33 @@ export default function Settings() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 Yes, Shutdown
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete account modal */}
+      {showConfirmDeleteAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-[#161b27] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-red-400">Delete Account?</h3>
+              <button onClick={() => setShowConfirmDeleteAccount(false)} className="rounded-lg p-1 text-slate-400 hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-400">
+              This will permanently delete your account, stop and destroy your container, and erase all your data. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowConfirmDeleteAccount(false)} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200">
+                Cancel
+              </button>
+              <button onClick={handleDeleteAccount} disabled={deletingAccount}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-60">
+                {deletingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Yes, Delete My Account
               </button>
             </div>
           </div>

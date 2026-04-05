@@ -11,7 +11,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from bp_platform.config import ADMIN_EMAIL, ADMIN_PASSWORD
+from bp_platform.config import ADMIN_EMAIL, ADMIN_PASSWORD, APP_BASE_URL
 from bp_platform.models.database import init_db, get_db, User
 from bp_platform.services.token_service import hash_password
 from bp_platform.services.health_monitor import health_monitor_loop
@@ -68,7 +68,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://app.phoenixsolution.in",
+        APP_BASE_URL,
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -79,20 +79,22 @@ app.add_middleware(
 from bp_platform.api.auth import router as auth_router
 from bp_platform.api.containers import router as containers_router
 from bp_platform.api.admin import router as admin_router
-from bp_platform.api.billing import router as billing_router
 from bp_platform.api.health import router as health_router
 from bp_platform.api.proxy import router as proxy_router
 
 app.include_router(auth_router)
 app.include_router(containers_router)
 app.include_router(admin_router)
-app.include_router(billing_router)
+# billing router intentionally omitted — free beta, no payment methods
 app.include_router(health_router)
 app.include_router(proxy_router)
 
 
 def _bootstrap_admin():
     """Create admin user on first boot if not exists."""
+    if not ADMIN_PASSWORD:
+        logger.warning("ADMIN_PASSWORD not set — skipping admin bootstrap (set ADMIN_PASSWORD env var)")
+        return
     with get_db() as db:
         existing = db.query(User).filter_by(email=ADMIN_EMAIL).first()
         if existing:

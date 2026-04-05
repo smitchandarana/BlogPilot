@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime, Text, JSON, Boolean, ForeignKey
 )
@@ -7,7 +7,7 @@ from backend.storage.database import Base
 
 
 def _utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.utcnow()
 
 
 class Post(Base):

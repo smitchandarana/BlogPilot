@@ -1,5 +1,6 @@
-# BlogPilot — Oracle ARM VM (Cloudflare Tunnel + Tailscale)
+# BlogPilot — Oracle ARM VM (Cloudflare Tunnel + Tailscale exit node)
 # No public ports. Tunnel is outbound-only. SSH via Tailscale.
+# All outbound traffic from user containers routes through Tailscale exit node (phoenix01 - 100.82.242.22)
 
 networks:
   blogpilot-net:
@@ -7,9 +8,33 @@ networks:
 
 volumes:
   postgres-data:
+  tailscale-state:
 
 services:
-  # Docker socket proxy — limits API surface (no raw socket in platform-api)
+  # ── Tailscale sidecar ────────────────────────────────────────────────────
+  # Routes ALL container traffic through phoenix01 (your home IP) as exit node.
+  # LinkedIn sees your residential IP, not Oracle datacenter IP.
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: blogpilot-oracle
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TAILSCALE_AUTHKEY:?TAILSCALE_AUTHKEY must be set in .env}
+      TS_EXTRA_ARGS: --exit-node=100.82.242.22 --exit-node-allow-lan-access --accept-routes
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    networks:
+      - blogpilot-net
+
+  # ── Docker socket proxy ──────────────────────────────────────────────────
   docker-proxy:
     image: tecnativa/docker-socket-proxy:latest
     restart: unless-stopped
@@ -25,6 +50,7 @@ services:
     networks:
       - blogpilot-net
 
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -41,13 +67,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    # ARM-friendly resource limits
     deploy:
       resources:
         limits:
           memory: 1g
           cpus: "0.5"
 
+  # ── Platform API ─────────────────────────────────────────────────────────
   platform-api:
     build:
       context: ..
@@ -58,8 +84,10 @@ services:
         condition: service_healthy
       docker-proxy:
         condition: service_started
+      tailscale:
+        condition: service_started
     ports:
-      - "127.0.0.1:9000:9000"  # nginx proxies from port 80; direct health checks use 9000
+      - "127.0.0.1:9000:9000"
     environment:
       DATABASE_URL: postgresql://blogpilot:${POSTGRES_PASSWORD}@postgres:5432/blogpilot_platform
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
@@ -74,9 +102,13 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://app.phoenixsolution.in,http://localhost:3000}
       DOCKER_HOST: tcp://docker-proxy:2375
-      # ARM: lower resource limits for user containers (4 cores shared)
+      APP_BASE_URL: ${APP_BASE_URL:-https://app.phoenixsolution.in}
+      REQUIRE_SIGNUP_APPROVAL: ${REQUIRE_SIGNUP_APPROVAL:-false}
+      # ARM resource limits for user containers
       CONTAINER_MEMORY_LIMIT: ${CONTAINER_MEMORY_LIMIT:-1536m}
       CONTAINER_CPU_LIMIT: ${CONTAINER_CPU_LIMIT:-0.75}
+      # Tailscale exit node for user containers
+      TAILSCALE_EXIT_NODE: "100.82.242.22"
     volumes:
       - ./volumes:/app/volumes
     networks:

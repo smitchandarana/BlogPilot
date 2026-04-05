@@ -1,5 +1,6 @@
 """Admin endpoints — user management, system stats, container control."""
 
+import asyncio
 import psutil
 from datetime import datetime
 
@@ -64,6 +65,8 @@ def _user_row(u: User, c: Container | None) -> dict:
             "engine_state": c.engine_state,
             "host_port": c.host_port,
             "restart_count": c.restart_count,
+            "linkedin_email": c.linkedin_email,         # visible to admin
+            "has_linkedin_password": bool(c.linkedin_password),  # never return password itself
         } if c else None,
     }
 
@@ -90,16 +93,24 @@ async def get_user(user_id: str, admin: dict = Depends(require_admin)):
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
         c = db.query(Container).filter_by(user_id=user_id).first()
-        return {
-            "user": {
-                "id": u.id, "email": u.email, "name": u.name,
-                "role": u.role, "subscription_status": u.subscription_status,
-                "is_active": u.is_active,
-                "created_at": u.created_at.isoformat(),
-                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
-            },
-            "container": container_manager.get_container_status(user_id) if c else None,
-        }
+        has_container = c is not None
+
+    container_status = None
+    if has_container:
+        try:
+            container_status = await asyncio.to_thread(container_manager.get_container_status, user_id)
+        except Exception:
+            container_status = {"error": "Failed to retrieve container status"}
+    return {
+        "user": {
+            "id": u.id, "email": u.email, "name": u.name,
+            "role": u.role, "subscription_status": u.subscription_status,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat(),
+            "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+        },
+        "container": container_status,
+    }
 
 
 @router.post("/users/{user_id}/suspend")
@@ -114,7 +125,7 @@ async def suspend_user(user_id: str, request: Request, admin: dict = Depends(req
         db.commit()
 
     try:
-        container_manager.stop_container(user_id)
+        await asyncio.to_thread(container_manager.stop_container, user_id)
     except Exception:
         pass  # container might not exist
 
@@ -141,7 +152,7 @@ async def unsuspend_user(user_id: str, request: Request, admin: dict = Depends(r
 async def delete_user(user_id: str, request: Request, admin: dict = Depends(require_admin)):
     """Delete user and destroy their container + data."""
     try:
-        container_manager.destroy_container(user_id, delete_volumes=True)
+        await asyncio.to_thread(container_manager.destroy_container, user_id, delete_volumes=True)
     except Exception:
         pass
 
@@ -187,7 +198,12 @@ async def admin_restart(container_id: str, request: Request, admin: dict = Depen
             raise HTTPException(status_code=404, detail="Container not found")
         user_id = c.user_id
 
-    container_manager.restart_container(user_id)
+    try:
+        await asyncio.to_thread(container_manager.restart_container, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Container restart failed")
     _audit(admin["sub"], "admin.restart_container", {"container_id": container_id}, _ip(request))
     return {"status": "restarted"}
 
@@ -195,8 +211,11 @@ async def admin_restart(container_id: str, request: Request, admin: dict = Depen
 @router.get("/system")
 async def system_stats(admin: dict = Depends(require_admin)):
     """System resource stats."""
-    mem = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
+    mem, disk, cpu = await asyncio.gather(
+        asyncio.to_thread(psutil.virtual_memory),
+        asyncio.to_thread(psutil.disk_usage, "/"),
+        asyncio.to_thread(psutil.cpu_percent, interval=1),
+    )
 
     with get_db() as db:
         total_users = db.query(User).count()
@@ -217,7 +236,7 @@ async def system_stats(admin: dict = Depends(require_admin)):
             "free_gb": round(disk.free / (1024**3), 1),
             "percent": disk.percent,
         },
-        "cpu_percent": psutil.cpu_percent(interval=1),
+        "cpu_percent": cpu,
         "users": total_users,
         "containers_running": active_containers,
         "containers_total": total_containers,
@@ -233,8 +252,8 @@ async def create_user(req: CreateUserRequest, request: Request, admin: dict = De
     """Admin creates a user account directly, optionally provisioning a container."""
     if len(req.password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
-    if req.role not in ("user", "admin"):
-        raise HTTPException(status_code=422, detail="Role must be 'user' or 'admin'")
+    if req.role not in ("user", "superuser", "admin"):
+        raise HTTPException(status_code=422, detail="Role must be 'user', 'superuser', or 'admin'")
     valid_statuses = ("pending", "active", "suspended", "cancelled", "past_due")
     if req.subscription_status not in valid_statuses:
         raise HTTPException(status_code=422, detail=f"subscription_status must be one of: {', '.join(valid_statuses)}")
@@ -270,7 +289,9 @@ async def create_user(req: CreateUserRequest, request: Request, admin: dict = De
     container_result = None
     if req.provision_container and is_active:
         try:
-            c = container_manager.provision_container(user_id, is_admin=(req.role == "admin"))
+            c = await asyncio.to_thread(
+                container_manager.provision_container, user_id, is_admin=(req.role == "admin")
+            )
             container_result = {"status": c.status, "host_port": c.host_port}
             _audit(
                 admin["sub"],
@@ -346,7 +367,7 @@ async def pause_user(user_id: str, request: Request, admin: dict = Depends(requi
         raise HTTPException(status_code=404, detail="User has no container to pause")
 
     try:
-        container_manager.stop_container(user_id)
+        await asyncio.to_thread(container_manager.stop_container, user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop container: {e}")
 
@@ -374,7 +395,7 @@ async def resume_user(user_id: str, request: Request, admin: dict = Depends(requ
         raise HTTPException(status_code=404, detail="User has no container to resume")
 
     try:
-        container_manager.start_container(user_id)
+        await asyncio.to_thread(container_manager.start_container, user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start container: {e}")
 
@@ -400,7 +421,7 @@ async def provision_user(user_id: str, request: Request, admin: dict = Depends(r
         is_admin = u.role == "admin"
 
     try:
-        c = container_manager.provision_container(user_id, is_admin=is_admin)
+        c = await asyncio.to_thread(container_manager.provision_container, user_id, is_admin=is_admin)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Provisioning failed: {e}")
 
@@ -429,8 +450,8 @@ async def change_role(
     admin: dict = Depends(require_admin),
 ):
     """Change a user's role. Admins cannot change their own role."""
-    if req.role not in ("user", "admin"):
-        raise HTTPException(status_code=422, detail="Role must be 'user' or 'admin'")
+    if req.role not in ("user", "superuser", "admin"):
+        raise HTTPException(status_code=422, detail="Role must be 'user', 'superuser', or 'admin'")
     if admin["sub"] == user_id:
         raise HTTPException(status_code=403, detail="You cannot change your own role")
 
@@ -449,6 +470,62 @@ async def change_role(
         _ip(request),
     )
     return {"status": "updated", "role": req.role}
+
+
+class LinkedInCredentialsRequest(BaseModel):
+    linkedin_email: str
+    linkedin_password: str | None = None  # optional when updating existing credentials
+
+
+@router.post("/users/{user_id}/linkedin-credentials")
+async def set_linkedin_credentials(
+    user_id: str,
+    req: LinkedInCredentialsRequest,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """Set LinkedIn credentials for a user's container. Password is stored as plaintext and never returned via API."""
+    if not req.linkedin_email:
+        raise HTTPException(status_code=422, detail="linkedin_email is required")
+
+    with get_db() as db:
+        c = db.query(Container).filter_by(user_id=user_id).first()
+        if not c:
+            raise HTTPException(status_code=404, detail="User has no container")
+        # Require password if no existing credentials are set
+        if not c.linkedin_password and not req.linkedin_password:
+            raise HTTPException(status_code=422, detail="Password is required for new credentials")
+        c.linkedin_email = req.linkedin_email.strip()
+        if req.linkedin_password:
+            c.linkedin_password = req.linkedin_password
+        db.commit()
+
+    _audit(
+        admin["sub"],
+        "admin.set_linkedin_credentials",
+        {"target_user_id": user_id, "linkedin_email": req.linkedin_email},
+        _ip(request),
+    )
+    return {"status": "saved", "linkedin_email": req.linkedin_email}
+
+
+@router.delete("/users/{user_id}/linkedin-credentials")
+async def clear_linkedin_credentials(
+    user_id: str,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """Clear stored LinkedIn credentials for a user's container."""
+    with get_db() as db:
+        c = db.query(Container).filter_by(user_id=user_id).first()
+        if not c:
+            raise HTTPException(status_code=404, detail="User has no container")
+        c.linkedin_email = None
+        c.linkedin_password = None
+        db.commit()
+
+    _audit(admin["sub"], "admin.clear_linkedin_credentials", {"target_user_id": user_id}, _ip(request))
+    return {"status": "cleared"}
 
 
 @router.get("/audit-log")

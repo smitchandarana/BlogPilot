@@ -209,9 +209,11 @@ export default function MixBoard({ pinnedItems, onUnpin, onHighlight, onSendToGe
     setGenerateLoading(true)
     setGenerateError(null)
     try {
+      const myPostTopic = pinnedItems.find(i => i.source_type === 'MY_POST')?.title
+      const topic = myPostTopic || pinnedItems[0]?.title || 'Business Intelligence'
       const res = await contentApi.generateFromBrief({
         brief,
-        topic: '',
+        topic,
         style,
         tone,
         word_count: wordCount,

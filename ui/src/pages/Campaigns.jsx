@@ -38,6 +38,7 @@ export default function Campaigns() {
   const [enrollUrls, setEnrollUrls] = useState('')
   const [enrollResult, setEnrollResult] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [createError, setCreateError] = useState('')
 
   const fetchCampaigns = async () => {
     try {
@@ -69,13 +70,16 @@ export default function Campaigns() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return
+    setCreateError('')
     try {
       await campaignsApi.create({ name: newName, steps: newSteps })
       fetchCampaigns()
-    } catch {}
-    setShowNew(false)
-    setNewName('')
-    setNewSteps([])
+      setShowNew(false)
+      setNewName('')
+      setNewSteps([])
+    } catch {
+      setCreateError('Failed to create campaign — is the server running?')
+    }
   }
 
   const handleDelete = async (id) => {
@@ -103,10 +107,11 @@ export default function Campaigns() {
     if (!ids.length) return
     try {
       await campaignsApi.enroll(showEnroll, ids)
-      fetchCampaigns()
       setEnrollResult({ success: true, message: `${ids.length} lead${ids.length !== 1 ? 's' : ''} enrolled` })
-    } catch {
-      setEnrollResult({ success: false, message: 'Enrollment failed' })
+      fetchCampaigns()
+    } catch (err) {
+      const detail = err?.response?.data?.detail || 'Enrollment failed — is the server running?'
+      setEnrollResult({ success: false, message: detail })
     }
   }
 
@@ -240,8 +245,11 @@ export default function Campaigns() {
               <label className="mb-2 block text-xs text-slate-400">Sequence Steps</label>
               <CampaignBuilder steps={newSteps} onChange={setNewSteps} />
             </div>
+            {createError && (
+              <p className="text-xs text-red-400">{createError}</p>
+            )}
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowNew(false)} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+              <button onClick={() => { setShowNew(false); setCreateError('') }} className="rounded-lg border border-slate-700/60 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
                 Cancel
               </button>
               <button

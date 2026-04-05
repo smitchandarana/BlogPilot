@@ -6,14 +6,24 @@ Source materials:
 {materials}
 
 Your job:
-Write a concise synthesis brief (3–6 sentences) that instructs a writer exactly how to combine these materials into one LinkedIn post.
+Write a concise synthesis brief (4–7 sentences) that instructs a ghostwriter exactly how to turn these materials into one sharp LinkedIn post.
+
+The brief must specify — in this exact order:
+
+1. HOOK: The precise opening approach. Name the type (contrarian / question / specific scenario / stat / pattern observation / mistake) AND the specific idea to open with. Be concrete — not "use a question" but "open by asking CFOs why they still export to Excel before a board meeting."
+
+2. CORE TENSION: The one central insight or contradiction this post must argue. Name what the audience currently believes and what the post will prove instead. One sentence, sharp.
+
+3. PROOF: Which specific evidence from the source materials to use. Name it directly — "use the example from source 2 about the ops team that reduced reporting time from 3 days to 4 hours" or "cite the pattern that X happens before Y." No invented stats.
+
+4. STRUCTURE: How the argument should unfold. Two or three beats. Example: "Open with the scenario → reveal why the standard approach fails → land the single insight → close with a specific question."
+
+5. AUDIENCE + EMOTIONAL TARGET: Who this is written for (be specific: "finance directors at mid-sized manufacturers" not "business leaders") and what they should feel at the end (challenged, validated, curious, motivated to act).
 
 Rules:
-- Start by specifying the opening hook approach (contrarian / question / stat / story / trend / mistake)
-- Name the core tension or insight the post should build around
-- Specify what evidence or proof to use (the stat, the story, the example)
-- End with the target audience and desired emotional effect
-- Be directive and specific. Not "you could use" — say "open with", "build on", "close with"
+- Be directive. Not "you could use" — say "open with", "build on", "close with", "name", "end by asking".
+- Stay within the materials. Do NOT invent facts, names, or evidence not present in the sources.
+- Keep the brief tight enough to fit on a notecard. No padding.
 - Do NOT write the post itself. Write the brief only.
 
-Write ONLY the brief. No preamble. No explanation.
+Write ONLY the brief. No headers. No preamble. No explanation.

@@ -31,6 +31,7 @@ export default function IdeaPoolPanel({ pinnedItems, onPin }) {
   const [activeTopic, setActiveTopic] = useState('')
   const [activeSource, setActiveSource] = useState('all')
   const debounceRef = useRef(null)
+  const _mounted = useRef(true)
 
   const pinnedIds = new Set(pinnedItems.map(p => p.id))
   const atMax = pinnedItems.length >= 5
@@ -43,17 +44,22 @@ export default function IdeaPoolPanel({ pinnedItems, onPin }) {
       if (source && source !== 'all') params.source = source
       if (topic) params.topic = topic
       const res = await contentApi.ideaPool(params)
-      setItems(res.data)
+      if (!_mounted.current) return
+      setItems(Array.isArray(res.data) ? res.data : [])
     } catch {
+      if (!_mounted.current) return
       setItems([])
     } finally {
-      setLoading(false)
+      if (_mounted.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     fetchPool('', 'all', '')
-    return () => clearTimeout(debounceRef.current)
+    return () => {
+      _mounted.current = false
+      clearTimeout(debounceRef.current)
+    }
   }, [fetchPool])
 
   const handleSearchChange = (e) => {
@@ -154,7 +160,8 @@ export default function IdeaPoolPanel({ pinnedItems, onPin }) {
         {!loading && items.map(item => {
           const isPinned = pinnedIds.has(item.id)
           const disablePin = atMax && !isPinned
-          const displayText = item.title || item.text.slice(0, 80) + (item.text.length > 80 ? '…' : '')
+          const rawText = item.text || item.title || ''
+          const displayText = item.title || rawText.slice(0, 80) + (rawText.length > 80 ? '…' : '')
           const badgeClass = SOURCE_BADGE[item.source_type] || 'bg-slate-700/40 text-slate-400'
           const badgeLabel = SOURCE_LABEL[item.source_type] || item.source_type
 

@@ -13,6 +13,7 @@ from bp_platform.config import (
     BLOGPILOT_IMAGE, VOLUME_BASE_PATH, DOCKER_NETWORK,
     CONTAINER_MEMORY_LIMIT, CONTAINER_CPU_LIMIT,
     ADMIN_SETTINGS_TEMPLATE, DEFAULT_SETTINGS_TEMPLATE,
+    TAILSCALE_EXIT_NODE,
 )
 from bp_platform.services.port_allocator import allocate_port
 from bp_platform.services.token_service import generate_container_token
@@ -34,10 +35,12 @@ def provision_container(user_id: str, is_admin: bool = False) -> Container:
     token = generate_container_token()
     name = f"blogpilot-{user_id[:8]}"
 
-    # Create volume directories
+    # Create volume directories (world-writable so container's non-root user can write)
     vol_root = os.path.join(VOLUME_BASE_PATH, user_id)
     for subdir in ("data", "browser_profile", "config", "config/.secrets", "logs"):
-        os.makedirs(os.path.join(vol_root, subdir), exist_ok=True)
+        path = os.path.join(vol_root, subdir)
+        os.makedirs(path, exist_ok=True)
+        os.chmod(path, 0o777)
 
     # Seed settings.yaml from template
     template = ADMIN_SETTINGS_TEMPLATE if is_admin else DEFAULT_SETTINGS_TEMPLATE
@@ -78,14 +81,20 @@ def provision_container(user_id: str, is_admin: bool = False) -> Container:
         os.path.join(vol_root_abs, "prompts"): {"bind": "/app/prompts", "mode": "rw"},
     }
 
-    # Start container — no host port mapping; traffic routed only via Traefik on Docker network
+    # Network mode: if Tailscale exit node is configured, share its network stack
+    # so all outbound traffic (Playwright / LinkedIn) exits through the home IP.
+    # Traefik routes inbound API traffic via the blogpilot-net network alias added below.
+    use_tailscale = bool(TAILSCALE_EXIT_NODE)
+    net_mode = "container:blogpilot-tailscale-1" if use_tailscale else None
+
     container = _docker().containers.run(
         image=BLOGPILOT_IMAGE,
         name=name,
         detach=True,
         volumes=volumes,
         labels=labels,
-        network=DOCKER_NETWORK,
+        network=None if use_tailscale else DOCKER_NETWORK,
+        network_mode=net_mode,
         mem_limit=CONTAINER_MEMORY_LIMIT,
         nano_cpus=int(CONTAINER_CPU_LIMIT * 1e9),
         environment={
@@ -95,36 +104,59 @@ def provision_container(user_id: str, is_admin: bool = False) -> Container:
             "BLOGPILOT_CONFIG": "/app/config/settings.yaml",
             "BIND_HOST": "0.0.0.0",
             "BIND_PORT": "8000",
+            "TAILSCALE_EXIT_NODE": TAILSCALE_EXIT_NODE,
         },
         restart_policy={"Name": "unless-stopped"},
     )
 
-    # Save to platform DB
-    with get_db() as db:
-        record = Container(
-            user_id=user_id,
-            docker_container_id=container.id,
-            container_name=name,
-            host_port=port,
-            status="starting",
-            api_token=token,
-            volume_path=vol_root_abs,
-        )
-        db.add(record)
-        db.commit()
-        db.refresh(record)
+    # When using Tailscale network mode, also connect to blogpilot-net so Traefik
+    # can still route inbound requests to this container via Docker network DNS.
+    if use_tailscale:
+        net = _docker().networks.get(DOCKER_NETWORK)
+        net.connect(container, aliases=[name])
+
+    # Save to platform DB (unique constraint on user_id guards against races)
+    try:
+        with get_db() as db:
+            record = Container(
+                user_id=user_id,
+                docker_container_id=container.id,
+                container_name=name,
+                host_port=port,
+                status="starting",
+                api_token=token,
+                volume_path=vol_root_abs,
+            )
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+    except Exception:
+        # DB commit failed (e.g. duplicate user_id) — clean up the Docker container we just started
+        try:
+            container.stop(timeout=5)
+            container.remove(force=True)
+        except Exception:
+            pass
+        raise
 
     # Wait for health check via Docker network DNS
-    _wait_healthy(name, timeout=60)
+    healthy = _wait_healthy(name, timeout=60)
 
     with get_db() as db:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if rec:
-            rec.status = "running"
+            rec.status = "running" if healthy else "error"
             rec.started_at = datetime.utcnow()
-            rec.health_status = "healthy"
+            rec.health_status = "healthy" if healthy else "unhealthy"
             db.commit()
 
+    if not healthy:
+        raise RuntimeError(f"Container {name} failed health check within timeout")
+
+    # Re-fetch from DB so callers get the up-to-date status ("running"), not
+    # the stale "starting" value that was set during the initial commit.
+    with get_db() as db:
+        record = db.query(Container).filter_by(user_id=user_id).first()
     return record
 
 
@@ -134,13 +166,15 @@ def start_container(user_id: str) -> None:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec or not rec.docker_container_id:
             raise ValueError("No container found for user")
+        docker_id = rec.docker_container_id   # save before commit expires attributes
+        container_name = rec.container_name
         rec.status = "starting"
         db.commit()
 
     try:
-        c = _docker().containers.get(rec.docker_container_id)
+        c = _docker().containers.get(docker_id)
         c.start()
-        _wait_healthy(rec.container_name, timeout=60)
+        _wait_healthy(container_name, timeout=60)
 
         with get_db() as db:
             rec = db.query(Container).filter_by(user_id=user_id).first()
@@ -162,10 +196,11 @@ def stop_container(user_id: str) -> None:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec or not rec.docker_container_id:
             raise ValueError("No container found for user")
+        docker_id = rec.docker_container_id  # save before commit expires attributes
         rec.status = "stopping"
         db.commit()
 
-    c = _docker().containers.get(rec.docker_container_id)
+    c = _docker().containers.get(docker_id)
     c.stop(timeout=30)
 
     with get_db() as db:
@@ -182,16 +217,18 @@ def restart_container(user_id: str) -> None:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec or not rec.docker_container_id:
             raise ValueError("No container found for user")
+        docker_id = rec.docker_container_id  # save before session closes
 
-    c = _docker().containers.get(rec.docker_container_id)
+    c = _docker().containers.get(docker_id)
     c.restart(timeout=30)
 
     with get_db() as db:
         rec = db.query(Container).filter_by(user_id=user_id).first()
-        rec.status = "running"
-        rec.restart_count = (rec.restart_count or 0) + 1
-        rec.started_at = datetime.utcnow()
-        db.commit()
+        if rec:
+            rec.status = "running"
+            rec.restart_count = (rec.restart_count or 0) + 1
+            rec.started_at = datetime.utcnow()
+            db.commit()
 
 
 def destroy_container(user_id: str, delete_volumes: bool = False) -> None:
@@ -200,22 +237,25 @@ def destroy_container(user_id: str, delete_volumes: bool = False) -> None:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec:
             return
+        docker_id = rec.docker_container_id  # save before session closes
+        volume_path = rec.volume_path
 
     try:
-        c = _docker().containers.get(rec.docker_container_id)
+        c = _docker().containers.get(docker_id)
         c.stop(timeout=10)
         c.remove(force=True)
     except docker.errors.NotFound:
         pass
 
-    if delete_volumes and rec.volume_path and os.path.isdir(rec.volume_path):
-        shutil.rmtree(rec.volume_path, ignore_errors=True)
+    if delete_volumes and volume_path and os.path.isdir(volume_path):
+        shutil.rmtree(volume_path, ignore_errors=True)
 
     with get_db() as db:
         rec = db.query(Container).filter_by(user_id=user_id).first()
-        rec.status = "destroyed"
-        rec.docker_container_id = None
-        db.commit()
+        if rec:
+            rec.status = "destroyed"
+            rec.docker_container_id = None
+            db.commit()
 
 
 def reset_container(user_id: str) -> None:
@@ -224,15 +264,16 @@ def reset_container(user_id: str) -> None:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec or not rec.volume_path:
             raise ValueError("No container found for user")
+        volume_path = rec.volume_path  # save before session closes
 
     # Replace settings.yaml with default template
-    settings_dest = os.path.join(rec.volume_path, "config", "settings.yaml")
+    settings_dest = os.path.join(volume_path, "config", "settings.yaml")
     if os.path.isfile(DEFAULT_SETTINGS_TEMPLATE):
         shutil.copy2(DEFAULT_SETTINGS_TEMPLATE, settings_dest)
 
     # Reset prompts to defaults
     prompts_src = os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-    prompts_dest = os.path.join(rec.volume_path, "prompts")
+    prompts_dest = os.path.join(volume_path, "prompts")
     if os.path.isdir(prompts_src):
         shutil.rmtree(prompts_dest, ignore_errors=True)
         shutil.copytree(prompts_src, prompts_dest)
@@ -247,19 +288,27 @@ def get_container_status(user_id: str) -> dict:
         rec = db.query(Container).filter_by(user_id=user_id).first()
         if not rec:
             return {"status": "none"}
+        # save all needed fields before session closes
+        db_status = rec.status
+        health_status = rec.health_status
+        engine_state = rec.engine_state
+        host_port = rec.host_port
+        started_at = rec.started_at
+        restart_count = rec.restart_count
+        docker_container_id = rec.docker_container_id
 
     result = {
-        "status": rec.status,
-        "health_status": rec.health_status,
-        "engine_state": rec.engine_state,
-        "host_port": rec.host_port,
-        "started_at": rec.started_at.isoformat() if rec.started_at else None,
-        "restart_count": rec.restart_count,
+        "status": db_status,
+        "health_status": health_status,
+        "engine_state": engine_state,
+        "host_port": host_port,
+        "started_at": started_at.isoformat() if started_at else None,
+        "restart_count": restart_count,
     }
 
     # Get live Docker status
     try:
-        c = _docker().containers.get(rec.docker_container_id)
+        c = _docker().containers.get(docker_container_id)
         result["docker_status"] = c.status
     except Exception:
         result["docker_status"] = "not_found"

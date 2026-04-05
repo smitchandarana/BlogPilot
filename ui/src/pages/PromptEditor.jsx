@@ -3,7 +3,12 @@ import { Save, Loader2, CheckCircle2, RotateCcw } from 'lucide-react'
 import { config as configApi } from '../api/client'
 import PromptTestPanel from '../components/PromptTestPanel'
 
-const PROMPT_NAMES = ['relevance', 'comment', 'post', 'note', 'reply']
+const PROMPT_NAMES = [
+  'relevance', 'comment', 'post', 'note', 'reply',
+  'comment_candidate', 'comment_scorer', 'post_scorer', 'post_with_context',
+  'topic_scorer', 'topic_extractor', 'content_extractor', 'structured_post',
+  'angle_generator', 'insight_normalizer', 'hook_generator', 'post_critic', 'synthesize_brief',
+]
 
 const PROMPT_DEFAULTS = {
   relevance: `You are a LinkedIn relevance scoring assistant.\n\nScore how relevant a post is to: {topics}\n\nPost author: {author_name}\nPost content:\n{post_text}\n\nRespond with ONLY JSON: {"score": <0-10>, "reason": "<one sentence>"}`,
@@ -24,13 +29,17 @@ export default function PromptEditor() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   useEffect(() => {
+    let isMounted = true
     configApi.getPrompts().then((res) => {
+      if (!isMounted) return
       if (res.data && typeof res.data === 'object') {
         setPrompts((prev) => ({ ...prev, ...res.data }))
       }
     }).catch(() => {})
+    return () => { isMounted = false }
   }, [])
 
   const currentText = prompts[selected] || ''
@@ -52,13 +61,22 @@ export default function PromptEditor() {
 
   const handleReset = async () => {
     setResetting(true)
+    setResetError('')
     try {
       const res = await configApi.resetPrompt(selected)
       if (res.data?.text) {
         setPrompts((prev) => ({ ...prev, [selected]: res.data.text }))
+      } else if (PROMPT_DEFAULTS[selected]) {
+        setPrompts((prev) => ({ ...prev, [selected]: PROMPT_DEFAULTS[selected] }))
       }
     } catch {
-      setPrompts((prev) => ({ ...prev, [selected]: PROMPT_DEFAULTS[selected] }))
+      // Don't clear the prompt — only reset if we have a known default
+      if (PROMPT_DEFAULTS[selected]) {
+        setPrompts((prev) => ({ ...prev, [selected]: PROMPT_DEFAULTS[selected] }))
+      } else {
+        setResetError('Reset failed')
+        setTimeout(() => setResetError(''), 3000)
+      }
     } finally {
       setResetting(false)
     }
@@ -73,7 +91,7 @@ export default function PromptEditor() {
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Sidebar */}
-        <div className="flex flex-row gap-1 lg:flex-col lg:w-44 lg:shrink-0">
+        <div className="flex flex-row flex-wrap gap-1 lg:flex-col lg:w-48 lg:shrink-0 lg:max-h-[600px] lg:overflow-y-auto">
           {PROMPT_NAMES.map((name) => (
             <button
               key={name}
@@ -84,7 +102,7 @@ export default function PromptEditor() {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              {name}
+              {name.replace(/_/g, ' ')}
             </button>
           ))}
         </div>
@@ -109,8 +127,9 @@ export default function PromptEditor() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {saveError && <p className="text-xs text-red-400">{saveError}</p>}
-                {saved && !saveError && <p className="text-xs text-emerald-400">Saved ✓</p>}
+                {resetError && <p className="text-xs text-red-400">{resetError}</p>}
+                {saveError && !resetError && <p className="text-xs text-red-400">{saveError}</p>}
+                {saved && !saveError && !resetError && <p className="text-xs text-emerald-400">Saved ✓</p>}
                 <button
                   onClick={handleReset}
                   disabled={resetting}

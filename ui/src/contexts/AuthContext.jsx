@@ -48,6 +48,10 @@ export function AuthProvider({ children }) {
   const signup = useCallback(async (email, password, name) => {
     const res = await authApi.signup(email, password, name)
     const data = res.data
+    if (data.pending_approval) {
+      // Account awaiting admin approval — do NOT persist token or set user state
+      return data
+    }
     localStorage.setItem('platform_token', data.token)
     setUser({ id: data.user_id, email: data.email, name: data.name, role: data.role })
     setContainerInfo(null)
@@ -72,6 +76,18 @@ export function AuthProvider({ children }) {
     } catch { /* ignore */ }
   }, [])
 
+  // Auto-logout when platform JWT expires mid-session (dispatched by platform.js interceptor)
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('platform_token')
+      localStorage.removeItem('api_token')
+      setUser(null)
+      setContainerInfo(null)
+    }
+    window.addEventListener('platform:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('platform:unauthorized', handleUnauthorized)
+  }, [])
+
   // Restore session on mount
   useEffect(() => {
     const token = localStorage.getItem('platform_token')
@@ -79,28 +95,37 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
-    authApi.me()
-      .then(res => {
-        const u = res.data
+
+    const restore = async () => {
+      try {
+        const meRes = await authApi.me()
+        const u = meRes.data
         setUser({ id: u.id, email: u.email, name: u.name, role: u.role })
         _configureContainerUrls(u.id)
-        return containersApi.status().catch(() => null)
-      })
-      .then(res => {
-        if (res) {
-          setContainerInfo({
-            port: res.data.host_port,
-            status: res.data.status,
-            token: localStorage.getItem('api_token'),
-          })
-        }
-      })
-      .catch(() => {
-        // Only log out if the /me call itself fails (invalid token)
+      } catch {
+        // /me failed — token invalid, log out
         localStorage.removeItem('platform_token')
         localStorage.removeItem('api_token')
-      })
-      .finally(() => setLoading(false))
+        setLoading(false)
+        return
+      }
+
+      // Container status is best-effort — never log out over it
+      try {
+        const cRes = await containersApi.status()
+        setContainerInfo({
+          port: cRes.data.host_port,
+          status: cRes.data.status,
+          token: localStorage.getItem('api_token'),
+        })
+      } catch {
+        /* no container yet or offline — containerInfo stays null */
+      }
+
+      setLoading(false)
+    }
+
+    restore()
   }, [])
 
   return (
@@ -112,6 +137,7 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: !!user,
       isAdmin: user?.role === 'admin',
+      isSuperUser: user?.role === 'superuser' || user?.role === 'admin',
       login,
       signup,
       logout,

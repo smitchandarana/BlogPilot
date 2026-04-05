@@ -110,37 +110,98 @@ class HashtagScanner:
 
     async def _extract_posts(self, page: Page, source: str = "") -> List[dict]:
         """
-        Extract posts from the current page using the same DOM selectors
-        as FeedScanner. Returns list of post dicts.
+        Extract posts from the current page using JS-based extraction (primary)
+        with legacy selector fallback.
         """
-        posts = []
+        max_posts = int(cfg_get("feed_engagement.max_posts_per_scan", 30))
 
-        # Wait for feed container
+        # Wait for any feed container to appear
         try:
             await page.wait_for_selector(
                 "div.scaffold-finite-scroll__content, "
                 "div[data-finite-scroll-hotspot-size], "
-                "div.search-results-container",
+                "div.search-results-container, "
+                "main",
                 timeout=10000,
             )
         except Exception:
             logger.debug(f"HashtagScanner: feed container not found for {source}")
+
+        # Primary: JS extraction (resilient to CSS class changes)
+        posts = []
+        try:
+            raw_posts = await page.evaluate(f"""() => {{
+                const results = [];
+                const containers = Array.from(document.querySelectorAll(
+                    'div[data-urn], div[data-id*="urn:li:activity"], ' +
+                    'div.feed-shared-update-v2, div.occludable-update'
+                ));
+                const seen = new Set();
+                for (const el of containers) {{
+                    if (results.length >= {max_posts}) break;
+                    // URL
+                    let url = '';
+                    const link = el.querySelector('a[href*="/feed/update/"], a[href*="/posts/"]');
+                    if (link) url = link.href.split('?')[0];
+                    if (!url) {{
+                        const urn = el.getAttribute('data-urn') || el.getAttribute('data-id') || '';
+                        if (urn.includes('activity:')) {{
+                            const aid = urn.split('activity:').pop().split(')')[0];
+                            url = 'https://www.linkedin.com/feed/update/urn:li:activity:' + aid;
+                        }}
+                    }}
+                    if (!url || seen.has(url)) continue;
+                    seen.add(url);
+                    // Text
+                    const textEl = el.querySelector(
+                        'div.feed-shared-update-v2__description, ' +
+                        'div.update-components-text, span.break-words, ' +
+                        '[data-testid="post-text"]'
+                    );
+                    const text = textEl ? textEl.innerText.trim() : '';
+                    if (!text) continue;
+                    // Author name
+                    let author = 'Unknown';
+                    const nameEl = el.querySelector(
+                        'span.update-components-actor__name span[aria-hidden="true"], ' +
+                        'span.update-components-actor__name, ' +
+                        'span.feed-shared-actor__name'
+                    );
+                    if (nameEl) author = nameEl.innerText.trim();
+                    // Author URL
+                    let authorUrl = '';
+                    const authorLink = el.querySelector('a[href*="/in/"], a[href*="/company/"]');
+                    if (authorLink) authorUrl = authorLink.href.split('?')[0];
+                    results.push({{ url, text, author_name: author, author_url: authorUrl }});
+                }}
+                return results;
+            }}""")
+
+            for item in (raw_posts or []):
+                posts.append({
+                    "url": item.get("url", ""),
+                    "author_name": item.get("author_name", "Unknown"),
+                    "author_url": item.get("author_url", ""),
+                    "text": item.get("text", ""),
+                    "like_count": 0,
+                    "comment_count": 0,
+                    "source": source,
+                })
+        except Exception as e:
+            logger.warning(f"HashtagScanner: JS extraction failed for {source}: {e}")
+
+        if posts:
             return posts
 
-        # Post containers
+        # Fallback: legacy selector approach
+        logger.debug(f"HashtagScanner: falling back to legacy selectors for {source}")
         post_elements = await page.query_selector_all(
-            "div[data-urn*='activity'], "
-            "div[data-id*='urn:li:activity']"
+            "div[data-urn*='activity'], div[data-id*='urn:li:activity']"
         )
-
         if not post_elements:
             post_elements = await page.query_selector_all(
-                "div.feed-shared-update-v2, "
-                "div.occludable-update"
+                "div.feed-shared-update-v2, div.occludable-update"
             )
-
-        max_posts = int(cfg_get("feed_engagement.max_posts_per_scan", 30))
-
         for el in post_elements[:max_posts]:
             try:
                 post = await self._parse_post(el, source)

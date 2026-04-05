@@ -245,7 +245,7 @@ class TopicRotator:
             never_tried = [t for t in yaml_topics if t not in db_topic_names]
 
             # Candidates: paused with low_engagement reason and old enough
-            retry_cutoff = now - timedelta(days=retry_days)
+            retry_cutoff = datetime.utcnow() - timedelta(days=retry_days)
             retryable = [
                 r for r in all_rows
                 if r.is_paused

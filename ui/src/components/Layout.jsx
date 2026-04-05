@@ -48,7 +48,7 @@ function StatusDot({ status }) {
 
 export default function Layout({ children }) {
   const { state } = useEngine()
-  const { user, isAdmin, logout } = useAuth()
+  const { user, isAdmin, isSuperUser, logout } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -65,7 +65,7 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-2">
             <Zap size={18} className="text-violet-400" />
             <span className="text-sm font-semibold text-slate-100 leading-tight">
-              LinkedIn AI<br />Growth Engine
+              BlogPilot
             </span>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function Layout({ children }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2">
           {NAV_ITEMS.filter(({ path }) =>
-            isAdmin || (path !== '/campaigns' && path !== '/leads')
+            isSuperUser || (path !== '/campaigns' && path !== '/leads')
           ).map(({ path, label, icon: Icon }) => (
             <NavLink
               key={path}

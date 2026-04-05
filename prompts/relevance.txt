@@ -88,6 +88,13 @@ SCORING RULES:
 
 ---
 
+EDGE CASES:
+- If the post is fewer than 20 words and passes Step 1, cap the score at 5 regardless of topic match — there is not enough signal.
+- If the post is in a non-English language but the topic is clearly on-target, score it normally on topic alignment but cap quality bonuses at +1.
+- If the post text appears to be a repost or quote (starts with " or contains "shared this" / "reposted"), treat it as a repost and apply the "REPOSTS WITH NO ADDED VALUE" disqualification unless original commentary is clearly visible.
+
+---
+
 OUTPUT FORMAT:
 
 Return ONLY a valid JSON object. No markdown. No commentary. No text before or after.

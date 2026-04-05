@@ -72,7 +72,14 @@ class CircuitBreaker:
             self._trip(source, stop=stop_instead_of_pause)
 
     def record_success(self):
-        """Reset tripped flag on a successful action."""
+        """Reset tripped flag on a successful action — only when engine is RUNNING."""
+        if self._state_manager is not None:
+            try:
+                from backend.core.state_manager import EngineState
+                if self._state_manager.get() != EngineState.RUNNING:
+                    return  # Don't clear tripped while engine is paused/stopped/error
+            except Exception:
+                pass
         with self._lock:
             self._tripped = False
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, AlertTriangle, ScanLine, ThumbsUp, MessageSquare, Eye, Mail, Users, Brain, Layers, Cpu, PlayCircle, Loader2, CheckCircle2, XCircle, RotateCcw, Search, Lightbulb, GitBranch, MessageCircle, ServerOff, Rocket } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useEngine } from '../hooks/useEngine'
@@ -109,6 +109,8 @@ export default function Dashboard() {
   const [intelligenceStatus, setIntelligenceStatus] = useState(null)
   const [taskStatus, setTaskStatus] = useState({}) // { [taskId]: 'idle'|'running'|'done'|'error' }
   const [taskResult, setTaskResult] = useState({}) // { [taskId]: string }
+  const _mounted = useRef(true)
+  useEffect(() => { _mounted.current = true; return () => { _mounted.current = false } }, [])
 
   const BG_TASKS = [
     {
@@ -160,12 +162,12 @@ export default function Dashboard() {
       const msg = await task.run()
       setTaskStatus((p) => ({ ...p, [task.id]: 'done' }))
       setTaskResult((p) => ({ ...p, [task.id]: typeof msg === 'string' ? msg : 'Done' }))
-      setTimeout(() => setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })), 4000)
+      setTimeout(() => { if (_mounted.current) setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })) }, 4000)
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || 'Failed'
       setTaskStatus((p) => ({ ...p, [task.id]: 'error' }))
       setTaskResult((p) => ({ ...p, [task.id]: detail }))
-      setTimeout(() => setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })), 6000)
+      setTimeout(() => { if (_mounted.current) setTaskStatus((p) => ({ ...p, [task.id]: 'idle' })) }, 6000)
     }
   }
 

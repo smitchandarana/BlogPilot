@@ -96,40 +96,75 @@ class ProfileScraper:
     # ── Field extractors ────────────────────────────────────────────────────
 
     async def _extract_name(self, page: Page) -> Optional[str]:
+        # Try CSS selectors first (ordered by reliability)
         for sel in [
             "h1.text-heading-xlarge",
             "h1[class*='text-heading-xlarge']",
-            "section.pv-top-card h1",
+            "section.artdeco-card h1",
+            "main h1",
             "div[class*='ph5'] h1",
-            "h1[class*='inline t-24']",
+            "section.pv-top-card h1",
             "h1",
         ]:
             el = await page.query_selector(sel)
             if el:
-                text = (await el.inner_text()).strip()
-                # Filter out non-name content (nav text, empty, overly long)
-                if text and 2 < len(text) < 80 and "\n" not in text:
+                text = (await el.inner_text()).strip().split("\n")[0].strip()
+                if text and 2 < len(text) < 80:
                     return text
+
+        # JS fallback — find the first h1 in main content
+        try:
+            name = await page.evaluate("""() => {
+                const h1s = Array.from(document.querySelectorAll('h1'));
+                for (const h of h1s) {
+                    const t = h.innerText.trim().split('\\n')[0].trim();
+                    if (t.length > 2 && t.length < 80) return t;
+                }
+                return null;
+            }""")
+            if name:
+                return name
+        except Exception:
+            pass
         return None
 
     async def _extract_title(self, page: Page) -> Optional[str]:
         for sel in [
             "div.text-body-medium.break-words",
             "div[class*='text-body-medium'][class*='break-words']",
+            "div[class*='pv-text-details__left-panel'] div.text-body-medium",
             "section.pv-top-card div.text-body-medium",
             "div[class*='ph5'] div.text-body-medium",
             "div[class*='pv-text-details'] .text-body-medium",
-            "div[data-generated-suggestion-target]",
+            "[data-generated-suggestion-target]",
         ]:
             el = await page.query_selector(sel)
             if el:
-                text = (await el.inner_text()).strip()
-                if text and len(text) < 300:
+                text = (await el.inner_text()).strip().split("\n")[0].strip()
+                if text and 3 < len(text) < 300:
                     return text
+
+        # JS fallback — headline is the element right after h1 in the top card
+        try:
+            title = await page.evaluate("""() => {
+                const h1 = document.querySelector('h1');
+                if (!h1) return null;
+                let el = h1.nextElementSibling;
+                while (el) {
+                    const t = el.innerText.trim().split('\\n')[0].trim();
+                    if (t.length > 3 && t.length < 300) return t;
+                    el = el.nextElementSibling;
+                }
+                return null;
+            }""")
+            if title:
+                return title
+        except Exception:
+            pass
         return None
 
     async def _extract_company(self, page: Page) -> Optional[str]:
-        # Strategy 1: aria-label based (most reliable)
+        # Strategy 1: aria-label based
         for sel in [
             "button[aria-label*='Current company' i] span",
             "span[aria-label*='Current company' i]",
@@ -140,19 +175,36 @@ class ProfileScraper:
                 text = (await el.inner_text()).strip()
                 if text:
                     return text
-        # Strategy 2: experience section top entry
+
+        # Strategy 2: experience section / company links in top card
         for sel in [
-            "li.pv-text-details__right-panel-item span.t-14",
-            "section[id*='experience'] li:first-child span.t-14.t-normal",
-            "div[class*='experience'] a[href*='/company/'] span",
+            "section[id*='experience'] li:first-child a[href*='/company/'] span[aria-hidden='true']",
+            "div[class*='pv-text-details__right-panel'] a[href*='/company/'] span",
             "section.pv-top-card a[href*='/company/'] span",
             "a[href*='/company/'] div[class*='t-14']",
+            "li.pv-text-details__right-panel-item span.t-14",
+            "section[id*='experience'] li:first-child span.t-14.t-normal",
         ]:
             el = await page.query_selector(sel)
             if el:
-                text = (await el.inner_text()).strip()
+                text = (await el.inner_text()).strip().split("\n")[0].strip()
                 if text:
                     return text
+
+        # Strategy 3: JS fallback — find first company link in top area
+        try:
+            company = await page.evaluate("""() => {
+                const links = Array.from(document.querySelectorAll('a[href*="/company/"]'));
+                for (const a of links) {
+                    const t = a.innerText.trim().split('\\n')[0].trim();
+                    if (t.length > 0 && t.length < 100) return t;
+                }
+                return null;
+            }""")
+            if company:
+                return company
+        except Exception:
+            pass
         return None
 
     async def _extract_degree(self, page: Page) -> Optional[int]:
@@ -162,7 +214,9 @@ class ProfileScraper:
                 "span.dist-value",
                 "span[class*='distance-badge'] span[aria-hidden='true']",
                 "span[class*='distance-badge']",
+                "span[class*='connection-degree-badge']",
                 "span.pvs-header__subtitle span[aria-hidden='true']",
+                "[class*='degree-badge']",
             ]:
                 el = await page.query_selector(sel)
                 if el:
@@ -170,11 +224,25 @@ class ProfileScraper:
                     match = re.search(r"(\d)", text)
                     if match:
                         return int(match.group(1))
+
             # Fallback: search full page text for degree badge patterns
-            body_text = await page.text_content("section.pv-top-card") or ""
-            degree_match = re.search(r"(\d)(?:st|nd|rd)\s*degree", body_text, re.IGNORECASE)
+            body_text = await page.text_content("body") or ""
+            degree_match = re.search(r"(\d)(?:st|nd|rd)\s*[-•]\s*degree", body_text, re.IGNORECASE)
             if degree_match:
                 return int(degree_match.group(1))
+
+            # JS fallback
+            degree = await page.evaluate("""() => {
+                const spans = Array.from(document.querySelectorAll('span'));
+                for (const s of spans) {
+                    const t = s.innerText.trim();
+                    const m = t.match(/^([123])(?:st|nd|rd)[\\s\\-•]*degree/i);
+                    if (m) return parseInt(m[1]);
+                }
+                return null;
+            }""")
+            if degree:
+                return degree
         except Exception as e:
             logger.debug(f"Degree extraction error: {e}")
         return None

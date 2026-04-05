@@ -7,7 +7,7 @@ Write ONE original LinkedIn post.
 
 Topic: {topic}
 
-This represents the central idea or problem the post must explore. 
+This represents the central idea or problem the post must explore.
 Focus on ONE clear insight related to reporting, dashboards, or data-driven decision making.
 
 Post Style: {style}
@@ -23,10 +23,10 @@ Rules:
 Start with a strong hook that stops the scroll. Hooks should be concrete or provocative.
 
 Allowed hook types:
-- surprising observation
-- bold opinion
-- common mistake
-- short real-world scenario
+- surprising observation naming a specific role + action + consequence
+- bold opinion that a real practitioner could disagree with
+- common mistake frame: name the exact error and the exact cost
+- short real-world scenario dropped into the middle of the moment (not backstory)
 
 FORBIDDEN OPENERS — never write any version of these:
 - "Most companies..." / "Many organizations..." / "Businesses today..."
@@ -35,7 +35,10 @@ FORBIDDEN OPENERS — never write any version of these:
 - "Did you know..." (unless a real statistic was provided in the topic)
 - "Here's the thing..." / "The truth is..." / "Here's what nobody tells you..."
 - "Let's talk about..." / "We need to talk about..."
+- "I've seen it time and time again..." / "Time and time again..." / "I've watched..."
+- "I want to share..." / "I wanted to talk about..."
 - Any opener that doesn't name the specific topic or audience in the first two sentences
+- Any opener that begins with "I've" as the first word
 
 Focus on ONE clear insight about reporting, dashboards, or business data.
 
@@ -46,7 +49,7 @@ Ground the post in realistic business situations such as:
 - slow monthly reporting cycles
 
 Formatting:
-- Use short paragraphs
+- Use short paragraphs (2–4 sentences max per paragraph)
 - Add line breaks for readability
 - Avoid large blocks of text
 
@@ -54,25 +57,27 @@ Style rules:
 
 Tips List:
 - Max 5 tips
-- Each tip must be practical and actionable
+- Each tip must be practical and actionable with a concrete outcome
 
 Story:
-- Use a realistic scenario
+- Use a realistic scenario dropped into the moment — first sentence should be mid-action
 - Write in first person
+- Name a specific role or situation
 
 Question:
-- End with a question inviting specific answers
+- End with a question inviting specific, answerable responses — not "What are your thoughts?"
 
 Thought Leadership:
-- Present a strong opinion about how businesses approach analytics or reporting.
+- Present a strong, specific opinion about how businesses approach analytics or reporting
+- The opinion must be disagreeable — a real practitioner could push back on it
 
 Data Insight:
-- Use a specific, named observation from a real business scenario (e.g. "A finance team tracking 40 KPIs found only 3 drove 80% of decisions").
-- Do NOT invent statistics or percentages. No "73% of companies..." or "studies show...".
-- A concrete named example beats a made-up number every time.
+- Use a specific, named observation from a real business scenario
+- Do NOT invent statistics or percentages. "A finance team tracking 40 KPIs found only 3 drove 80% of decisions" beats "73% of companies..."
+- A concrete named example beats a made-up number every time
 
 Contrarian Take:
-- Challenge a common belief about dashboards, analytics, or reporting.
+- Challenge a common belief about dashboards, analytics, or reporting with a specific counter-example
 
 FORBIDDEN CONCLUSIONS — never end with any version of these:
 - "Those who adapt will thrive / survive"
@@ -83,19 +88,20 @@ FORBIDDEN CONCLUSIONS — never end with any version of these:
 
 STATISTICS RULE:
 If no specific number was provided in the topic, do NOT fabricate one.
+Do not write "80% of dashboards are never opened" unless that exact number was given to you.
 A specific named scenario beats a made-up percentage every time.
+If you need to express scale, use qualitative language: "most", "the majority of teams I've worked with", "rarely".
 
 Avoid:
-- corporate buzzwords (synergy, leverage, pivot, ecosystem, journey)
-- generic LinkedIn clichés like "data is the new oil"
+- corporate buzzwords (synergy, leverage, pivot, ecosystem, journey, actionable)
+- generic LinkedIn clichés like "data is the new oil" or "data-driven decisions"
 - motivational fluff
 - emojis of any kind — none, anywhere in the post
+
 Call-to-action rule:
-
-Include a natural call-to-action near the end of the post inviting readers to learn more or explore solutions at:
-phoenixsolution.in
-
-Do not make it overly promotional. Integrate it naturally within the content.
+Near the end of the post, include one natural, non-promotional prompt that invites the reader to act on the insight —
+for example: audit their own reporting setup, revisit a KPI they have been ignoring, or ask their team a specific question.
+The CTA should feel like a natural extension of the post's argument, not a product pitch.
 
 End with ONE hashtag line (3–5 relevant hashtags related to analytics, reporting, dashboards, or business intelligence).
 

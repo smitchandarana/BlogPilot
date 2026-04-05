@@ -25,13 +25,4 @@ Angle types to choose from:
 Select best_angle_index = the angle most likely to generate a reply from a real practitioner.
 
 Return ONLY valid JSON, no preamble, no markdown:
-{
-  "angles": [
-    {
-      "type": "contrarian|mistake|hidden_cost|trend_shift|system_failure",
-      "stance": "<one arguable sentence naming a specific role or outcome>",
-      "rationale": "<one sentence: why this angle creates engagement>"
-    }
-  ],
-  "best_angle_index": 0
-}
+{{"angles": [{{"type": "contrarian|mistake|hidden_cost|trend_shift|system_failure", "stance": "<one arguable sentence naming a specific role or outcome>", "rationale": "<one sentence: why this angle creates engagement>"}}], "best_angle_index": 0}}

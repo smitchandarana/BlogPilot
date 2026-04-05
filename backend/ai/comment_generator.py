@@ -135,7 +135,7 @@ def _check_diversity(new_comment: str, db) -> bool:
                 continue
             recent_words = set(recent_text.lower().split())
             overlap = len(new_words & recent_words) / len(new_words)
-            if overlap > threshold:
+            if overlap >= threshold:
                 return False
 
         return True

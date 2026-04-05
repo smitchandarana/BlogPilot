@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter
 from sqlalchemy import func, case, and_
 from backend.utils.logger import get_logger
@@ -9,8 +9,8 @@ router = APIRouter()
 
 
 def _today_start():
-    """Return naive datetime for start of today (SQLite stores naive datetimes)."""
-    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    """Return naive UTC datetime for start of today UTC (consistent with budget_tracker)."""
+    return datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 @router.get("/daily")
@@ -32,7 +32,7 @@ async def daily_analytics():
             Lead.email_status.in_(["FOUND", "VERIFIED"])
         ).count()
     return {
-        "date": datetime.now().date().isoformat(),
+        "date": datetime.utcnow().date().isoformat(),
         "actions": stats,
         "posts_scanned": posts_scanned,
         "leads_total": leads_total,
@@ -68,8 +68,9 @@ async def weekly_analytics():
     from backend.storage.models import ActionLog, Lead
     with get_db() as db:
         result = []
+        today_utc = datetime.utcnow().date()
         for i in range(6, -1, -1):
-            day = date.today() - timedelta(days=i)
+            day = today_utc - timedelta(days=i)
             day_start = datetime.combine(day, datetime.min.time())
             day_end = day_start + timedelta(days=1)
 
@@ -115,7 +116,7 @@ async def analytics_summary():
     """Generate a text summary from real stats."""
     from backend.storage.models import ActionLog, Lead, Post
     with get_db() as db:
-        week_start = datetime.now() - timedelta(days=7)
+        week_start = datetime.utcnow() - timedelta(days=7)
 
         total_actions = db.query(ActionLog).filter(ActionLog.created_at >= week_start).count()
         total_likes = db.query(ActionLog).filter(
@@ -133,7 +134,9 @@ async def analytics_summary():
             Lead.created_at >= week_start,
             Lead.email_status.in_(["FOUND", "VERIFIED"])
         ).count()
-        profiles_visited = db.query(Lead).filter(Lead.created_at >= week_start).count()
+        profiles_visited = db.query(ActionLog).filter(
+            ActionLog.created_at >= week_start, ActionLog.action_type == "profile_visits"
+        ).count()
 
         # Top topic this week
         top_topic_row = (

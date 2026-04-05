@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { ExternalLink, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { analytics, config as configApi } from '../api/client'
 
 const MODES = [
@@ -58,10 +58,12 @@ export default function FeedEngagement() {
   const [mode, setMode] = useState('smart')
   const [previewComments, setPreviewComments] = useState(true)
   const [viralThreshold, setViralThreshold] = useState(50)
+  const [minScore, setMinScore] = useState(6)
   const [recentPosts, setRecentPosts] = useState([])
   const [skippedPosts, setSkippedPosts] = useState([])
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [saveState, setSaveState] = useState(null) // null | 'saving' | 'saved' | 'error'
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -82,23 +84,32 @@ export default function FeedEngagement() {
   }, [])
 
   useEffect(() => {
+    let isMounted = true
     loadData()
-    // Load settings
     configApi.getSettings().then((res) => {
+      if (!isMounted) return
       const d = res.data
       if (d?.feed_engagement?.mode) setMode(d.feed_engagement.mode)
       if (d?.feed_engagement?.preview_comments != null) setPreviewComments(d.feed_engagement.preview_comments)
       if (d?.viral_detection?.likes_per_hour_threshold) setViralThreshold(d.viral_detection.likes_per_hour_threshold)
+      if (d?.feed_engagement?.min_relevance_score != null) setMinScore(d.feed_engagement.min_relevance_score)
     }).catch(() => {})
+    return () => { isMounted = false }
   }, [loadData])
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = async (overrides = {}) => {
+    setSaveState('saving')
     try {
       await configApi.updateSettings({
-        feed_engagement: { mode, preview_comments: previewComments },
-        viral_detection: { likes_per_hour_threshold: viralThreshold },
+        feed_engagement: { mode, preview_comments: previewComments, min_relevance_score: minScore, ...overrides.feed_engagement },
+        viral_detection: { likes_per_hour_threshold: viralThreshold, ...overrides.viral_detection },
       })
-    } catch { /* silent */ }
+      setSaveState('saved')
+      setTimeout(() => setSaveState(null), 2500)
+    } catch {
+      setSaveState('error')
+      setTimeout(() => setSaveState(null), 3000)
+    }
   }
 
   return (
@@ -108,9 +119,24 @@ export default function FeedEngagement() {
           <h1 className="text-xl font-semibold tracking-tight text-slate-100">Feed Engagement</h1>
           <p className="mt-0.5 text-sm text-slate-500">Configure how the engine interacts with LinkedIn feed posts.</p>
         </div>
-        <button onClick={loadData} className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {saveState === 'saved' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Saved
+            </span>
+          )}
+          {saveState === 'error' && (
+            <span className="flex items-center gap-1.5 text-xs text-red-400">
+              <AlertTriangle className="h-3.5 w-3.5" /> Save failed
+            </span>
+          )}
+          {saveState === 'saving' && (
+            <span className="text-xs text-slate-500">Saving…</span>
+          )}
+          <button onClick={loadData} className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Settings row */}
@@ -129,7 +155,7 @@ export default function FeedEngagement() {
                 }`}
               >
                 <input type="radio" name="mode" value={m.value} checked={mode === m.value}
-                  onChange={() => { setMode(m.value); setTimeout(handleSaveSettings, 0) }}
+                  onChange={() => { setMode(m.value); handleSaveSettings({ feed_engagement: { mode: m.value } }) }}
                   className="mt-0.5 accent-violet-500" />
                 <div>
                   <p className={`text-sm font-medium ${mode === m.value ? 'text-violet-300' : 'text-slate-300'}`}>{m.label}</p>
@@ -150,10 +176,22 @@ export default function FeedEngagement() {
                 <p className="text-xs text-slate-500">Show before posting</p>
               </div>
               <button role="switch" aria-checked={previewComments}
-                onClick={() => { setPreviewComments(!previewComments); setTimeout(handleSaveSettings, 0) }}
+                onClick={() => { const next = !previewComments; setPreviewComments(next); handleSaveSettings({ feed_engagement: { preview_comments: next } }) }}
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${previewComments ? 'bg-violet-600' : 'bg-slate-700'}`}>
                 <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ${previewComments ? 'translate-x-4' : 'translate-x-1'}`} />
               </button>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-400">Min Relevance Score (0–10)</label>
+              <div className="flex items-center gap-3">
+                <input type="range" min={0} max={10} step={0.5} value={minScore}
+                  onChange={(e) => setMinScore(Number(e.target.value))}
+                  onMouseUp={handleSaveSettings}
+                  onTouchEnd={handleSaveSettings}
+                  className="flex-1 accent-violet-500" />
+                <span className="w-6 text-right text-sm font-semibold tabular-nums text-violet-300">{minScore}</span>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-600">Posts below this score are skipped</p>
             </div>
             <div>
               <label className="mb-1.5 block text-xs text-slate-400">Viral Threshold (likes/hr)</label>

@@ -4,8 +4,9 @@ All requests to /u/{user_id}/... are forwarded to the user's BlogPilot container
 via the internal Docker network.  WebSocket connections to /u/{user_id}/ws are
 similarly bridged.
 
-This lets the Cloudflare Tunnel expose a single domain (api.phoenixsolution.in)
-and still route per-user engine traffic without Traefik.
+Authentication: every request must carry the container's api_token either via
+Bearer header (HTTP) or ?token= query param (WebSocket). The token is verified
+against the container record for the given user_id, preventing IDOR attacks.
 """
 
 import asyncio
@@ -13,7 +14,7 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
 from bp_platform.models.database import Container, get_db
@@ -29,10 +30,16 @@ _HOP_BY_HOP = frozenset([
 ])
 
 
-def _get_container(user_id: str) -> Optional[Container]:
+def _get_authenticated_container(user_id: str, token: Optional[str]) -> Optional[Container]:
+    """Return the container only if the token matches the user_id's container api_token."""
+    if not token:
+        return None
     with get_db() as db:
-        rec = db.query(Container).filter_by(user_id=user_id).first()
-        # Detach from session so we can use after context closes
+        rec = (
+            db.query(Container)
+            .filter_by(user_id=user_id, api_token=token)
+            .first()
+        )
         if rec:
             db.expunge(rec)
         return rec
@@ -53,8 +60,12 @@ def _forward_headers(request: Request) -> dict:
 )
 async def proxy_http(user_id: str, path: str, request: Request):
     """Forward HTTP requests to the user's container."""
-    container = _get_container(user_id)
-    if not container or container.status not in ("running", "starting"):
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+    container = _get_authenticated_container(user_id, token)
+    if not container:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    if container.status not in ("running", "starting"):
         raise HTTPException(status_code=503, detail="Container not available")
 
     query = request.url.query
@@ -94,12 +105,19 @@ async def proxy_http(user_id: str, path: str, request: Request):
 # ── WebSocket proxy ───────────────────────────────────────────────────────────
 
 @router.websocket("/u/{user_id}/ws")
-async def proxy_websocket(user_id: str, websocket: WebSocket):
+async def proxy_websocket(
+    user_id: str,
+    websocket: WebSocket,
+    token: Optional[str] = Query(default=None),
+):
     """Bridge WebSocket connections to the user's container."""
     await websocket.accept()
 
-    container = _get_container(user_id)
-    if not container or container.status not in ("running", "starting"):
+    container = _get_authenticated_container(user_id, token)
+    if not container:
+        await websocket.close(1008, "Unauthorized")
+        return
+    if container.status not in ("running", "starting"):
         await websocket.close(1013, "Container not available")
         return
 

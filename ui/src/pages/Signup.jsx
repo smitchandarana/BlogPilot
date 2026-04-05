@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { UserPlus, Loader2 } from 'lucide-react'
+import { UserPlus, Loader2, Clock } from 'lucide-react'
 
 export default function Signup() {
   const [name, setName] = useState('')
@@ -10,6 +10,7 @@ export default function Signup() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pending, setPending] = useState(false)
   const { signup } = useAuth()
   const navigate = useNavigate()
 
@@ -26,13 +27,38 @@ export default function Signup() {
     }
     setLoading(true)
     try {
-      await signup(email, password, name)
-      navigate('/')
+      const data = await signup(email, password, name)
+      if (data.pending_approval) {
+        setPending(true)
+      } else {
+        navigate('/')
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Signup failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (pending) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="mb-6 flex justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/20">
+              <Clock className="h-7 w-7 text-amber-400" />
+            </div>
+          </div>
+          <h1 className="text-xl font-bold text-slate-100">Account Pending Approval</h1>
+          <p className="mt-3 text-sm text-slate-400">
+            Your account has been created and is awaiting admin approval. You'll be able to sign in once your account is activated.
+          </p>
+          <Link to="/login" className="mt-6 inline-block text-sm text-violet-400 hover:text-violet-300">
+            Back to login
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (

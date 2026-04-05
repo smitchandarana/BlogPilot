@@ -9,20 +9,7 @@ let _wsUrlOverride = null
 export function setWebSocketUrl(url) { _wsUrlOverride = url }
 
 async function _getToken() {
-  const stored = localStorage.getItem('api_token')
-  if (stored) return stored
-  // Token not yet bootstrapped — fetch it now
-  try {
-    const res = await fetch(`${_defaultApiUrl}/auth/token`)
-    if (res.ok) {
-      const data = await res.json()
-      if (data?.token) {
-        localStorage.setItem('api_token', data.token)
-        return data.token
-      }
-    }
-  } catch { /* server may not be up yet */ }
-  return null
+  return localStorage.getItem('api_token') || null
 }
 
 export function useWebSocket() {

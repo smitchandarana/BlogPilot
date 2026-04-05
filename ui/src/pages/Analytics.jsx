@@ -43,6 +43,7 @@ export default function Analytics() {
   const [timing, setTiming] = useState(null)
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
       setLoading(true)
       try {
@@ -53,6 +54,7 @@ export default function Analytics() {
           analytics.summary(),
           analytics.daily(),
         ])
+        if (cancelled) return
 
         // Transform weekly data for chart
         const weekly = (weeklyRes.data || []).map((d) => {
@@ -93,16 +95,18 @@ export default function Analytics() {
           analytics.learningCalibration().catch(() => ({ data: null })),
           analytics.learningTiming().catch(() => ({ data: null })),
         ])
+        if (cancelled) return
         setCommentQuality(cqRes.data)
         setCalibration(calRes.data)
         setTiming(timRes.data)
       } catch {
         // keep empty state
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     load()
+    return () => { cancelled = true }
   }, [])
 
   const chartData = weeklyData
@@ -173,6 +177,9 @@ export default function Analytics() {
         {/* Campaign funnel */}
         <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Campaign Funnel</h2>
+          {funnelData.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-500">No campaign data yet.</p>
+          ) : (
           <div className="flex flex-col gap-3 mt-2">
             {funnelData.map((item) => {
               const maxVal = Math.max(...funnelData.map(d => d.value), 1)
@@ -192,13 +199,17 @@ export default function Analytics() {
               )
             })}
           </div>
+          )}
         </div>
       </div>
 
       {/* Weekly summary */}
       <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Weekly Summary</h2>
-        <p className="text-sm leading-relaxed text-slate-400">{summaryText}</p>
+        {summaryText
+          ? <p className="text-sm leading-relaxed text-slate-400">{summaryText}</p>
+          : <p className="text-sm text-slate-500">No summary yet. Run the engine to collect engagement data.</p>
+        }
       </div>
 
       {/* ── Learning Insights ─────────────────────────────────────── */}
@@ -222,7 +233,7 @@ export default function Analytics() {
         />
         <StatCard
           label="Reply Rate"
-          value={commentQuality?.total_comments > 0 ? `${(commentQuality.reply_rate * 100).toFixed(0)}%` : 'N/A'}
+          value={commentQuality?.total_comments > 0 && commentQuality.reply_rate != null ? `${(commentQuality.reply_rate * 100).toFixed(0)}%` : 'N/A'}
           sub={`${commentQuality?.got_reply_count ?? 0} replies`}
           color="text-emerald-400"
         />
@@ -240,7 +251,7 @@ export default function Analytics() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Score Calibration</h2>
           {calibration?.buckets?.length > 0 ? (
             <div className="space-y-3">
-              {calibration.buckets.map((b) => {
+              {(calibration?.buckets ?? []).map((b) => {
                 const pct = Math.round(b.rate * 100)
                 return (
                   <div key={b.range} className="flex items-center gap-3">
@@ -277,7 +288,7 @@ export default function Analytics() {
               <div className="flex flex-wrap gap-1">
                 {Array.from({ length: 24 }, (_, h) => {
                   const count = timing.hourly?.[h] ?? 0
-                  const maxCount = Math.max(...Object.values(timing.hourly || {}), 1)
+                  const maxCount = Math.max(...Object.values(timing.hourly ?? {}), 1)
                   const intensity = count / maxCount
                   return (
                     <div

@@ -4,7 +4,7 @@ LinkedIn insights — extracts trending topics from existing feed scan data.
 No external API calls — purely DB queries against the posts table
 populated by the feed scanner pipeline.
 """
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
 
@@ -24,7 +24,7 @@ def get_trending_from_feed(db, days: int = 7) -> list[dict]:
         List of dicts: {topic, post_count, avg_likes, avg_comments, engagement_velocity}
         sorted by engagement_velocity desc.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.utcnow() - timedelta(days=days)  # naive — matches SQLite storage
 
     results = (
         db.query(
@@ -70,7 +70,7 @@ def get_high_engagement_posts(db, min_score: float = 7.0, days: int = 7) -> list
     Returns:
         List of dicts: {author, text_snippet, score, likes, comments, topic}
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.utcnow() - timedelta(days=days)  # naive — matches SQLite storage
 
     posts = (
         db.query(Post)

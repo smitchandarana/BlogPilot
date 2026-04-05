@@ -238,7 +238,7 @@ async def log_generation_session(body: dict):
             tone=body.get("tone", ""),
             generated_text=body.get("generated_text", ""),
             final_text=body.get("final_text", body.get("generated_text", "")),
-            quality_score=float(body.get("quality_score", 0)),
+            quality_score=_safe_float(body.get("quality_score", 0)),
             edit_distance_ratio=_compute_edit_ratio(
                 body.get("generated_text", ""), body.get("final_text", "")
             ),
@@ -295,6 +295,14 @@ async def intelligence_status():
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Convert to float safely, returning default on any error."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 
 def _compute_edit_ratio(original: str, final: str) -> float:
     """Compute normalized edit distance ratio. 0 = identical, 1 = completely different."""

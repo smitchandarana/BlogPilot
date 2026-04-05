@@ -10,11 +10,12 @@ Usage:
     insights = await extractor.extract_from_snippets(db, batch_size=20)
 """
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 
 from backend.utils.logger import get_logger
 from backend.utils.config_loader import get as cfg_get
 from backend.ai.utils import parse_json_safe
+from backend.storage.database import get_db
 
 logger = get_logger(__name__)
 
@@ -104,80 +105,99 @@ class ContentExtractor:
 
         created = []
 
-        async def _process_one(snippet):
+        # Capture scalar values needed inside tasks BEFORE shared session closes
+        snippet_cache = {
+            s.id: {
+                "topic_id": s.topic_id,
+                "engagement_signal": s.engagement_signal,
+                "source": s.source,
+            }
+            for s in rows
+        }
+
+        async def _process_one(snippet_id):
             async with semaphore:
-                topic = topic_map.get(snippet.topic_id)
+                cached = snippet_cache[snippet_id]
+                topic = topic_map.get(cached["topic_id"])
                 domain = topic.domain or topic.topic if topic else ""
-                try:
-                    data = await self._extract_single(snippet, domain)
-                except Exception as e:
-                    logger.warning(f"ContentExtractor: snippet {snippet.id} failed — {e}")
-                    data = None
 
-                try:
-                    # Mark processed regardless of success
-                    snippet.processed_for_insights = True
-                    db.commit()
-                except Exception:
-                    pass
+                # Each task uses its own DB session to avoid concurrent-commit races
+                with get_db() as task_db:
+                    from backend.storage.models import ResearchSnippet as _RS
+                    snippet = task_db.query(_RS).filter_by(id=snippet_id).first()
+                    if snippet is None:
+                        return None
 
-                if data is None:
-                    return None
+                    try:
+                        data = await self._extract_single(snippet, domain)
+                    except Exception as e:
+                        logger.warning(f"ContentExtractor: snippet {snippet_id} failed — {e}")
+                        data = None
 
-                # Quality gate
-                if float(data.get("specificity_score", 0)) < min_score:
-                    logger.debug(
-                        f"ContentExtractor: snippet {snippet.id} dropped — "
-                        f"specificity {data.get('specificity_score')} < {min_score}"
-                    )
-                    return None
+                    try:
+                        snippet.processed_for_insights = True
+                        task_db.commit()
+                    except Exception:
+                        pass
 
-                # Store insight
-                try:
-                    insight = ContentInsight(
-                        snippet_id=snippet.id,
-                        topic=topic.topic if topic else "",
-                        subtopic=data.get("subtopic", ""),
-                        pain_point=data.get("pain_point", ""),
-                        hook_type=data.get("hook_type", ""),
-                        content_style=data.get("content_style", ""),
-                        key_insight=data.get("key_insight", ""),
-                        audience_segment=data.get("audience_segment", ""),
-                        sentiment=data.get("sentiment", "NEUTRAL"),
-                        specificity_score=float(data.get("specificity_score", 0)),
-                        source_engagement=snippet.engagement_signal or 0,
-                        source_type=snippet.source,
-                        mistake=data.get("mistake"),
-                        false_belief=data.get("false_belief"),
-                        contradiction=data.get("contradiction"),
-                        scenario=data.get("scenario"),
-                        evidence=data.get("evidence"),
-                        moment_type=data.get("moment_type"),
-                    )
-                    db.add(insight)
-                    db.commit()
-                    db.refresh(insight)
-                    logger.info(
-                        f"ContentExtractor: insight created — "
-                        f"subtopic='{insight.subtopic}' hook={insight.hook_type} "
-                        f"score={insight.specificity_score}"
-                    )
-                    return {
-                        "id": insight.id,
-                        "subtopic": insight.subtopic,
-                        "pain_point": insight.pain_point,
-                        "hook_type": insight.hook_type,
-                        "content_style": insight.content_style,
-                        "key_insight": insight.key_insight,
-                        "audience_segment": insight.audience_segment,
-                        "specificity_score": insight.specificity_score,
-                        "source_type": insight.source_type,
-                    }
-                except Exception as e:
-                    logger.error(f"ContentExtractor: failed to store insight — {e}")
-                    return None
+                    if data is None:
+                        return None
 
-        results = await asyncio.gather(*[_process_one(s) for s in rows])
+                    # Quality gate
+                    if float(data.get("specificity_score", 0)) < min_score:
+                        logger.debug(
+                            f"ContentExtractor: snippet {snippet_id} dropped — "
+                            f"specificity {data.get('specificity_score')} < {min_score}"
+                        )
+                        return None
+
+                    # Store insight
+                    try:
+                        from backend.storage.models import ContentInsight as _CI
+                        insight = _CI(
+                            snippet_id=snippet_id,
+                            topic=topic.topic if topic else "",
+                            subtopic=data.get("subtopic", ""),
+                            pain_point=data.get("pain_point", ""),
+                            hook_type=data.get("hook_type", ""),
+                            content_style=data.get("content_style", ""),
+                            key_insight=data.get("key_insight", ""),
+                            audience_segment=data.get("audience_segment", ""),
+                            sentiment=data.get("sentiment", "NEUTRAL"),
+                            specificity_score=float(data.get("specificity_score", 0)),
+                            source_engagement=cached["engagement_signal"] or 0,
+                            source_type=cached["source"],
+                            mistake=data.get("mistake"),
+                            false_belief=data.get("false_belief"),
+                            contradiction=data.get("contradiction"),
+                            scenario=data.get("scenario"),
+                            evidence=data.get("evidence"),
+                            moment_type=data.get("moment_type"),
+                        )
+                        task_db.add(insight)
+                        task_db.commit()
+                        task_db.refresh(insight)
+                        logger.info(
+                            f"ContentExtractor: insight created — "
+                            f"subtopic='{insight.subtopic}' hook={insight.hook_type} "
+                            f"score={insight.specificity_score}"
+                        )
+                        return {
+                            "id": insight.id,
+                            "subtopic": insight.subtopic,
+                            "pain_point": insight.pain_point,
+                            "hook_type": insight.hook_type,
+                            "content_style": insight.content_style,
+                            "key_insight": insight.key_insight,
+                            "audience_segment": insight.audience_segment,
+                            "specificity_score": insight.specificity_score,
+                            "source_type": insight.source_type,
+                        }
+                    except Exception as e:
+                        logger.error(f"ContentExtractor: failed to store insight — {e}")
+                        return None
+
+        results = await asyncio.gather(*[_process_one(s.id) for s in rows])
         created = [r for r in results if r is not None]
         logger.info(f"ContentExtractor: created {len(created)} insights from {len(rows)} snippets")
         return created

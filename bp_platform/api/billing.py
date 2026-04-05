@@ -3,7 +3,7 @@
 import stripe
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from bp_platform.config import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+from bp_platform.config import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, APP_BASE_URL
 from bp_platform.api.auth import get_current_user
 from bp_platform.models.database import User, BillingEvent, get_db
 
@@ -38,8 +38,8 @@ async def create_checkout(user: dict = Depends(get_current_user)):
             "price": "price_REPLACE_WITH_YOUR_PRICE_ID",  # Set your Stripe price ID
             "quantity": 1,
         }],
-        success_url="https://app.phoenixsolution.in/billing/success?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url="https://app.phoenixsolution.in/billing/cancel",
+        success_url=f"{APP_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{APP_BASE_URL}/billing/cancel",
         metadata={"user_id": user_id},
     )
 

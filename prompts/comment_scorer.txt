@@ -1,18 +1,41 @@
-Score each LinkedIn comment candidate. Be harsh — most AI comments are garbage.
+Score each LinkedIn comment candidate. Be harsh — most AI-generated comments are mediocre.
 
 Scoring criteria (each 0-2, total 0-10):
 
-  specificity:      References a specific detail from the post, not just the general topic
-  adds_something:   Says something NEW the author didn't already say (not a rephraseor summary)
-  human_voice:      Sounds like a real person typed this quickly, not an AI crafting a response
-  reply_worthy:     Author would actually want to respond (not just "thanks!")
-  no_ai_smell:      Zero AI tells — no third-person references to author, no "elaborate", no summary-then-question
+  specificity:      References a specific concrete detail (number, tool, scenario, named consequence), not just the general topic
+  adds_something:   Says something NEW the author didn't already say (not a rephrase, not a summary)
+  human_voice:      Sounds like a real person typing mid-conversation — casual, direct, no corporate polish
+  reply_worthy:     Author would genuinely want to respond with something substantive (not just "thanks!")
+  no_ai_smell:      Zero AI tells (see AI TELLS list below)
+
+AI TELLS — any of these automatically sets no_ai_smell=0:
+  - Starts with "In my experience..." / "From my experience..." / "In my work..."
+  - Starts with "I've seen..." / "I've found..." / "I've noticed..."
+  - Uses "resonates" / "this resonates" / "really resonates"
+  - Uses "actionable" / "actionable insights" / "actionable steps"
+  - Uses "game-changer" / "paradigm shift" / "moving the needle"
+  - Uses "at the end of the day" / "it's worth noting" / "it's important to note"
+  - Structured like a mini-essay with an intro sentence + explanation + conclusion
+  - Ends with an open-ended question ("What are your thoughts?", "Would love to hear more", "How do you see this?")
+  - Ends with a compliment followed by a question ("Great insight! Have you considered...")
+  - References the author in third person ("The author mentions...", "James talks about...")
 
 AUTOMATIC REJECT (set total=0, fill reject_reason):
-  - Refers to the author in third person ("Author mentions…", "Name talks about…")
-  - Contains "can you elaborate", "I'd love to hear", "can you share more"
-  - Just summarizes the post and adds a generic question
-  - Starts with any form of "Great post" / "Love this" / "Totally agree"
+  - Refers to the author in third person ("Author mentions…", "Name talks about…", "The post says...")
+  - Contains "can you elaborate", "I'd love to hear", "can you share more", "what are your thoughts"
+  - Just summarizes the post and adds a generic question at the end
+  - Starts with any form of "Great post" / "Love this" / "Totally agree" / "So true"
+  - Opens with "In my experience" / "From my experience" / "I've seen this"
+  - Fabricates a statistic that doesn't exist (e.g., "studies show 73%...")
+  - Contains hollow phrases: "game-changer", "paradigm shift", "resonates deeply", "so important"
+  - Ends with an open-ended question ("What do you think?", "Would love to hear your thoughts")
+
+WHAT SCORES HIGH:
+  - Opens directly with a concrete observation, number, or named scenario
+  - Adds one specific thing the post didn't say (not more — one sharp thing)
+  - Has one narrow follow-up question IF the question is specific and answerable in one sentence
+  - Sounds like it was typed in 30 seconds by someone who lived through the situation
+  - Under 60 words and says more than most 200-word AI comments
 
 Post the comment is responding to:
 {post_text}

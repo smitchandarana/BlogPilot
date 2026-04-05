@@ -420,6 +420,7 @@ export default function ContentStudio() {
   const [rewriteAttempted, setRewriteAttempted] = useState(false)
   const [copied, setCopied] = useState(false)
   const [generateAttempt, setGenerateAttempt] = useState(0)
+  const _copyTimeout = useRef(null)
 
   const [showScheduler, setShowScheduler] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
@@ -675,7 +676,7 @@ export default function ContentStudio() {
     }
   }
 
-  const generate = async () => {
+  const generate = async (styleExamplesOverride = undefined) => {
     const currentAttempt = generateAttempt
     setGenerateAttempt(a => a + 1)
     setGenerating(true)
@@ -688,10 +689,15 @@ export default function ContentStudio() {
     try {
       let data
       if (generationMode === 'structured') {
+        // Use the directly-passed override (avoids stale closure when called from
+        // "Write like my best posts" button), otherwise fall back to state value.
+        const effectiveStyleExamples = styleExamplesOverride !== undefined
+          ? styleExamplesOverride
+          : pendingStyleExamples
         const payload = {
           topic, style, tone, word_count: wordCount,
           ...structuredInputs,
-          ...(pendingStyleExamples ? { style_examples: pendingStyleExamples } : {}),
+          ...(effectiveStyleExamples ? { style_examples: effectiveStyleExamples } : {}),
           variation_seed: currentAttempt,
         }
         const res = await contentApi.generateStructured(payload)
@@ -731,7 +737,8 @@ export default function ContentStudio() {
   const handleCopy = () => {
     navigator.clipboard.writeText(generated)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    clearTimeout(_copyTimeout.current)
+    _copyTimeout.current = setTimeout(() => setCopied(false), 2000)
   }
 
   const handleSchedule = async () => {
@@ -1132,9 +1139,10 @@ export default function ContentStudio() {
                     try {
                       const res = await intelligenceApi.preferences()
                       const fresh = res.data?.top_posts?.length > 0 ? res.data.top_posts : topPosts
-                      setPendingStyleExamples(fresh)
                       setTopPosts(fresh)
-                      await generate()
+                      // Pass fresh directly — setPendingStyleExamples would be a stale
+                      // closure read if we called generate() without the override arg.
+                      await generate(fresh)
                     } catch (e) {
                       setGenerated(`[Error: ${e.response?.data?.detail || e.message}]`)
                     } finally {

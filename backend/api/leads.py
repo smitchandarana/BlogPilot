@@ -144,12 +144,16 @@ async def enrich_all_leads(background_tasks: BackgroundTasks):
 
     async def _run_bulk(profiles):
         from backend.enrichment.email_enricher import EmailEnricher
-        enricher = EmailEnricher(page=None)
+        try:
+            enricher = EmailEnricher(page=None)
+        except Exception as e:
+            logger.error(f"Bulk enrich: failed to initialize EmailEnricher: {e}")
+            return
         for profile_data in profiles:
             try:
                 await enricher.enrich(profile_data)
             except Exception as e:
-                logger.warning(f"Bulk enrich error: {e}")
+                logger.warning(f"Bulk enrich error for {profile_data.get('linkedin_url', '?')}: {e}")
 
     if profiles:
         background_tasks.add_task(_run_bulk, profiles)

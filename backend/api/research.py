@@ -10,8 +10,7 @@ Endpoints:
   GET  /research/status                 → research status info
 """
 import asyncio
-import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -44,36 +43,17 @@ class GenerateRequest(BaseModel):
 
 
 def _build_researcher():
-    """Build and return (groq_client, prompt_loader, researcher) tuple."""
+    """Build and return a TopicResearcher (with AI client if available)."""
     groq_client = None
     prompt_loader = None
     try:
-        from backend.ai.groq_client import GroqClient
         from backend.ai.prompt_loader import PromptLoader
+        from backend.ai.client_factory import build_ai_client
 
-        api_key = os.environ.get("GROQ_API_KEY", "")
-        if not api_key:
-            try:
-                import json as _json
-                groq_path = os.path.normpath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
-                )
-                if os.path.exists(groq_path):
-                    with open(groq_path, "r") as f:
-                        data = _json.load(f)
-                    api_key = data.get("api_key", "")
-            except Exception:
-                pass
-
-        if api_key:
-            groq_client = GroqClient(
-                api_key=api_key,
-                model=cfg_get("ai.model", "llama-3.3-70b-versatile"),
-                max_tokens=int(cfg_get("ai.max_tokens", 500)),
-                temperature=float(cfg_get("ai.temperature", 0.7)),
-            )
-            prompt_loader = PromptLoader()
-            prompt_loader.load_all()
+        # Use the factory — it correctly handles env var + encrypted file + decryption
+        groq_client = build_ai_client("generation")
+        prompt_loader = PromptLoader()
+        prompt_loader.load_all()
     except Exception as e:
         logger.warning(f"Research: could not init AI — falling back to heuristics: {e}")
 
@@ -88,7 +68,7 @@ async def _run_research_background(topics: list, researcher: "TopicResearcher"):
         logger.info(f"Background research started for {len(topics)} topics")
         with get_db() as db:
             results = await researcher.research_topics(topics, db)
-        _last_research_at = datetime.now(timezone.utc)
+        _last_research_at = datetime.utcnow()
         logger.info(f"Background research complete — {len(results)} topics stored")
         try:
             from backend.api.websocket import schedule_broadcast
@@ -156,33 +136,15 @@ async def generate_from_topic(topic_id: str, body: GenerateRequest):
         context = get_context_for_generation(topic_id, db)
 
     # Get AI clients
-    from backend.ai.groq_client import GroqClient
     from backend.ai.prompt_loader import PromptLoader
     from backend.ai import post_generator
+    from backend.ai.client_factory import build_ai_client, AIClientUnavailableError
 
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        try:
-            import json as _json
-            groq_path = os.path.normpath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "config", ".secrets", "groq.json")
-            )
-            if os.path.exists(groq_path):
-                with open(groq_path, "r") as f:
-                    data = _json.load(f)
-                api_key = data.get("api_key", "")
-        except Exception:
-            pass
+    try:
+        groq_client = build_ai_client("generation")
+    except AIClientUnavailableError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Groq API key not configured")
-
-    groq_client = GroqClient(
-        api_key=api_key,
-        model=cfg_get("ai.model", "llama-3.3-70b-versatile"),
-        max_tokens=int(cfg_get("ai.max_tokens", 500)),
-        temperature=float(cfg_get("ai.temperature", 0.7)),
-    )
     prompt_loader = PromptLoader()
     prompt_loader.load_all()
 
@@ -228,11 +190,14 @@ async def clear_all_topics():
 
 @router.delete("/topics/{topic_id}")
 async def dismiss_topic(topic_id: str):
-    """Dismiss/archive a researched topic."""
+    """Dismiss/archive a researched topic and delete its associated snippets."""
+    from backend.storage.models import ResearchSnippet
     with get_db() as db:
         topic = db.query(ResearchedTopic).filter_by(id=topic_id).first()
         if not topic:
             raise HTTPException(status_code=404, detail="Topic not found")
+        # Delete snippets first (FK constraint) — ContentInsights have nullable snippet_id so survive
+        db.query(ResearchSnippet).filter_by(topic_id=topic_id).delete()
         topic.status = "EXPIRED"
         db.commit()
     return {"dismissed": topic_id}

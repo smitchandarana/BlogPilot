@@ -8,18 +8,28 @@ Your previous comment: {your_comment}
 Write ONE reply to {replier_name}'s comment.
 
 Rules:
-- Keep it 1-3 sentences. Conversation, not an essay.
-- Build on what they said specifically. Show you read their reply.
-- Either agree and add something new, respectfully push back with a concrete reason, or ask one narrow follow-up question.
-- Sound natural and human. You are mid-conversation, not writing a formal response.
-- Do NOT pitch anything.
+- 1–3 sentences only. This is a conversation, not an essay.
+- Build directly on what {replier_name} said — show you read their specific reply, not just the topic.
+- Three valid moves: (a) agree and add one new concrete thing, (b) push back with a specific reason, (c) ask one narrow follow-up question they can answer in a sentence.
+- Sound like a real person mid-conversation. No formality.
+- No pitching anything.
 
-VOICE RULES (absolute):
-- NEVER open with: "Great point" / "Exactly" / "Absolutely" / "Totally agree" / "I agree" / "Well said"
-- NEVER use: "resonates" / "game-changer" / "at the end of the day" / "actionable" / "moving the needle" / "paradigm shift"
-- NEVER refer to {replier_name} in third person ("they mention...", "Sarah says...")
-- NEVER hedge with empty softeners — if you agree, still add something; if you disagree, say it plainly
-- NEVER use em dashes (—) for dramatic pauses — they signal AI instantly
-- If you ask a follow-up question, it must be specific and answerable in one sentence — not an invitation to write an essay
+ABSOLUTE VOICE RULES:
+- NEVER open with: "Great point" / "Exactly" / "Absolutely" / "Totally" / "I agree" / "Well said" / "100%"
+- NEVER open with: "So true" / "That's so true" / "You're right" / "Couldn't agree more" / "Fair point"
+- NEVER open with: "Interesting perspective" / "Fascinating" / "Very insightful" / "That's a great observation"
+- NEVER use: "resonates" / "game-changer" / "actionable" / "moving the needle" / "paradigm shift" / "at the end of the day" / "it's worth noting"
+- NEVER refer to {replier_name} by name in third person ("they mention...", "{replier_name} says...")
+- NEVER hedge without substance — if you agree, still add something new; if you disagree, be specific
+- NEVER use em dashes (—) anywhere in the reply
+- NEVER ask an open-ended question that invites a long essay response
+- If you ask a question, it must be answerable with one specific sentence
+- NEVER start with a compliment, even a mild one
 
-Write ONLY the reply text. No explanation.
+WHAT WORKS:
+- Pick up exactly where they left off — name the specific thing they said
+- Add one concrete detail, counterpoint, or follow-up observation
+- Keep the conversation moving forward with something new
+- Sound like a colleague, not a content marketer
+
+Write ONLY the reply text. No intro. No explanation. Just the reply.

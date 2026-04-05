@@ -191,8 +191,20 @@ export default function Topics() {
   const handleActivate = async (topic) => {
     try {
       await configApi.activateTopic(topic)
+
+      // Merge any checked suggested hashtags into the hashtags list
+      const selected = Object.entries(checkedHashtags)
+        .filter(([, v]) => v)
+        .map(([h]) => h)
+      if (selected.length > 0) {
+        const merged = [...new Set([...hashtags, ...selected])]
+        setHashtags(merged)
+        await configApi.updateSettings({ hashtags: merged })
+      }
+
       setExpandedAvailable(null)
       setSuggestedHashtags([])
+      setCheckedHashtags({})
       fetchTopicData()
       fetchPerformance()
       setToast(`Topic "${topic}" activated`)
